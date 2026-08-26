@@ -1,0 +1,14 @@
+{
+  "description": "Bio conversational agent mini program",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "miniprogram/",
+  "appid": "touristappid",
+  "projectname": "bio-agent",
+  "setting": {
+    "es6": true,
+    "enhance": true,
+    "minified": true,
+    "postcss": true,
+    "compileHotReLoad": true
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "bio-agent",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @bio/contracts build && pnpm --parallel --filter @bio/api --filter @bio/miniprogram dev",
+    "dev:api": "pnpm --filter @bio/contracts build && pnpm --filter @bio/api dev",
+    "typecheck": "pnpm --filter @bio/contracts build && pnpm -r typecheck",
+    "test": "pnpm -r test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

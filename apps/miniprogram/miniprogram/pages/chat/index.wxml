@@ -1,0 +1,34 @@
+<view class="page">
+  <scroll-view class="messages" scroll-y enhanced scroll-into-view="bottom-anchor">
+    <view wx:if="{{messages.length === 0}}" class="empty">
+      <view class="empty__title">今天想聊点什么？</view>
+      <view class="empty__hint">我可以陪你分析、整理和执行任务。</view>
+    </view>
+    <view
+      wx:for="{{messages}}"
+      wx:key="id"
+      class="message message--{{item.role}}"
+    >
+      <view class="message__bubble">{{item.content}}</view>
+    </view>
+    <view id="bottom-anchor"></view>
+  </scroll-view>
+
+  <view class="composer">
+    <textarea
+      class="composer__input"
+      value="{{input}}"
+      placeholder="给 Agent 发消息"
+      auto-height
+      maxlength="20000"
+      disabled="{{sending}}"
+      bindinput="onInput"
+      bindconfirm="sendMessage"
+    />
+    <button
+      class="composer__send"
+      disabled="{{sending || !input}}"
+      bindtap="sendMessage"
+    >{{sending ? '···' : '发送'}}</button>
+  </view>
+</view>

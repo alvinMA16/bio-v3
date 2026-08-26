@@ -1,0 +1,9 @@
+page {
+  background: #f7f7f5;
+  color: #171714;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button::after {
+  border: 0;
+}

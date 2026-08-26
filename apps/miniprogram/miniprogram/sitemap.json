@@ -1,0 +1,4 @@
+{
+  "desc": "See WeChat sitemap documentation",
+  "rules": [{ "action": "allow", "page": "*" }]
+}

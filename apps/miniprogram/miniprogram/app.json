@@ -1,0 +1,11 @@
+{
+  "pages": ["pages/chat/index"],
+  "window": {
+    "navigationBarTitleText": "Bio Agent",
+    "navigationBarBackgroundColor": "#f7f7f5",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f7f7f5"
+  },
+  "style": "v2",
+  "lazyCodeLoading": "requiredComponents"
+}
