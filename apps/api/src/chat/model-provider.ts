@@ -3,7 +3,7 @@ export interface ModelInput {
   content: string;
 }
 
-export interface ModelDelta {
+export interface ModelCompletion {
   content: string;
   finishReason: string | null;
 }
@@ -11,5 +11,5 @@ export interface ModelDelta {
 export const MODEL_PROVIDER = Symbol('MODEL_PROVIDER');
 
 export interface ModelProvider {
-  stream(messages: ModelInput[], signal?: AbortSignal): AsyncGenerator<ModelDelta>;
+  complete(messages: ModelInput[], signal?: AbortSignal): Promise<ModelCompletion>;
 }

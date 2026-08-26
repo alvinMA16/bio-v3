@@ -1,11 +1,15 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import type { ModelDelta, ModelInput, ModelProvider } from './model-provider';
+import type {
+  ModelCompletion,
+  ModelInput,
+  ModelProvider,
+} from './model-provider';
 
-interface DeepSeekChunk {
+interface DeepSeekResponse {
   choices?: Array<{
-    delta?: { content?: string };
+    message?: { content?: string };
     finish_reason?: string | null;
   }>;
 }
@@ -14,10 +18,10 @@ interface DeepSeekChunk {
 export class DeepSeekProvider implements ModelProvider {
   constructor(private readonly config: ConfigService) {}
 
-  async *stream(
+  async complete(
     messages: ModelInput[],
     signal?: AbortSignal,
-  ): AsyncGenerator<ModelDelta> {
+  ): Promise<ModelCompletion> {
     const apiKey = this.config.get<string>('DEEPSEEK_API_KEY');
     if (!apiKey) {
       throw new ServiceUnavailableException('DEEPSEEK_API_KEY is not configured');
@@ -36,42 +40,29 @@ export class DeepSeekProvider implements ModelProvider {
       body: JSON.stringify({
         model: this.config.get<string>('DEEPSEEK_MODEL', 'deepseek-chat'),
         messages,
-        stream: true,
+        stream: false,
       }),
       ...(signal ? { signal } : {}),
     });
 
-    if (!response.ok || !response.body) {
+    if (!response.ok) {
       const detail = await response.text();
       throw new ServiceUnavailableException(
         `DeepSeek request failed (${response.status}): ${detail.slice(0, 300)}`,
       );
     }
 
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    for await (const chunk of response.body) {
-      buffer += decoder.decode(chunk, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const payload = line.trim();
-        if (!payload.startsWith('data:')) continue;
-
-        const data = payload.slice(5).trim();
-        if (!data || data === '[DONE]') continue;
-
-        const parsed = JSON.parse(data) as DeepSeekChunk;
-        const choice = parsed.choices?.[0];
-        if (!choice) continue;
-
-        yield {
-          content: choice.delta?.content ?? '',
-          finishReason: choice.finish_reason ?? null,
-        };
-      }
+    const parsed = (await response.json()) as DeepSeekResponse;
+    const choice = parsed.choices?.[0];
+    if (!choice?.message?.content) {
+      throw new ServiceUnavailableException(
+        'DeepSeek returned an empty completion',
+      );
     }
+
+    return {
+      content: choice.message.content,
+      finishReason: choice.finish_reason ?? null,
+    };
   }
 }

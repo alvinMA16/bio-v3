@@ -9,7 +9,7 @@ apps/
   api/          NestJS + Fastify API 与 Agent runtime
   miniprogram/  原生 TypeScript 微信小程序
 packages/
-  contracts/    前后端流式事件与领域协议
+  contracts/    前后端对话与领域协议
 infra/          本地 PostgreSQL、Redis 配置
 ```
 
@@ -27,11 +27,11 @@ pnpm dev:api
 API 默认监听 `http://127.0.0.1:3000`：
 
 - `GET /api/v1/health`：健康检查
-- `POST /api/v1/chat/stream`：返回 NDJSON 流式对话事件
+- `POST /api/v1/chat/completions`：等待模型完成后返回完整回复
 
 将 `apps/miniprogram` 导入微信开发者工具即可运行小程序。开发阶段需要在开发者工具中关闭域名校验；发布前把 `app.ts` 的地址替换为已备案 HTTPS 域名并加入小程序 request 合法域名。
 
-## 流式接口
+## 对话接口
 
 请求：
 
@@ -39,7 +39,20 @@ API 默认监听 `http://127.0.0.1:3000`：
 {"message":"你好","conversationId":"可选"}
 ```
 
-响应使用 `application/x-ndjson`，每行一个事件：`start`、`delta`、`done` 或 `error`。微信小程序通过 `enableChunked` 和 `onChunkReceived` 增量渲染。
+后端等待 DeepSeek 完成后返回一个 JSON 响应，小程序再一次性渲染助手消息：
+
+```json
+{
+  "conversationId": "...",
+  "message": {
+    "id": "...",
+    "role": "assistant",
+    "content": "完整回复",
+    "createdAt": "2026-08-26T00:00:00.000Z"
+  },
+  "finishReason": "stop"
+}
+```
 
 ## 架构边界
 
