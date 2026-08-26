@@ -7,6 +7,7 @@
 ```text
 apps/
   api/          NestJS + Fastify API 与 Agent runtime
+  debug-console/ React + Vite Agent 调试台
   miniprogram/  原生 TypeScript 微信小程序
 packages/
   contracts/    前后端对话与领域协议
@@ -23,6 +24,14 @@ pnpm install
 docker compose -f infra/docker-compose.yml up -d
 pnpm dev:api
 ```
+
+另开一个终端启动 Web 调试台：
+
+```bash
+pnpm dev:web
+```
+
+访问 `http://127.0.0.1:5173`，可以编辑 System Prompt、发起运行、查看耗时、原始请求/响应和本地运行历史。
 
 API 默认监听 `http://127.0.0.1:3000`：
 

@@ -9,4 +9,9 @@ export class CompleteChatDto {
   @IsString()
   @IsOptional()
   conversationId?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(10_000)
+  systemPrompt?: string;
 }

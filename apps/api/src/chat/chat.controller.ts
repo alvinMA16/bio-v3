@@ -10,6 +10,10 @@ export class ChatController {
 
   @Post('completions')
   complete(@Body() body: CompleteChatDto): Promise<ChatCompletionResponse> {
-    return this.chatService.complete(body.message, body.conversationId);
+    return this.chatService.complete(
+      body.message,
+      body.conversationId,
+      body.systemPrompt,
+    );
   }
 }

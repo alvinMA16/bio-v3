@@ -2,7 +2,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { ChatCompletionResponse } from '@bio/contracts';
 import { randomUUID } from 'node:crypto';
 
-import { MODEL_PROVIDER, type ModelProvider } from './model-provider';
+import {
+  MODEL_PROVIDER,
+  type ModelInput,
+  type ModelProvider,
+} from './model-provider';
 
 @Injectable()
 export class ChatService {
@@ -13,10 +17,17 @@ export class ChatService {
   async complete(
     message: string,
     conversationId: string = randomUUID(),
+    systemPrompt?: string,
     signal?: AbortSignal,
   ): Promise<ChatCompletionResponse> {
+    const messages: ModelInput[] = [];
+    if (systemPrompt?.trim()) {
+      messages.push({ role: 'system', content: systemPrompt.trim() });
+    }
+    messages.push({ role: 'user', content: message });
+
     const completion = await this.modelProvider.complete(
-      [{ role: 'user', content: message }],
+      messages,
       signal,
     );
 

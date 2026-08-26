@@ -7,6 +7,7 @@
     "build": "pnpm -r build",
     "dev": "pnpm --filter @bio/contracts build && pnpm --parallel --filter @bio/api --filter @bio/miniprogram dev",
     "dev:api": "pnpm --filter @bio/contracts build && pnpm --filter @bio/api dev",
+    "dev:web": "pnpm --filter @bio/contracts build && pnpm --filter @bio/debug-console dev",
     "typecheck": "pnpm --filter @bio/contracts build && pnpm -r typecheck",
     "test": "pnpm -r test"
   },

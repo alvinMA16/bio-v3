@@ -7,6 +7,12 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+export interface ChatCompletionRequest {
+  message: string;
+  conversationId?: string;
+  systemPrompt?: string;
+}
+
 export interface ChatCompletionResponse {
   conversationId: string;
   message: ChatMessage;
