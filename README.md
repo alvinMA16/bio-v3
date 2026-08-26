@@ -31,7 +31,7 @@ pnpm dev:api
 pnpm dev:web
 ```
 
-访问 `http://127.0.0.1:5173`，可以编辑 System Prompt、发起运行、查看耗时、原始请求/响应和本地运行历史。
+访问 `http://127.0.0.1:5173`，可以编辑 System Prompt、发起运行、查看模型、Token 用量、人民币预估费用、耗时、原始请求/响应和本地运行历史。人民币费用按 `USD_TO_CNY_RATE` 配置的汇率从 DeepSeek 美元挂牌价换算。
 
 API 默认监听 `http://127.0.0.1:3000`：
 

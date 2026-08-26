@@ -82,6 +82,21 @@ h1 { margin: 5px 0 0; font-family: Georgia, "Times New Roman", serif; font-size:
 .answer-card { padding: 30px 32px; border: 1px solid #dfdcd3; border-radius: 14px; background: #fff; box-shadow: 0 12px 35px rgba(44,43,38,.05); }
 .answer-label { margin-bottom: 20px; color: #97958b; font-size: 10px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
 .answer-content { color: #292a26; font-family: Georgia, "Songti SC", serif; font-size: 16px; line-height: 1.85; white-space: pre-wrap; }
+.usage-card { margin-top: 16px; overflow: hidden; border: 1px solid #dfdcd3; border-radius: 14px; background: #f8f8f3; }
+.usage-heading { display: flex; align-items: flex-end; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid #e3e1d8; }
+.usage-heading > div:first-child { display: flex; flex-direction: column; gap: 6px; }
+.usage-heading strong { font-size: 13px; }
+.cost-total { text-align: right; }
+.cost-total span { display: block; margin-bottom: 5px; color: #96948b; font-size: 10px; }
+.cost-total strong { color: #4f6c31; font-family: "SFMono-Regular", Consolas, monospace; font-size: 15px; }
+.usage-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.usage-metric { padding: 16px 18px; border-right: 1px solid #e3e1d8; }
+.usage-metric:last-child { border-right: 0; }
+.usage-metric span { display: block; margin-bottom: 7px; color: #96948b; font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.usage-metric strong { font-family: "SFMono-Regular", Consolas, monospace; font-size: 14px; }
+.usage-metric--total { background: #eef1e5; }
+.cost-breakdown { display: flex; flex-wrap: wrap; gap: 10px 20px; padding: 11px 18px; border-top: 1px solid #e3e1d8; color: #8d8b82; font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; }
+.cost-breakdown span:last-child { margin-left: auto; font-family: inherit; font-style: italic; }
 .error-card { display: flex; gap: 14px; padding: 20px; border: 1px solid #e6c8c0; border-radius: 12px; background: #fff8f6; }
 .error-mark { display: grid; width: 24px; height: 24px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #c65c47; color: #fff; font-weight: 800; }
 .error-card strong { font-size: 13px; }.error-card p { margin: 5px 0 0; color: #8b5a50; font-size: 12px; }
@@ -103,7 +118,7 @@ h1 { margin: 5px 0 0; font-family: Georgia, "Times New Roman", serif; font-size:
 .history-toolbar h2 { margin: 0; font-family: Georgia, serif; font-size: 22px; font-weight: 500; }.history-toolbar p { margin: 4px 0 0; color: #98968d; font-size: 11px; }
 .history-toolbar button { border: 0; background: transparent; color: #9c5a4e; cursor: pointer; font-size: 11px; }
 .history-list { overflow: hidden; border: 1px solid #dfdcd3; border-radius: 12px; background: #fff; }
-.history-row { display: grid; width: 100%; grid-template-columns: 10px minmax(0,1fr) 75px 75px; gap: 14px; align-items: center; padding: 15px 16px; border: 0; border-bottom: 1px solid #eeece6; background: transparent; color: #8c8a82; cursor: pointer; text-align: left; font-size: 11px; }
+.history-row { display: grid; width: 100%; grid-template-columns: 10px minmax(0,1fr) 90px 75px 75px; gap: 14px; align-items: center; padding: 15px 16px; border: 0; border-bottom: 1px solid #eeece6; background: transparent; color: #8c8a82; cursor: pointer; text-align: left; font-size: 11px; }
 .history-row:last-child { border-bottom: 0; }.history-row:hover, .history-row--selected { background: #f5f6ee; }
 .history-status { width: 7px; height: 7px; border-radius: 50%; background: #77a355; }.history-status--error { background: #c15a48; }
 .history-message { overflow: hidden; color: #33342f; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }

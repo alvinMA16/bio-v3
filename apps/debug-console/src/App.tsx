@@ -16,7 +16,7 @@ interface RunRecord {
   error?: string;
 }
 
-const HISTORY_KEY = 'bio-agent-lab-history';
+const HISTORY_KEY = 'bio-agent-lab-history-v2';
 const DEFAULT_SYSTEM_PROMPT = `你是 Bio Agent，一个清晰、可靠的对话式助手。
 先理解用户目标，再给出具体且可执行的回答。
 信息不足时，明确指出缺少什么。`;
@@ -40,6 +40,14 @@ function formatTime(value: string): string {
 
 function formatDuration(value: number): string {
   return value < 1000 ? `${value} ms` : `${(value / 1000).toFixed(2)} s`;
+}
+
+function formatTokens(value: number): string {
+  return new Intl.NumberFormat('en-US').format(value);
+}
+
+function formatCost(value: number): string {
+  return `¥${value.toFixed(value < 0.01 ? 8 : 4)}`;
 }
 
 export function App() {
@@ -175,7 +183,7 @@ export function App() {
               <span className="eyebrow">Configuration</span>
               <h1>New run</h1>
             </div>
-            <span className="model-chip">DeepSeek</span>
+            <span className="model-chip">V4 Flash</span>
           </div>
 
           <label className="field">
@@ -315,6 +323,7 @@ function ResultView({
         </span>
         <span>{formatTime(run.startedAt)}</span>
         <span>{formatDuration(run.durationMs)}</span>
+        {run.response?.model && <span>{run.response.model}</span>}
         {run.response?.finishReason && <span>{run.response.finishReason}</span>}
       </div>
 
@@ -330,6 +339,8 @@ function ResultView({
         </article>
       )}
 
+      {run.response && <UsageSummary response={run.response} />}
+
       <div className="timeline">
         <div className="timeline-heading">Run timeline</div>
         <div className="timeline-item timeline-item--done">
@@ -338,10 +349,43 @@ function ResultView({
         </div>
         <div className={`timeline-item ${run.error ? 'timeline-item--error' : 'timeline-item--done'}`}>
           <span className="timeline-dot" />
-          <div><strong>DeepSeek completion</strong><p>{formatDuration(run.durationMs)} total latency</p></div>
+          <div><strong>{run.response?.model ?? 'DeepSeek'} completion</strong><p>{formatDuration(run.durationMs)} total latency</p></div>
         </div>
       </div>
     </div>
+  );
+}
+
+function UsageSummary({ response }: { response: ChatCompletionResponse }) {
+  const { usage, estimatedCost } = response;
+
+  return (
+    <section className="usage-card">
+      <div className="usage-heading">
+        <div>
+          <span className="eyebrow">Token usage</span>
+          <strong>{response.model}</strong>
+        </div>
+        <div className="cost-total">
+          <span>Estimated cost</span>
+          <strong>{formatCost(estimatedCost.total)} CNY</strong>
+        </div>
+      </div>
+      <div className="usage-grid">
+        <div className="usage-metric"><span>Input</span><strong>{formatTokens(usage.promptTokens)}</strong></div>
+        <div className="usage-metric"><span>Cache hit</span><strong>{formatTokens(usage.promptCacheHitTokens)}</strong></div>
+        <div className="usage-metric"><span>Cache miss</span><strong>{formatTokens(usage.promptCacheMissTokens)}</strong></div>
+        <div className="usage-metric"><span>Output</span><strong>{formatTokens(usage.completionTokens)}</strong></div>
+        <div className="usage-metric"><span>Reasoning</span><strong>{formatTokens(usage.reasoningTokens)}</strong></div>
+        <div className="usage-metric usage-metric--total"><span>Total</span><strong>{formatTokens(usage.totalTokens)}</strong></div>
+      </div>
+      <div className="cost-breakdown">
+        <span>Cached input {formatCost(estimatedCost.cacheHitInput)}</span>
+        <span>Uncached input {formatCost(estimatedCost.cacheMissInput)}</span>
+        <span>Output {formatCost(estimatedCost.output)}</span>
+        <span>1 USD = {estimatedCost.usdToCnyRate} CNY · estimated</span>
+      </div>
+    </section>
   );
 }
 
@@ -392,6 +436,7 @@ function HistoryView({
           >
             <span className={`history-status ${run.error ? 'history-status--error' : ''}`} />
             <span className="history-message">{run.request.message}</span>
+            <span>{run.response ? formatCost(run.response.estimatedCost.total) : '—'}</span>
             <span>{formatDuration(run.durationMs)}</span>
             <span>{formatTime(run.startedAt)}</span>
           </button>
