@@ -1,0 +1,34 @@
+.stage {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #d8c5a8;
+}
+
+.stage__layer,
+.stage__actor {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.stage__actor {
+  z-index: 1;
+  overflow: hidden;
+}
+
+.stage__sheet {
+  position: absolute;
+  max-width: none;
+}
+
+.stage__panel {
+  z-index: 2;
+}

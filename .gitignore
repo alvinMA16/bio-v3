@@ -12,3 +12,4 @@ coverage/
 .vscode/
 apps/miniprogram/miniprogram_npm/
 apps/miniprogram/.miniprogram-ci/
+apps/miniprogram/project.private.config.json

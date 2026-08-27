@@ -1,0 +1,12 @@
+<view class="stage">
+  <image class="stage__layer" src="{{environmentSrc}}" mode="scaleToFill" />
+  <view class="stage__layer stage__actor">
+    <image
+      class="stage__sheet"
+      src="{{spriteSrc}}"
+      mode="scaleToFill"
+      style="width: {{sheetWidthPercent}}%; height: {{sheetHeightPercent}}%; left: {{sheetLeftPercent}}%; top: {{sheetTopPercent}}%;"
+    />
+  </view>
+  <image class="stage__layer stage__panel" src="{{innerPanelSrc}}" mode="scaleToFill" />
+</view>

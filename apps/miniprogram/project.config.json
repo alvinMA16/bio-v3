@@ -1,14 +1,58 @@
 {
-  "description": "Bio conversational agent mini program",
-  "compileType": "miniprogram",
-  "miniprogramRoot": "miniprogram/",
-  "appid": "touristappid",
-  "projectname": "bio-agent",
-  "setting": {
-    "es6": true,
-    "enhance": true,
-    "minified": true,
-    "postcss": true,
-    "compileHotReLoad": true
-  }
+    "description": "Bio Agent mini program with a layered fox animation stage",
+    "compileType": "miniprogram",
+    "miniprogramRoot": "miniprogram/",
+    "appid": "wx3ba73b828f5bd023",
+    "projectname": "bio-agent-fox",
+    "setting": {
+        "es6": true,
+        "enhance": true,
+        "minified": true,
+        "postcss": true,
+        "compileHotReLoad": true,
+        "compileWorklet": false,
+        "uglifyFileName": false,
+        "uploadWithSourceMap": true,
+        "packNpmManually": false,
+        "packNpmRelationList": [],
+        "minifyWXSS": true,
+        "minifyWXML": true,
+        "localPlugins": false,
+        "disableUseStrict": false,
+        "useCompilerPlugins": [
+            "typescript"
+        ],
+        "condition": false,
+        "swc": false,
+        "disableSWC": true,
+        "babelSetting": {
+            "ignore": [],
+            "disablePlugins": [],
+            "outputPath": ""
+        }
+    },
+    "condition": {
+        "miniprogram": {
+            "list": [
+                {
+                    "name": "角色动画",
+                    "pathName": "pages/character/index",
+                    "query": "",
+                    "scene": null
+                },
+                {
+                    "name": "Agent 对话",
+                    "pathName": "pages/chat/index",
+                    "query": "",
+                    "scene": null
+                }
+            ]
+        }
+    },
+    "simulatorPluginLibVersion": {},
+    "packOptions": {
+        "ignore": [],
+        "include": []
+    },
+    "editorSetting": {}
 }
