@@ -1,0 +1,66 @@
+{
+  "version": 3,
+  "character": "fox-clerk",
+  "style": "needle-felt stop-motion",
+  "frameMode": "three-layer",
+  "sourceSize": {
+    "width": 853,
+    "height": 1844
+  },
+  "layers": {
+    "environment": {
+      "name": "背景环境",
+      "src": "/animations/fox-clerk/environment.webp"
+    },
+    "actorBoard": {
+      "name": "狐狸 + 外板",
+      "kind": "animated-sprite"
+    },
+    "innerPanel": {
+      "name": "内层白框",
+      "src": "/animations/fox-clerk/inner-panel.webp"
+    }
+  },
+  "backgroundPolicy": "背景环境、狐狸 + 外板、内层白框使用同尺寸画布独立叠放；白框永远保持固定坐标",
+  "animations": [
+    {
+      "id": "blink",
+      "name": "眨眼",
+      "description": "狐狸层切换睁眼、半闭和闭眼姿态；环境与白框保持静止",
+      "src": "/animations/fox-clerk/blink.webp",
+      "frameCount": 9,
+      "frameWidth": 320,
+      "frameHeight": 692,
+      "columns": 4,
+      "rows": 3,
+      "fps": 8,
+      "durationMs": 1125
+    },
+    {
+      "id": "talk",
+      "name": "说话",
+      "description": "整张狐狸与板子完全固定，只切换嘴部口型，消除脸部纹理闪动",
+      "src": "/animations/fox-clerk/talk.webp",
+      "frameCount": 13,
+      "frameWidth": 320,
+      "frameHeight": 692,
+      "columns": 4,
+      "rows": 4,
+      "fps": 6,
+      "durationMs": 2167
+    },
+    {
+      "id": "wave",
+      "name": "挥手问候",
+      "description": "完整全画幅姿态统一曝光后慢速摆动；四指纯橙色毛毡手保持不变",
+      "src": "/animations/fox-clerk/wave.webp",
+      "frameCount": 12,
+      "frameWidth": 320,
+      "frameHeight": 692,
+      "columns": 4,
+      "rows": 3,
+      "fps": 5,
+      "durationMs": 2400
+    }
+  ]
+}

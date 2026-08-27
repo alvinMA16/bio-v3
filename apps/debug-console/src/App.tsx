@@ -5,7 +5,34 @@ import type {
 } from '@bio/contracts';
 
 type View = 'result' | 'inspector' | 'history';
+type ProductView = 'agent' | 'animation';
 type ApiStatus = 'checking' | 'online' | 'offline';
+
+interface AnimationAsset {
+  id: 'blink' | 'talk' | 'wave';
+  name: string;
+  description: string;
+  src: string;
+  frameCount: number;
+  frameWidth: number;
+  frameHeight: number;
+  columns: number;
+  rows: number;
+  fps: number;
+  durationMs: number;
+}
+
+interface AnimationManifest {
+  character: string;
+  frameMode: 'three-layer';
+  layers: {
+    environment: { name: string; src: string };
+    actorBoard: { name: string; kind: 'animated-sprite' };
+    innerPanel: { name: string; src: string };
+  };
+  backgroundPolicy: string;
+  animations: AnimationAsset[];
+}
 
 interface RunRecord {
   id: string;
@@ -51,6 +78,7 @@ function formatCost(value: number): string {
 }
 
 export function App() {
+  const [productView, setProductView] = useState<ProductView>('agent');
   const [apiStatus, setApiStatus] = useState<ApiStatus>('checking');
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
   const [message, setMessage] = useState('请介绍一下你自己，并说明你能帮我做什么。');
@@ -166,6 +194,22 @@ export function App() {
             <div className="brand-caption">Prompt & runtime debugger</div>
           </div>
         </div>
+        <nav className="product-nav" aria-label="Debugger sections">
+          <button
+            className={productView === 'agent' ? 'product-nav__item product-nav__item--active' : 'product-nav__item'}
+            type="button"
+            onClick={() => setProductView('agent')}
+          >
+            Agent 调试
+          </button>
+          <button
+            className={productView === 'animation' ? 'product-nav__item product-nav__item--active' : 'product-nav__item'}
+            type="button"
+            onClick={() => setProductView('animation')}
+          >
+            动画检查
+          </button>
+        </nav>
         <div className={`api-status api-status--${apiStatus}`}>
           <span className="status-dot" />
           {apiStatus === 'online'
@@ -176,7 +220,7 @@ export function App() {
         </div>
       </header>
 
-      <main className="workspace">
+      {productView === 'agent' ? <main className="workspace">
         <aside className="control-panel">
           <div className="panel-heading">
             <div>
@@ -283,8 +327,196 @@ export function App() {
             )}
           </div>
         </section>
-      </main>
+      </main> : <AnimationLab />}
     </div>
+  );
+}
+
+function AnimationLab() {
+  const [manifest, setManifest] = useState<AnimationManifest | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [animationId, setAnimationId] = useState<AnimationAsset['id']>('blink');
+  const [frame, setFrame] = useState(0);
+  const [playing, setPlaying] = useState(true);
+  const [speed, setSpeed] = useState(1);
+  const [onionSkin, setOnionSkin] = useState(false);
+  const [looping, setLooping] = useState(false);
+  const [visibleLayers, setVisibleLayers] = useState({
+    environment: true,
+    actorBoard: true,
+    innerPanel: true,
+  });
+
+  const animation = manifest?.animations.find((item) => item.id === animationId);
+
+  useEffect(() => {
+    void fetch('/animations/fox-clerk/manifest.json')
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json() as Promise<AnimationManifest>;
+      })
+      .then(setManifest)
+      .catch((error: unknown) => {
+        setLoadError(error instanceof Error ? error.message : '动画清单加载失败');
+      });
+  }, []);
+
+  useEffect(() => {
+    setFrame(0);
+  }, [animationId]);
+
+  useEffect(() => {
+    if (!playing || !animation) return;
+    const timer = window.setInterval(() => {
+      setFrame((value) => {
+        if (value < animation.frameCount - 1) return value + 1;
+        if (looping) return 0;
+        setPlaying(false);
+        return value;
+      });
+    }, 1000 / (animation.fps * speed));
+    return () => window.clearInterval(timer);
+  }, [animation, looping, playing, speed]);
+
+  function step(delta: number): void {
+    if (!animation) return;
+    setPlaying(false);
+    setFrame((value) => (value + delta + animation.frameCount) % animation.frameCount);
+  }
+
+  if (loadError) {
+    return <main className="animation-workspace"><div className="empty-state"><div className="empty-glyph">!</div><h2>Animation assets unavailable</h2><p>{loadError}</p></div></main>;
+  }
+
+  if (!manifest || !animation) {
+    return <main className="animation-workspace"><div className="running-state"><div className="orb"><span /></div><h2>Loading animation assets</h2></div></main>;
+  }
+
+  return (
+    <main className="animation-workspace">
+      <aside className="animation-sidebar">
+        <span className="eyebrow">Character motion</span>
+        <h1>动作素材</h1>
+        <p className="animation-intro">固定镜头与场景，只检查狐狸角色的毛毡定格动作。</p>
+        <div className="animation-list">
+          {manifest.animations.map((item) => (
+            <button
+              className={animationId === item.id ? 'animation-item animation-item--active' : 'animation-item'}
+              type="button"
+              key={item.id}
+              onClick={() => { setAnimationId(item.id); setPlaying(true); }}
+            >
+              <span>{item.name}</span>
+              <small>{item.frameCount} 帧 · {(item.durationMs / 1000).toFixed(1)} 秒</small>
+            </button>
+          ))}
+        </div>
+        <div className="asset-note">
+          <strong>场景锁定</strong>
+          <p>{manifest.backgroundPolicy}</p>
+        </div>
+        <fieldset className="layer-controls">
+          <legend>图层检查</legend>
+          {([
+            ['environment', manifest.layers.environment.name],
+            ['actorBoard', manifest.layers.actorBoard.name],
+            ['innerPanel', manifest.layers.innerPanel.name],
+          ] as const).map(([id, name]) => (
+            <label key={id}>
+              <input
+                type="checkbox"
+                checked={visibleLayers[id]}
+                onChange={(event) => setVisibleLayers((value) => ({ ...value, [id]: event.target.checked }))}
+              />
+              <span className={`layer-swatch layer-swatch--${id}`} />
+              {name}
+            </label>
+          ))}
+        </fieldset>
+      </aside>
+
+      <section className="animation-stage-panel">
+        <div className="animation-toolbar">
+          <div>
+            <span className="eyebrow">Preview</span>
+            <h2>{animation.name}</h2>
+            <p className="animation-description">{animation.description}</p>
+          </div>
+          <div className="frame-counter">FRAME {String(frame + 1).padStart(2, '0')} / {animation.frameCount}</div>
+        </div>
+
+        <div className="animation-preview-wrap">
+          <div className="animation-preview" style={{ aspectRatio: `${animation.frameWidth} / ${animation.frameHeight}` }}>
+            {visibleLayers.environment && (
+              <div className="sprite-frame sprite-frame--environment" style={{ backgroundImage: `url(${manifest.layers.environment.src})` }} />
+            )}
+            {visibleLayers.actorBoard && onionSkin && (
+              <SpriteFrame
+                animation={animation}
+                frame={(frame - 1 + animation.frameCount) % animation.frameCount}
+                className="sprite-frame sprite-frame--onion"
+              />
+            )}
+            {visibleLayers.actorBoard && (
+              <SpriteFrame animation={animation} frame={frame} className="sprite-frame sprite-frame--actor" />
+            )}
+            {visibleLayers.innerPanel && (
+              <div className="sprite-frame sprite-frame--inner-panel" style={{ backgroundImage: `url(${manifest.layers.innerPanel.src})` }} />
+            )}
+            <div className="anchor anchor--head" title="Head anchor" />
+            <div className="anchor anchor--desk" title="Desk anchor" />
+          </div>
+        </div>
+
+        <div className="transport">
+          <button type="button" onClick={() => step(-1)} aria-label="Previous frame">‹</button>
+          <button className="transport__play" type="button" onClick={() => {
+            if (!playing && frame === animation.frameCount - 1) setFrame(0);
+            setPlaying((value) => !value);
+          }}>{playing ? '暂停' : '播放'}</button>
+          <button type="button" onClick={() => step(1)} aria-label="Next frame">›</button>
+          <label className="toggle"><input type="checkbox" checked={onionSkin} onChange={(event) => setOnionSkin(event.target.checked)} />前后帧叠加</label>
+          <label className="toggle"><input type="checkbox" checked={looping} onChange={(event) => setLooping(event.target.checked)} />循环播放</label>
+          <label className="speed-control">速度
+            <select value={speed} onChange={(event) => setSpeed(Number(event.target.value))}>
+              <option value={0.5}>0.5×</option>
+              <option value={1}>1×</option>
+              <option value={1.5}>1.5×</option>
+              <option value={2}>2×</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="frame-strip" aria-label="Frame selector">
+          {Array.from({ length: animation.frameCount }, (_, index) => (
+            <button
+              className={frame === index ? 'frame-tick frame-tick--active' : 'frame-tick'}
+              type="button"
+              key={index}
+              onClick={() => { setPlaying(false); setFrame(index); }}
+              aria-label={`Frame ${index + 1}`}
+            ><span /></button>
+          ))}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function SpriteFrame({ animation, frame, className }: { animation: AnimationAsset; frame: number; className: string }) {
+  const column = frame % animation.columns;
+  const row = Math.floor(frame / animation.columns);
+  const positionX = animation.columns === 1 ? 0 : (column / (animation.columns - 1)) * 100;
+  const positionY = animation.rows === 1 ? 0 : (row / (animation.rows - 1)) * 100;
+  return (
+    <div
+      className={className}
+      style={{
+        backgroundImage: `url(${animation.src})`,
+        backgroundSize: `${animation.columns * 100}% ${animation.rows * 100}%`,
+        backgroundPosition: `${positionX}% ${positionY}%`,
+      }}
+    />
   );
 }
 
