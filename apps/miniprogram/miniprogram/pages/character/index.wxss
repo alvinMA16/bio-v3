@@ -27,6 +27,12 @@
 .stage__sheet {
   position: absolute;
   max-width: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.stage__sheet--active {
+  opacity: 1;
 }
 
 .stage__panel {

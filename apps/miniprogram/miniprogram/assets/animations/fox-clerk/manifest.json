@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 6,
   "character": "fox-clerk",
   "style": "needle-felt stop-motion",
   "frameMode": "three-layer",
@@ -21,7 +21,8 @@
       "src": "/animations/fox-clerk/inner-panel.webp"
     }
   },
-  "backgroundPolicy": "背景环境、狐狸 + 外板、内层白框使用同尺寸画布独立叠放；白框永远保持固定坐标",
+  "backgroundPolicy": "背景环境、固定狐狸身体 + 外板、运动手臂、内层白框使用锁定画布叠放；白框永远保持固定坐标",
+  "playbackPolicy": "首次进入播放一次挥手问候，随后保持静止，并以较长随机间隔偶发眨眼",
   "animations": [
     {
       "id": "blink",
@@ -52,15 +53,15 @@
     {
       "id": "wave",
       "name": "挥手问候",
-      "description": "完整全画幅姿态统一曝光后慢速摆动；四指纯橙色毛毡手保持不变",
+      "description": "固定狐狸身体与板子，仅让四指纯橙色毛毡手臂完成抬手、慢速摆动和收手",
       "src": "/animations/fox-clerk/wave.webp",
-      "frameCount": 12,
+      "frameCount": 15,
       "frameWidth": 320,
       "frameHeight": 692,
       "columns": 4,
-      "rows": 3,
+      "rows": 4,
       "fps": 5,
-      "durationMs": 2400
+      "durationMs": 3000
     }
   ]
 }

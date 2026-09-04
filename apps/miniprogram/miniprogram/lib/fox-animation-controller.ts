@@ -1,6 +1,7 @@
 export const FOX_ACTION_ORDER = ['blink', 'talk', 'wave'] as const;
 
 export type FoxActionId = (typeof FOX_ACTION_ORDER)[number];
+export type FoxAnimationPhase = 'welcome' | 'idle' | 'action';
 
 export interface FoxAnimationClip {
   id: FoxActionId;
@@ -16,7 +17,7 @@ export interface FoxAnimationState {
   action: FoxAnimationClip;
   frame: number;
   playing: boolean;
-  autoCycle: boolean;
+  phase: FoxAnimationPhase;
 }
 
 export const FOX_ANIMATION_CLIPS: Record<FoxActionId, FoxAnimationClip> = {
@@ -42,62 +43,46 @@ export const FOX_ANIMATION_CLIPS: Record<FoxActionId, FoxAnimationClip> = {
     id: 'wave',
     name: '挥手',
     src: '/assets/animations/fox-clerk/wave.webp',
-    frameCount: 12,
+    frameCount: 15,
     columns: 4,
-    rows: 3,
+    rows: 4,
     fps: 5,
   },
 };
 
 type StateListener = (state: FoxAnimationState) => void;
 
-const ACTION_TRANSITION_PAUSE_MS = 420;
+const IDLE_BLINK_MIN_DELAY_MS = 18_000;
+const IDLE_BLINK_MAX_DELAY_MS = 35_000;
 
 /**
- * Owns which visual state is shown on the character screen.
+ * Drives the character's ambient behavior.
  *
- * The current policy cycles blink -> talk -> wave. Call `playAction` later
- * from an Agent event, voice state, or business state to take manual control.
+ * The default policy is a one-time welcome wave, a still neutral pose, and an
+ * occasional blink. Agent or voice events can call `playAction` at any time;
+ * after that one-shot action finishes, the fox returns to the same idle pose.
  */
 export class FoxAnimationController {
-  private actionIndex = 0;
+  private actionId: FoxActionId = 'wave';
   private frame = 0;
   private playing = false;
-  private autoCycle = true;
+  private phase: FoxAnimationPhase = 'welcome';
   private suspended = false;
   private timer: number | undefined;
 
   constructor(private readonly listener: StateListener) {}
 
+  startWelcomeSequence(): void {
+    this.startOneShot('wave', 'welcome');
+  }
+
+  /** Backward-compatible page entry; the behavior is no longer a cycle. */
   startAutoCycle(): void {
-    this.stopTimer();
-    this.autoCycle = true;
-    this.playing = true;
-    this.actionIndex = 0;
-    this.frame = 0;
-    this.emit();
-    this.scheduleNextFrame();
+    this.startWelcomeSequence();
   }
 
   playAction(action: FoxActionId): void {
-    this.stopTimer();
-    this.autoCycle = false;
-    this.playing = true;
-    this.actionIndex = FOX_ACTION_ORDER.indexOf(action);
-    this.frame = 0;
-    this.emit();
-    this.scheduleNextFrame();
-  }
-
-  togglePlayback(): void {
-    if (this.playing) {
-      this.pause();
-      return;
-    }
-
-    this.playing = true;
-    this.emit();
-    this.scheduleNextFrame();
+    this.startOneShot(action, 'action');
   }
 
   pause(): void {
@@ -113,7 +98,9 @@ export class FoxAnimationController {
 
   resume(): void {
     this.suspended = false;
-    if (this.playing && this.timer === undefined) this.scheduleNextFrame();
+    if (!this.playing || this.timer !== undefined) return;
+    if (this.phase === 'idle') this.scheduleIdleBlink();
+    else this.scheduleNextFrame();
   }
 
   destroy(): void {
@@ -122,16 +109,26 @@ export class FoxAnimationController {
   }
 
   private get clip(): FoxAnimationClip {
-    const actionId = FOX_ACTION_ORDER[this.actionIndex] ?? FOX_ACTION_ORDER[0];
-    return FOX_ANIMATION_CLIPS[actionId];
+    return FOX_ANIMATION_CLIPS[this.actionId];
   }
 
-  private scheduleNextFrame(delayMs = 1000 / this.clip.fps): void {
+  private startOneShot(action: FoxActionId, phase: FoxAnimationPhase): void {
+    this.stopTimer();
+    this.actionId = action;
+    this.frame = 0;
+    this.phase = phase;
+    this.playing = true;
+    this.emit();
+    this.scheduleNextFrame();
+  }
+
+  private scheduleNextFrame(): void {
     if (!this.playing || this.suspended) return;
-    this.timer = setTimeout(() => this.advance(), delayMs);
+    this.timer = setTimeout(() => this.advance(), 1000 / this.clip.fps);
   }
 
   private advance(): void {
+    this.timer = undefined;
     this.frame += 1;
 
     if (this.frame < this.clip.frameCount) {
@@ -140,16 +137,25 @@ export class FoxAnimationController {
       return;
     }
 
-    this.frame = 0;
-    if (this.autoCycle) {
-      this.actionIndex = (this.actionIndex + 1) % FOX_ACTION_ORDER.length;
-      this.emit();
-      this.scheduleNextFrame(ACTION_TRANSITION_PAUSE_MS);
-      return;
-    }
+    this.settleIdle();
+  }
 
+  private settleIdle(): void {
+    this.actionId = 'blink';
+    this.frame = 0;
+    this.phase = 'idle';
     this.emit();
-    this.scheduleNextFrame();
+    this.scheduleIdleBlink();
+  }
+
+  private scheduleIdleBlink(): void {
+    if (!this.playing || this.suspended) return;
+    const delay = IDLE_BLINK_MIN_DELAY_MS
+      + Math.random() * (IDLE_BLINK_MAX_DELAY_MS - IDLE_BLINK_MIN_DELAY_MS);
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      this.startOneShot('blink', 'action');
+    }, delay);
   }
 
   private emit(): void {
@@ -157,7 +163,7 @@ export class FoxAnimationController {
       action: this.clip,
       frame: this.frame,
       playing: this.playing,
-      autoCycle: this.autoCycle,
+      phase: this.phase,
     });
   }
 

@@ -4,7 +4,7 @@ from pathlib import Path
 import json
 import math
 
-from PIL import Image, ImageDraw, ImageFilter, ImageStat
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageStat
 
 
 HERE = Path(__file__).resolve().parent
@@ -53,17 +53,40 @@ def actor_mask(size: tuple[int, int], pose: str) -> Image.Image:
 
     if pose.startswith("wave"):
         # Each complete generated frame has its own full-character silhouette.
-        raised_arm = [
-            (326, 714), (294, 684), (255, 678), (218, 686), (184, 704),
-            (176, 744), (184, 783), (214, 817), (263, 839), (306, 826),
-            (332, 790), (337, 750),
-        ] if pose == "wave-left" else [
-            (319, 719), (300, 695), (283, 685), (267, 688), (248, 704),
-            (229, 716), (220, 741), (225, 774), (240, 807), (264, 824),
-            (294, 819), (318, 794), (330, 759),
-        ]
-        draw.polygon(points(raised_arm), fill=255)
-        hand_box = [(176, 678), (307, 790)] if pose == "wave-left" else [(219, 682), (307, 775)]
+        raised_arms = {
+            "wave-rise": [
+                (332, 714), (305, 718), (278, 733), (258, 742), (271, 719),
+                (275, 690), (258, 671), (235, 671), (220, 686), (202, 678),
+                (185, 697), (183, 730), (198, 756), (219, 768), (227, 797),
+                (250, 818), (282, 819), (311, 796), (330, 760),
+            ],
+            "wave-left": [
+            (331, 710), (298, 693), (260, 696), (230, 690), (241, 665),
+            (238, 625), (220, 609), (202, 620), (185, 598), (159, 590),
+            (142, 612), (140, 651), (162, 686), (185, 700), (198, 738),
+            (218, 772), (252, 787), (286, 772), (309, 745),
+            ],
+            "wave-right": [
+            (331, 716), (305, 704), (278, 704), (262, 697), (269, 674),
+            (257, 642), (236, 631), (214, 638), (192, 628), (177, 644),
+            (176, 678), (189, 706), (207, 720), (211, 756), (229, 788),
+            (260, 805), (292, 792), (315, 761),
+            ],
+            "wave-lower": [
+                (331, 716), (310, 723), (288, 743), (280, 735), (292, 714),
+                (282, 696), (257, 702), (244, 716), (224, 711), (207, 726),
+                (205, 756), (220, 781), (240, 791), (249, 814), (276, 829),
+                (306, 818), (328, 787),
+            ],
+        }
+        hand_boxes = {
+            "wave-rise": [(179, 665), (282, 795)],
+            "wave-left": [(136, 585), (245, 710)],
+            "wave-right": [(172, 624), (273, 735)],
+            "wave-lower": [(200, 695), (300, 815)],
+        }
+        draw.polygon(points(raised_arms[pose]), fill=255)
+        hand_box = hand_boxes[pose]
         draw.ellipse((*points(hand_box)[0], *points(hand_box)[1]), fill=255)
 
     # Outer board layer. The fixed inner panel is punched out below.
@@ -82,6 +105,25 @@ def actor_frame(image: Image.Image, pose: str) -> Image.Image:
     result = image.copy()
     result.putalpha(actor_mask(image.size, pose))
     return result
+
+
+def keep_only_wave_motion(image: Image.Image, reference: Image.Image, pose: str) -> Image.Image:
+    """Lock the face, body, and board while retaining the generated moving arm."""
+    size = image.size
+    sx, sy = size[0] / 853, size[1] / 1844
+
+    # The raised appendage lives outside the neutral silhouette. The shoulder
+    # patch also replaces the original resting paw so it cannot appear twice.
+    raised_appendage = ImageChops.subtract(actor_mask(size, pose), actor_mask(size, "neutral"))
+    shoulder_patch = Image.new("L", size)
+    ImageDraw.Draw(shoulder_patch).rounded_rectangle(
+        (round(235 * sx), round(695 * sy), round(390 * sx), round(880 * sy)),
+        radius=round(46 * sx),
+        fill=255,
+    )
+    motion_mask = ImageChops.lighter(raised_appendage, shoulder_patch)
+    motion_mask = motion_mask.filter(ImageFilter.GaussianBlur(round(5 * sx)))
+    return Image.composite(image, reference, motion_mask)
 
 
 def keep_only_mouth(image: Image.Image, reference: Image.Image) -> Image.Image:
@@ -133,7 +175,7 @@ def write_sheet(frames: list[Image.Image], action: str, columns: int = 4) -> dic
         "description": {
             "blink": "狐狸层切换睁眼、半闭和闭眼姿态；环境与白框保持静止",
             "talk": "整张狐狸与板子完全固定，只切换嘴部口型，消除脸部纹理闪动",
-            "wave": "完整全画幅姿态统一曝光后慢速摆动；四指纯橙色毛毡手保持不变",
+            "wave": "固定狐狸身体与板子，仅让四指纯橙色毛毡手臂完成抬手、慢速摆动和收手",
         }[action],
         "src": f"/animations/fox-clerk/{action}.webp",
         "frameCount": len(frames),
@@ -156,8 +198,18 @@ def main() -> None:
         "blink-closed": normalized_image("blink-closed.png", size),
         "talk-quiet": keep_only_mouth(normalized_image("talk-quiet.png", size), neutral),
         "talk-a": keep_only_mouth(normalized_image("talk-a.png", size), neutral),
-        "wave-left": match_full_frame_lighting(normalized_image("wave-left.png", size), neutral),
-        "wave-right": match_full_frame_lighting(normalized_image("wave-right.png", size), neutral),
+        "wave-rise": keep_only_wave_motion(
+            match_full_frame_lighting(normalized_image("wave-rise.png", size), neutral), neutral, "wave-rise",
+        ),
+        "wave-left": keep_only_wave_motion(
+            match_full_frame_lighting(normalized_image("wave-left.png", size), neutral), neutral, "wave-left",
+        ),
+        "wave-right": keep_only_wave_motion(
+            match_full_frame_lighting(normalized_image("wave-right.png", size), neutral), neutral, "wave-right",
+        ),
+        "wave-lower": keep_only_wave_motion(
+            match_full_frame_lighting(normalized_image("wave-lower.png", size), neutral), neutral, "wave-lower",
+        ),
     }
     actor = {name: actor_frame(image, name) for name, image in poses.items()}
 
@@ -180,10 +232,13 @@ def main() -> None:
         actor["talk-a"], actor["talk-quiet"], actor["neutral"], actor["neutral"], actor["neutral"],
     ]
     wave_frames = [
+        actor["wave-rise"],
         actor["wave-left"], actor["wave-left"], actor["wave-left"],
         actor["wave-right"], actor["wave-right"], actor["wave-right"],
         actor["wave-left"], actor["wave-left"], actor["wave-left"],
         actor["wave-right"], actor["wave-right"], actor["wave-right"],
+        actor["wave-lower"],
+        actor["neutral"],
     ]
 
     animations = [
@@ -192,7 +247,7 @@ def main() -> None:
         write_sheet(wave_frames, "wave"),
     ]
     manifest = {
-        "version": 3,
+        "version": 6,
         "character": "fox-clerk",
         "style": "needle-felt stop-motion",
         "frameMode": "three-layer",
@@ -202,7 +257,8 @@ def main() -> None:
             "actorBoard": {"name": "狐狸 + 外板", "kind": "animated-sprite"},
             "innerPanel": {"name": "内层白框", "src": "/animations/fox-clerk/inner-panel.webp"},
         },
-        "backgroundPolicy": "背景环境、狐狸 + 外板、内层白框使用同尺寸画布独立叠放；白框永远保持固定坐标",
+        "backgroundPolicy": "背景环境、固定狐狸身体 + 外板、运动手臂、内层白框使用锁定画布叠放；白框永远保持固定坐标",
+        "playbackPolicy": "首次进入播放一次挥手问候，随后保持静止，并以较长随机间隔偶发眨眼",
         "animations": animations,
     }
     (OUTPUT / "manifest.json").write_text(

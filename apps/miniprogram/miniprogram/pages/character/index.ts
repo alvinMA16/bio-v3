@@ -14,11 +14,16 @@ Page({
   data: {
     environmentSrc: ENVIRONMENT_SRC,
     innerPanelSrc: INNER_PANEL_SRC,
-    spriteSrc: FOX_ANIMATION_CLIPS.blink.src,
-    sheetWidthPercent: FOX_ANIMATION_CLIPS.blink.columns * 100,
-    sheetHeightPercent: FOX_ANIMATION_CLIPS.blink.rows * 100,
-    sheetLeftPercent: 0,
-    sheetTopPercent: 0,
+    blinkSrc: FOX_ANIMATION_CLIPS.blink.src,
+    talkSrc: FOX_ANIMATION_CLIPS.talk.src,
+    waveSrc: FOX_ANIMATION_CLIPS.wave.src,
+    activeAction: 'wave' as FoxActionId,
+    blinkLeftPercent: 0,
+    blinkTopPercent: 0,
+    talkLeftPercent: 0,
+    talkTopPercent: 0,
+    waveLeftPercent: 0,
+    waveTopPercent: 0,
   },
 
   onLoad(): void {
@@ -43,11 +48,9 @@ Page({
     const column = state.frame % state.action.columns;
     const row = Math.floor(state.frame / state.action.columns);
     this.setData({
-      spriteSrc: state.action.src,
-      sheetWidthPercent: state.action.columns * 100,
-      sheetHeightPercent: state.action.rows * 100,
-      sheetLeftPercent: column * -100,
-      sheetTopPercent: row * -100,
+      activeAction: state.action.id,
+      [`${state.action.id}LeftPercent`]: column * -100,
+      [`${state.action.id}TopPercent`]: row * -100,
     });
   },
 

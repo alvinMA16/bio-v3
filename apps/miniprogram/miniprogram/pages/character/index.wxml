@@ -2,10 +2,22 @@
   <image class="stage__layer" src="{{environmentSrc}}" mode="scaleToFill" />
   <view class="stage__layer stage__actor">
     <image
-      class="stage__sheet"
-      src="{{spriteSrc}}"
+      class="stage__sheet {{activeAction === 'blink' ? 'stage__sheet--active' : ''}}"
+      src="{{blinkSrc}}"
       mode="scaleToFill"
-      style="width: {{sheetWidthPercent}}%; height: {{sheetHeightPercent}}%; left: {{sheetLeftPercent}}%; top: {{sheetTopPercent}}%;"
+      style="width: 400%; height: 300%; left: {{blinkLeftPercent}}%; top: {{blinkTopPercent}}%;"
+    />
+    <image
+      class="stage__sheet {{activeAction === 'talk' ? 'stage__sheet--active' : ''}}"
+      src="{{talkSrc}}"
+      mode="scaleToFill"
+      style="width: 400%; height: 400%; left: {{talkLeftPercent}}%; top: {{talkTopPercent}}%;"
+    />
+    <image
+      class="stage__sheet {{activeAction === 'wave' ? 'stage__sheet--active' : ''}}"
+      src="{{waveSrc}}"
+      mode="scaleToFill"
+      style="width: 400%; height: 400%; left: {{waveLeftPercent}}%; top: {{waveTopPercent}}%;"
     />
   </view>
   <image class="stage__layer stage__panel" src="{{innerPanelSrc}}" mode="scaleToFill" />
