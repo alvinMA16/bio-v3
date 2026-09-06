@@ -1,13 +1,14 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, createAgentSession } from '@earendil-works/pi-coding-agent';
+import { DefaultResourceLoader, SessionManager, SettingsManager, createAgentSession } from '@earendil-works/pi-coding-agent';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AgentEventPayload } from '@bio/contracts';
 
 import { AgentStorage } from './agent-storage.js';
 import { createPresentationTools } from './presentation-tools.js';
-import { getModelPrice } from '../chat/model-pricing.js';
+import { createModelRuntime } from '../models/model-provider.js';
+import type { ModelProvider } from '@bio/contracts';
 
 const DEFAULT_PERSONA = '你是 Bio，一个清晰、可靠、自然亲切的助手。帮助用户对话、整理内容和完成任务。';
 const PRESENTATION_RULES = `\n面向用户的普通回复用于人物字幕，也可能被语音播报，表达应简洁自然。
@@ -19,35 +20,14 @@ const PRESENTATION_RULES = `\n面向用户的普通回复用于人物字幕，�
 export class PiSessionFactory {
   constructor(private readonly config: ConfigService, private readonly storage: AgentStorage) {}
 
-  async create(conversationId: string, systemPrompt: string | undefined, emit: (event: AgentEventPayload) => void) {
-    const apiKey = this.config.get<string>('DEEPSEEK_API_KEY');
-    if (!apiKey) throw new ServiceUnavailableException('DEEPSEEK_API_KEY is not configured');
-
+  async create(conversationId: string, systemPrompt: string | undefined, emit: (event: AgentEventPayload) => void, provider?: ModelProvider) {
     const cwd = this.storage.conversationDirectory(conversationId);
     const personaPath = join(cwd, 'persona.json');
     const persona = systemPrompt?.trim()
       || (existsSync(personaPath) ? JSON.parse(readFileSync(personaPath, 'utf8')) as string : DEFAULT_PERSONA);
     writeFileSync(personaPath, JSON.stringify(persona), { mode: 0o600 });
 
-    // Never discover the developer's global skills, extensions, credentials or AGENTS.md.
-    const modelRuntime = await ModelRuntime.create({
-      authPath: join(cwd, 'auth.json'), modelsPath: null, allowModelNetwork: false,
-    });
-    const modelId = this.config.get<string>('DEEPSEEK_MODEL', 'deepseek-v4-flash');
-    const price = getModelPrice(modelId);
-    modelRuntime.registerProvider('bio-deepseek', {
-      api: 'openai-completions',
-      baseUrl: this.config.get<string>('DEEPSEEK_BASE_URL', 'https://api.deepseek.com'),
-      models: [{
-        id: modelId, name: modelId, reasoning: true, input: ['text'],
-        contextWindow: 131072, maxTokens: 8192,
-        cost: { input: price?.cacheMissInput ?? 0, output: price?.output ?? 0, cacheRead: price?.cacheHitInput ?? 0, cacheWrite: 0 },
-        compat: { supportsDeveloperRole: false, supportsReasoningEffort: false, maxTokensField: 'max_tokens', thinkingFormat: 'deepseek' },
-      }],
-    });
-    await modelRuntime.setRuntimeApiKey('bio-deepseek', apiKey);
-    const model = modelRuntime.getModel('bio-deepseek', modelId);
-    if (!model) throw new ServiceUnavailableException('Agent model is unavailable');
+    const { modelRuntime, model } = await createModelRuntime(this.config, cwd, provider);
 
     const settingsManager = SettingsManager.inMemory({
       compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },

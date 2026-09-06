@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  ModelProvider,
   ChatCompletionRequest,
   ChatCompletionResponse,
   MarkdownPanel,
@@ -84,6 +85,7 @@ export function App() {
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
   const [message, setMessage] = useState('请介绍一下你自己，并说明你能帮我做什么。');
   const [conversationId, setConversationId] = useState('');
+  const [provider, setProvider] = useState<ModelProvider | ''>('');
   const [running, setRunning] = useState(false);
   const [view, setView] = useState<View>('result');
   const [history, setHistory] = useState<RunRecord[]>(readHistory);
@@ -112,6 +114,7 @@ export function App() {
 
     const request: ChatCompletionRequest = {
       message: message.trim(),
+      ...(provider ? { provider } : {}),
       ...(conversationId.trim()
         ? { conversationId: conversationId.trim() }
         : {}),
@@ -228,8 +231,21 @@ export function App() {
               <span className="eyebrow">Configuration</span>
               <h1>New run</h1>
             </div>
-            <span className="model-chip">V4 Flash</span>
+            <span className="model-chip">Model comparison</span>
           </div>
+
+          <label className="field">
+            <span className="field-label">模型（切换后开始新会话）</span>
+            <select className="input" value={provider} disabled={running} onChange={(event) => {
+              setProvider(event.target.value as ModelProvider | '');
+              setConversationId('');
+            }}>
+              <option value="">服务端默认</option>
+              <option value="deepseek">DeepSeek V4 Flash</option>
+              <option value="qwen">Qwen 3.8 Flash</option>
+              <option value="openai-compatible">自定义 OpenAI 兼容模型</option>
+            </select>
+          </label>
 
           <label className="field">
             <span className="field-label">

@@ -37,7 +37,13 @@ export function estimateModelCost(
   usage: ModelTokenUsage,
   usdToCnyRate: number,
 ): ModelCostEstimate {
-  const price = USD_PER_MILLION_TOKENS[model];
+  // Qwen mainland list prices are denominated in CNY, independent of FX.
+  // https://help.aliyun.com/zh/model-studio/qwen3-8-flash
+  const isQwen = model === 'qwen3.8-flash';
+  const price = isQwen
+    ? { cacheHitInput: 0.1, cacheMissInput: 0.8, output: 2.7 }
+    : USD_PER_MILLION_TOKENS[model];
+  const conversion = isQwen ? 1 : usdToCnyRate;
   if (!price) {
     return {
       currency: 'CNY',
@@ -62,11 +68,11 @@ export function estimateModelCost(
   return {
     currency: 'CNY',
     usdToCnyRate,
-    cacheHitInput: roundCurrency(cacheHitInput * usdToCnyRate),
-    cacheMissInput: roundCurrency(cacheMissInput * usdToCnyRate),
-    output: roundCurrency(output * usdToCnyRate),
+    cacheHitInput: roundCurrency(cacheHitInput * conversion),
+    cacheMissInput: roundCurrency(cacheMissInput * conversion),
+    output: roundCurrency(output * conversion),
     total: roundCurrency(
-      (cacheHitInput + cacheMissInput + output) * usdToCnyRate,
+      (cacheHitInput + cacheMissInput + output) * conversion,
     ),
   };
 }

@@ -22,10 +22,10 @@ let root, mock, app, config, service, storage, factory, baseUrl;
 const requests = [];
 let onHeldRequest;
 
-function sendCompletion(response, { text = '你好，我是 Bio。', tool } = {}) {
+function sendCompletion(response, { text = '你好，我是 Bio。', tool, model = 'deepseek-v4-flash' } = {}) {
   response.writeHead(200, { 'content-type': 'text/event-stream' });
   const chunk = (delta, finish_reason = null) => response.write(`data: ${JSON.stringify({
-    id: 'mock-completion', object: 'chat.completion.chunk', created: 1, model: 'deepseek-v4-flash',
+    id: 'mock-completion', object: 'chat.completion.chunk', created: 1, model,
     choices: [{ index: 0, delta, finish_reason }],
   })}\n\n`);
   chunk({ role: 'assistant' });
@@ -60,6 +60,7 @@ before(async () => {
       return;
     }
     sendCompletion(response, {
+      model: payload.model,
       tool: lastText === 'SHOW_PANEL',
       text: payload.tools?.length ? '你好，我是 Bio。' : 'COMPACTED_MEMORY_MARKER',
     });
@@ -67,6 +68,8 @@ before(async () => {
   mock.listen(0, '127.0.0.1');
   await once(mock, 'listening');
   config = new ConfigService({
+    MODEL_PROVIDER: 'deepseek',
+    QWEN_API_KEY: 'qwen-test-key', QWEN_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1`,
     AGENT_DATA_DIR: root, DEEPSEEK_API_KEY: 'local-test-key',
     DEEPSEEK_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1`,
     DEEPSEEK_MODEL: 'deepseek-v4-flash', AGENT_TIMEOUT_MS: 20000,
@@ -210,4 +213,23 @@ test('missing credentials fail with a trace ID instead of a successful response'
     assert.equal(storage.readTrace(response.runId).at(-1).type, 'run.failed');
     return true;
   });
+});
+
+
+test('Qwen selection uses its protocol, supports tools and can switch restored sessions', async () => {
+  const response = await post('chat/completions', { message: 'SHOW_PANEL', provider: 'qwen' });
+  assert.equal(response.status, 201);
+  const result = await response.json();
+  assert.equal(result.model, 'qwen3.8-flash');
+  assert.equal(requests.at(-1).model, 'qwen3.8-flash');
+  assert.equal(requests.at(-1).enable_thinking, false);
+  assert.equal(requests.at(-1).thinking, undefined);
+  assert.ok(result.events.some(event => event.type === 'panel.updated'));
+  assert.ok(result.estimatedCost.total > 0);
+  await service.run({ message: 'switch', conversationId: result.conversationId, provider: 'deepseek' });
+  assert.equal(requests.at(-1).model, 'deepseek-v4-flash');
+  assert.deepEqual(requests.at(-1).thinking, { type: 'disabled' });
+  assert.equal((await post('chat/completions', { message: 'hello', provider: 'unknown' })).status, 400);
+  const saved = await readFile(join(root, 'conversations', result.conversationId, 'session.jsonl'), 'utf8');
+  assert.ok(!saved.includes('qwen-test-key'));
 });

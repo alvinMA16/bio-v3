@@ -1,6 +1,12 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
+
+import type { ModelProvider } from '@bio/contracts';
 
 export class CompleteChatDto {
+  @IsOptional()
+  @IsIn(['deepseek', 'qwen', 'openai-compatible'])
+  provider?: ModelProvider;
+
   @IsString()
   @IsNotEmpty()
   @Matches(/\S/)

@@ -7,7 +7,10 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+export type ModelProvider = 'deepseek' | 'qwen' | 'openai-compatible';
+
 export interface ChatCompletionRequest {
+  provider?: ModelProvider;
   message: string;
   conversationId?: string;
   systemPrompt?: string;
