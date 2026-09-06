@@ -1,12 +1,13 @@
-import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
 
 export class CompleteChatDto {
   @IsString()
   @IsNotEmpty()
+  @Matches(/\S/)
   @MaxLength(20_000)
   message!: string;
 
-  @IsString()
+  @IsUUID('4')
   @IsOptional()
   conversationId?: string;
 

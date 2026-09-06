@@ -20,6 +20,10 @@ const USD_PER_MILLION_TOKENS: Record<string, ModelPrice> = {
   },
 };
 
+export function getModelPrice(model: string): ModelPrice | undefined {
+  return USD_PER_MILLION_TOKENS[model];
+}
+
 function tokenCost(tokens: number, pricePerMillion: number): number {
   return (tokens * pricePerMillion) / 1_000_000;
 }

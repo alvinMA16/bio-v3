@@ -86,6 +86,9 @@ h1 { margin: 5px 0 0; font-family: Georgia, "Times New Roman", serif; font-size:
 .answer-card { padding: 30px 32px; border: 1px solid #dfdcd3; border-radius: 14px; background: #fff; box-shadow: 0 12px 35px rgba(44,43,38,.05); }
 .answer-label { margin-bottom: 20px; color: #97958b; font-size: 10px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
 .answer-content { color: #292a26; font-family: Georgia, "Songti SC", serif; font-size: 16px; line-height: 1.85; white-space: pre-wrap; }
+.work-panel { margin-top: 16px; }
+.trace-link { font-size: 12px; overflow-wrap: anywhere; }
+.trace-link a { color: #537032; }
 .usage-card { margin-top: 16px; overflow: hidden; border: 1px solid #dfdcd3; border-radius: 14px; background: #f8f8f3; }
 .usage-heading { display: flex; align-items: flex-end; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid #e3e1d8; }
 .usage-heading > div:first-child { display: flex; flex-direction: column; gap: 6px; }

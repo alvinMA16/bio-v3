@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
+  MarkdownPanel,
 } from '@bio/contracts';
 
 type View = 'result' | 'inspector' | 'history';
@@ -532,7 +533,7 @@ function ResultView({
       <div className="running-state">
         <div className="orb"><span /></div>
         <h2>Agent is thinking</h2>
-        <p>等待 DeepSeek 返回完整结果…</p>
+        <p>Pi 正在执行，结果和面板将在完成后显示…</p>
       </div>
     );
   }
@@ -545,6 +546,11 @@ function ResultView({
         <p>配置提示词并运行 Agent，结果和调试信息会显示在这里。</p>
       </div>
     );
+  }
+
+  const panels = new Map<string, MarkdownPanel>();
+  for (const event of run.response?.events ?? []) {
+    if (event.type === 'panel.updated') panels.set(event.panel.id, event.panel);
   }
 
   return (
@@ -572,6 +578,19 @@ function ResultView({
       )}
 
       {run.response && <UsageSummary response={run.response} />}
+
+      {Array.from(panels.values()).map((panel) => (
+        <article className="answer-card work-panel" key={panel.id}>
+          <div className="answer-label">工作面板 · {panel.title}</div>
+          <div className="answer-content">{panel.content}</div>
+        </article>
+      ))}
+
+      {run.response?.runId && (
+        <p className="trace-link">
+          <a href={`/api/v1/agent/runs/${run.response.runId}/trace`} target="_blank" rel="noreferrer">查看本次运行 Trace</a>
+        </p>
+      )}
 
       <div className="timeline">
         <div className="timeline-heading">Run timeline</div>

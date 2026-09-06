@@ -1,62 +1,17 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable } from '@nestjs/common';
 import type { ChatCompletionResponse } from '@bio/contracts';
-import { randomUUID } from 'node:crypto';
+import { AgentService } from '../agent/agent.service.js';
 
-import {
-  MODEL_PROVIDER,
-  type ModelInput,
-  type ModelProvider,
-} from './model-provider';
-import { estimateModelCost } from './model-pricing';
-
+/** Compatibility endpoint for the existing mini-program and debugger. */
 @Injectable()
 export class ChatService {
-  constructor(
-    @Inject(MODEL_PROVIDER) private readonly modelProvider: ModelProvider,
-    private readonly config: ConfigService,
-  ) {}
+  constructor(private readonly agent: AgentService) {}
 
-  async complete(
-    message: string,
-    conversationId: string = randomUUID(),
-    systemPrompt?: string,
-    signal?: AbortSignal,
-  ): Promise<ChatCompletionResponse> {
-    const messages: ModelInput[] = [];
-    if (systemPrompt?.trim()) {
-      messages.push({ role: 'system', content: systemPrompt.trim() });
-    }
-    messages.push({ role: 'user', content: message });
-
-    const completion = await this.modelProvider.complete(
-      messages,
-      signal,
-    );
-    const configuredRate = Number(
-      this.config.get<string>('USD_TO_CNY_RATE', '6.7829'),
-    );
-    const usdToCnyRate =
-      Number.isFinite(configuredRate) && configuredRate > 0
-        ? configuredRate
-        : 6.7829;
-
-    return {
-      conversationId,
-      message: {
-        id: randomUUID(),
-        role: 'assistant',
-        content: completion.content,
-        createdAt: new Date().toISOString(),
-      },
-      finishReason: completion.finishReason,
-      model: completion.model,
-      usage: completion.usage,
-      estimatedCost: estimateModelCost(
-        completion.model,
-        completion.usage,
-        usdToCnyRate,
-      ),
-    };
+  complete(message: string, conversationId?: string, systemPrompt?: string, signal?: AbortSignal): Promise<ChatCompletionResponse> {
+    return this.agent.run({
+      message,
+      ...(conversationId ? { conversationId } : {}),
+      ...(systemPrompt !== undefined ? { systemPrompt } : {}),
+    }, undefined, signal);
   }
 }
