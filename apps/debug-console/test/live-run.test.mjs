@@ -31,3 +31,13 @@ test('panel changes and tool failures appear before final response and survive c
   assert.deepEqual(state.steps.map(step => step.elapsedMs), [100, 200, 300, 400]);
   assert.equal(emptyLiveRun().panel, undefined);
 });
+
+test('overlapping tools are tracked by ID and terminal events clear pending work', () => {
+  let state = emptyLiveRun();
+  state = applyLiveEvent(state, event({ type: 'tool.started', name: 'update_panel_content', toolCallId: 'write' }), 0);
+  state = applyLiveEvent(state, event({ type: 'tool.started', name: 'get_panel_state', toolCallId: 'read' }), 10);
+  state = applyLiveEvent(state, event({ type: 'tool.completed', name: 'get_panel_state', toolCallId: 'read', isError: false }), 20);
+  assert.deepEqual(state.activeTools, [{ id: 'write', name: 'update_panel_content' }]);
+  state = applyLiveEvent(state, event({ type: 'run.failed', message: '断流' }), 30);
+  assert.deepEqual(state.activeTools, []);
+});

@@ -19,6 +19,24 @@
       mode="scaleToFill"
       style="width: 400%; height: 400%; left: {{waveLeftPercent}}%; top: {{waveTopPercent}}%;"
     />
+    <image
+      class="stage__sheet {{activeAction === 'note' ? 'stage__sheet--active' : ''}}"
+      src="{{noteSrc}}"
+      mode="scaleToFill"
+      style="width: 400%; height: 400%; left: {{noteLeftPercent}}%; top: {{noteTopPercent}}%;"
+    />
+    <image
+      class="stage__sheet {{activeAction === 'nod' ? 'stage__sheet--active' : ''}}"
+      src="{{nodSrc}}"
+      mode="scaleToFill"
+      style="width: 400%; height: 400%; left: {{nodLeftPercent}}%; top: {{nodTopPercent}}%;"
+    />
+    <image
+      class="stage__sheet {{activeAction === 'notebookTalk' ? 'stage__sheet--active' : ''}}"
+      src="{{notebookTalkSrc}}"
+      mode="scaleToFill"
+      style="width: 400%; height: 400%; left: {{notebookTalkLeftPercent}}%; top: {{notebookTalkTopPercent}}%;"
+    />
   </view>
   <image class="stage__layer stage__panel" src="{{innerPanelSrc}}" mode="scaleToFill" />
 </view>

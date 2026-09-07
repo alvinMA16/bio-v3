@@ -1,3 +1,5 @@
+import type { FoxActivity } from '../../miniprogram/miniprogram/lib/fox-behavior';
+import { FoxAnimationController, type FoxAnimationState } from '../../miniprogram/miniprogram/lib/fox-animation-controller';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 interface Animation {
@@ -9,15 +11,18 @@ interface Manifest {
   animations: Animation[];
 }
 
-export function PhonePreview({ children, subtitle, speaking, running }: {
-  children: ReactNode; subtitle: string; speaking: boolean; running: boolean;
+export function PhonePreview({ children, subtitle, activity, running }: {
+  children: ReactNode; subtitle: string; activity: FoxActivity; running: boolean;
 }) {
+  const { phase, notebook, speech } = activity;
+  const speaking = speech !== 'silent' && phase !== 'listening';
   const [manifest, setManifest] = useState<Manifest>();
   const [assetError, setAssetError] = useState(false);
-  const [frame, setFrame] = useState(0);
+  const [animationState, setAnimationState] = useState<FoxAnimationState>();
+  const controllerRef = useRef<FoxAnimationController | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
   const subtitleRef = useRef<HTMLDivElement>(null);
-  const animation = manifest?.animations.find(item => item.id === (speaking ? 'talk' : 'blink'));
+  const animation = manifest?.animations.find(item => item.id === (animationState?.action.id ?? 'blink'));
 
   useEffect(() => {
     const controller = new AbortController();
@@ -33,15 +38,24 @@ export function PhonePreview({ children, subtitle, speaking, running }: {
     return () => media.removeEventListener('change', update);
   }, []);
   useEffect(() => {
-    setFrame(0);
-    if (!animation || reducedMotion || !speaking) return;
-    const timer = window.setInterval(() => setFrame(value => (value + 1) % animation.frameCount), 1000 / animation.fps);
-    return () => window.clearInterval(timer);
-  }, [animation, speaking, reducedMotion]);
+    const controller = new FoxAnimationController(setAnimationState);
+    controllerRef.current = controller;
+    controller.setActivity({ phase: 'idle', notebook: false, speech: 'silent', reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches });
+    controller.startWelcomeSequence();
+    const visibility = () => { if (document.hidden) controller.suspend(); else controller.resume(); };
+    document.addEventListener('visibilitychange', visibility);
+    visibility();
+    return () => { document.removeEventListener('visibilitychange', visibility); controller.destroy(); controllerRef.current = null; };
+  }, []);
+  useEffect(() => {
+    controllerRef.current?.setActivity({
+      phase, notebook, speech, reducedMotion,
+    });
+  }, [phase, notebook, speech, reducedMotion]);
   useEffect(() => {
     if (running && subtitleRef.current) subtitleRef.current.scrollTop = subtitleRef.current.scrollHeight;
   }, [subtitle, running]);
-  const safeFrame = animation ? frame % animation.frameCount : 0;
+  const safeFrame = animation ? (animationState?.frame ?? 0) % animation.frameCount : 0;
   const column = animation ? safeFrame % animation.columns : 0;
   const row = animation ? Math.floor(safeFrame / animation.columns) : 0;
 

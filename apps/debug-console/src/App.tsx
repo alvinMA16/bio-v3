@@ -1,3 +1,4 @@
+import { foxActivityOf } from './fox-activity';
 import { PhonePreview } from './phone-preview';
 import { conversationOf, conversationThrough, panelOf, type RunRecord } from './run-history';
 import { applyLiveEvent, emptyLiveRun, type LiveRun } from './live-run';
@@ -17,7 +18,7 @@ type ProductView = 'agent' | 'animation';
 type ApiStatus = 'checking' | 'online' | 'offline';
 
 interface AnimationAsset {
-  id: 'blink' | 'talk' | 'wave';
+  id: 'blink' | 'talk' | 'wave' | 'note' | 'nod' | 'notebookTalk';
   name: string;
   description: string;
   src: string;
@@ -341,7 +342,7 @@ export function App() {
         <div className="lab-main" ref={resultRef}>
           <section className="lab-preview-column">
             <header className="lab-section-heading"><h1>用户界面预览</h1><span>手机 · 实时状态</span></header>
-            <PhonePreview subtitle={subtitle} speaking={running && !!latestSpeech && !latestSpeech.completed} running={running}>
+            <PhonePreview subtitle={subtitle} running={running} activity={foxActivityOf({ running, live, panel: shownPanel })}>
               {shownPanel ? <WorkspacePanel panel={shownPanel} selectedBlockId={selectedBlockId}
                 {...(!running ? { onSelectBlock: selectBlock } : {})} />
                 : <div className="phone-empty"><strong>今天想聊点什么？</strong><p>我在这里，陪你慢慢讲。</p></div>}

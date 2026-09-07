@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 8,
   "character": "fox-clerk",
   "style": "needle-felt stop-motion",
   "frameMode": "three-layer",
@@ -62,6 +62,45 @@
       "rows": 4,
       "fps": 5,
       "durationMs": 3000
+    },
+    {
+      "id": "note",
+      "name": "拿本子记笔记",
+      "description": "手持浅色笔记本，用铅笔完成几次短笔画，再回到静止姿态",
+      "src": "/animations/fox-clerk/note.webp",
+      "frameCount": 13,
+      "frameWidth": 320,
+      "frameHeight": 692,
+      "columns": 4,
+      "rows": 4,
+      "fps": 5,
+      "durationMs": 2600
+    },
+    {
+      "id": "nod",
+      "name": "拿本子点头",
+      "description": "保持本子与双手稳定，低头回应后抬头，再回到静止姿态",
+      "src": "/animations/fox-clerk/nod.webp",
+      "frameCount": 13,
+      "frameWidth": 320,
+      "frameHeight": 692,
+      "columns": 4,
+      "rows": 4,
+      "fps": 5,
+      "durationMs": 2600
+    },
+    {
+      "id": "notebookTalk",
+      "name": "拿本子说话",
+      "description": "拿着本子面向你说话，本子与双手固定，仅切换口型",
+      "src": "/animations/fox-clerk/notebookTalk.webp",
+      "frameCount": 13,
+      "frameWidth": 320,
+      "frameHeight": 692,
+      "columns": 4,
+      "rows": 4,
+      "fps": 6,
+      "durationMs": 2167
     }
   ]
 }

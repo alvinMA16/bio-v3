@@ -126,3 +126,11 @@ Pi 历史（含已有压缩摘要、近期原文与完整工具调用/结果）
 - [Pi SDK](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/sdk.md)
 - [上下文压缩](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/compaction.md)
 - [会话格式](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/session-format.md)
+
+### 令狸动作调度
+
+动作规则集中在 `apps/miniprogram/miniprogram/lib/fox-behavior.ts`，帧播放与计时集中在同目录的 `fox-animation-controller.ts`。为兼容小程序本地打包，模块保留在小程序源码内；Web 调试台直接复用同一份实现，不复制规则。模块不调用模型、不阻塞内容渲染。
+
+宿主通过 `setActivity` 提交完整状态：`phase`（idle/listening/processing/writing）、`notebook`、`speech`（silent/text/audio）和 `reducedMotion`。倾听立即打断工作和口型；语音优先于写作，Agent 结束不意味着音频结束。Web 的 `fox-activity.ts` 负责将 Agent 工具、文本和面板状态转成该输入。将来音频接入后，传 `audioPlaying` 会替代文本流驱动口型；`userSpeaking` 用于打断。当前没有真实音频事件接入，小程序角色页仅提供状态入口，未连接聊天流。
+
+首次挂载挥手一次；普通等待随机间隔 18～35 秒眨眼。编辑场景使用持本姿态等待和说话；没有持本眨眼素材时保持静止。写作持续 450 毫秒后开始记笔记，每段动作结束持本停顿 1.8 秒；较短操作不闪动。当前写作仅根据 `update_panel_content` 工具执行状态判断，不猜测模型尚未发出的工具意图。`acknowledge()` 是可选倾听回应，要求持本、未说话，并有 20 秒冷却，不自动绑定每轮消息或工具成功。隐藏页面暂停计时，恢复后采用最新状态；销毁清除计时器。减少动态效果模式使用静止姿态。

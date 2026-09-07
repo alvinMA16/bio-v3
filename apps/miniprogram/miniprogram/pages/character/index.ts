@@ -1,3 +1,4 @@
+import type { FoxActivity } from '../../lib/fox-behavior';
 import {
   FOX_ANIMATION_CLIPS,
   FoxAnimationController,
@@ -17,6 +18,15 @@ Page({
     blinkSrc: FOX_ANIMATION_CLIPS.blink.src,
     talkSrc: FOX_ANIMATION_CLIPS.talk.src,
     waveSrc: FOX_ANIMATION_CLIPS.wave.src,
+    noteSrc: FOX_ANIMATION_CLIPS.note.src,
+    nodSrc: FOX_ANIMATION_CLIPS.nod.src,
+    notebookTalkSrc: FOX_ANIMATION_CLIPS.notebookTalk.src,
+    notebookTalkLeftPercent: 0,
+    notebookTalkTopPercent: 0,
+    noteLeftPercent: 0,
+    noteTopPercent: 0,
+    nodLeftPercent: 0,
+    nodTopPercent: 0,
     activeAction: 'wave' as FoxActionId,
     blinkLeftPercent: 0,
     blinkTopPercent: 0,
@@ -52,6 +62,10 @@ Page({
       [`${state.action.id}LeftPercent`]: column * -100,
       [`${state.action.id}TopPercent`]: row * -100,
     });
+  },
+
+  updateCharacterActivity(activity: FoxActivity): void {
+    animationController?.setActivity(activity);
   },
 
   playCharacterAction(action: FoxActionId): void {

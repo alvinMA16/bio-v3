@@ -4,6 +4,7 @@ export interface LiveRun {
   messages: { id: string; text: string; completed: boolean }[];
   steps: { sequence: number; label: string; elapsedMs: number; failed: boolean }[];
   panel?: PanelState;
+  activeTools?: { id: string; name: string }[];
   status: string;
 }
 
@@ -28,6 +29,10 @@ export function applyLiveEvent(previous: LiveRun, event: AgentEvent, elapsedMs: 
       : [...previous.messages, message],
     };
   }
+  let activeTools = previous.activeTools ?? [];
+  if (event.type === 'tool.started') activeTools = [...activeTools.filter(tool => tool.id !== event.toolCallId), { id: event.toolCallId, name: event.name }];
+  if (event.type === 'tool.completed') activeTools = activeTools.filter(tool => tool.id !== event.toolCallId);
+  if (['run.completed', 'run.cancelled', 'run.failed'].includes(event.type)) activeTools = [];
   let label: string;
   let failed = false;
   let panel = previous.panel;
@@ -52,7 +57,7 @@ export function applyLiveEvent(previous: LiveRun, event: AgentEvent, elapsedMs: 
     default: return previous;
   }
   return {
-    ...previous, ...(panel ? { panel } : {}), status: label,
+    ...previous, activeTools, ...(panel ? { panel } : {}), status: label,
     steps: [...previous.steps, { sequence: event.sequence, label, elapsedMs, failed }],
   };
 }
