@@ -1,0 +1,21 @@
+{
+  "checked_at": "2026-09-07",
+  "currency": "CNY",
+  "unit": "per_million_tokens",
+  "qwen": {
+    "model": "qwen3.8-flash",
+    "region": "mainland Beijing",
+    "source": "https://help.aliyun.com/zh/model-studio/qwen3-8-flash",
+    "rates": {"cache_hit": 0.1, "cache_miss": 0.8, "output": 2.7},
+    "explicit_cache_write": 1.25,
+    "note": "This benchmark uses implicit cache only; no explicit cache creation API."
+  },
+  "deepseek": {
+    "model": "deepseek-v4-flash",
+    "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+    "peak": {"cache_hit": 0.1, "cache_miss": 3.0, "output": 9.0},
+    "off_peak": {"cache_hit": 0.05, "cache_miss": 1.5, "output": 4.5},
+    "peak_schedule": "Asia/Shanghai Monday-Friday [09:00,12:00) and [14:00,18:00)",
+    "billing_time_assumption": "client request start time; provider bill is authoritative at boundaries"
+  }
+}

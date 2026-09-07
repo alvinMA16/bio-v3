@@ -14,3 +14,8 @@ coverage/
 apps/miniprogram/miniprogram_npm/
 apps/miniprogram/.miniprogram-ci/
 apps/miniprogram/project.private.config.json
+
+# Private benchmark inputs and generated model outputs
+.bench-private/
+bench/voice/runs/
+bench/voice/__pycache__/

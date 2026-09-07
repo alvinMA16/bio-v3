@@ -1,0 +1,109 @@
+{
+  "run_id": "2026-09-07-real-001",
+  "benchmark_version": "voice-v0.2",
+  "private_archive": ".bench-private/archives/voice/2026-09-07-real-001",
+  "manifest_sha256": "571ba76ff6e469d8a96d92cb742f05acf34097a2b5e525fcca4be36c504334ba",
+  "run_fingerprint": "e6e5d9fd2168d4752e8063e09d7f66a675594b4515633c797ab4e07ab1b54021",
+  "cases": 20,
+  "sessions": 7,
+  "users": 3,
+  "repeats": 2,
+  "models": {
+    "qwen": "qwen3.8-flash",
+    "deepseek": "deepseek-v4-flash"
+  },
+  "review_method": "single_pass_blinded",
+  "quality": {
+    "qwen": {
+      "case_mean": 3.435,
+      "session_macro": 3.507142857142857,
+      "wins": 12
+    },
+    "deepseek": {
+      "case_mean": 2.71,
+      "session_macro": 2.7261904761904763,
+      "wins": 5
+    }
+  },
+  "measurement": {
+    "qwen": {
+      "calls": 40,
+      "success": 40,
+      "tokens": {
+        "input": 18682,
+        "cache_hit": 0,
+        "cache_miss": 18682,
+        "output": 1553
+      },
+      "missing_usage_calls": {
+        "input": 0,
+        "cache_hit": 0,
+        "cache_miss": 0,
+        "output": 0
+      },
+      "unpriced_calls": 0,
+      "known_cost_cny": {
+        "cache_hit": 0.0,
+        "cache_miss": 0.0149456,
+        "output": 0.0041931,
+        "total": 0.0191387
+      },
+      "cache_hit_ratio": 0.0,
+      "latency": {
+        "ttft_ms": {
+          "mean": 1041.65525,
+          "p50": 511.005,
+          "p95": 2382.5220000000004
+        },
+        "duration_ms": {
+          "mean": 1830.6265,
+          "p50": 1215.08,
+          "p95": 3773.6824999999926
+        }
+      }
+    },
+    "deepseek": {
+      "calls": 40,
+      "success": 40,
+      "tokens": {
+        "input": 17702,
+        "cache_hit": 11392,
+        "cache_miss": 6310,
+        "output": 1981
+      },
+      "missing_usage_calls": {
+        "input": 0,
+        "cache_hit": 0,
+        "cache_miss": 0,
+        "output": 0
+      },
+      "unpriced_calls": 0,
+      "known_cost_cny": {
+        "cache_hit": 0.000736,
+        "cache_miss": 0.016191,
+        "output": 0.0129015,
+        "total": 0.0298285
+      },
+      "cache_hit_ratio": 0.6435431024742967,
+      "latency": {
+        "ttft_ms": {
+          "mean": 462.83575,
+          "p50": 448.975,
+          "p95": 698.6115
+        },
+        "duration_ms": {
+          "mean": 1098.634,
+          "p50": 1075.1399999999999,
+          "p95": 1750.504
+        }
+      }
+    }
+  },
+  "limitations": [
+    "20-turn convenience sample; 3 accounts",
+    "single Codex blind review",
+    "short context windows",
+    "actual mixed peak/off-peak prices; compare normalized rates too"
+  ],
+  "storage": "Code and aggregate metadata are in Git. Full transcripts and outputs are local-only, not a remote backup."
+}

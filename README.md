@@ -96,3 +96,7 @@ API 集成测试使用真实 Pi SDK 和本地模拟 OpenAI 兼容服务，不需
 
 千问费用按北京地域公开人民币原价估算（输入 0.8、缓存命中 0.1、输出 2.7 元/百万 Token），不含优惠或套餐；其他地域请核对账单。自定义未知模型尚无定价，返回的零费用不代表免费。
 参考：[千问模型规格与价格](https://help.aliyun.com/zh/model-studio/qwen3-8-flash)、[API 地址与密钥](https://help.aliyun.com/zh/model-studio/get-api-key/)。密钥只放在被 Git 忽略的服务端 `.env`。
+
+## 语音回复质量评测
+
+[Voice Reply Bench](bench/voice/README.md) 使用只读提取的真实对话片段，记录缓存输入/非缓存输入/输出 Token、分项费用及流式首字/完整耗时，再由 Codex 按匿名评分规则直接评审。真实数据和报告保存在 Git 忽略的本地私有目录；运行方式和数据局限见说明。
