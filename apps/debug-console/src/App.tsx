@@ -1,3 +1,5 @@
+import { PhonePreview } from './phone-preview';
+import { conversationOf, conversationThrough, panelOf, type RunRecord } from './run-history';
 import { applyLiveEvent, emptyLiveRun, type LiveRun } from './live-run';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -5,7 +7,6 @@ import type {
   ModelProvider,
   ChatCompletionRequest,
   ChatCompletionResponse,
-  MarkdownPanel,
   AgentEvent,
   PanelState,
   PanelBlock,
@@ -39,17 +40,6 @@ interface AnimationManifest {
   };
   backgroundPolicy: string;
   animations: AnimationAsset[];
-}
-
-interface RunRecord {
-  id: string;
-  startedAt: string;
-  durationMs: number;
-  request: ChatCompletionRequest;
-  response?: ChatCompletionResponse;
-  error?: string;
-  panel?: PanelState;
-  live?: LiveRun;
 }
 
 const HISTORY_KEY = 'bio-agent-lab-history-v2';
@@ -91,7 +81,7 @@ export function App() {
   const [apiStatus, setApiStatus] = useState<ApiStatus>('checking');
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
   const [message, setMessage] = useState('请介绍一下你自己，并说明你能帮我做什么。');
-  const [conversationId, setConversationId] = useState('');
+  const [conversationId, setConversationId] = useState(() => { const latest = readHistory()[0]; return latest ? conversationOf(latest) ?? '' : ''; });
   const [provider, setProvider] = useState<ModelProvider | ''>('');
   const [scene, setScene] = useState<AgentScene>('conversation');
   const [documentId, setDocumentId] = useState('');
@@ -106,6 +96,7 @@ export function App() {
   const [live, setLive] = useState<LiveRun>(emptyLiveRun);
   const [elapsedMs, setElapsedMs] = useState(0);
   const startedRef = useRef(0);
+  const [pendingMessage, setPendingMessage] = useState('');
   const [running, setRunning] = useState(false);
   const [view, setView] = useState<View>('result');
   const [history, setHistory] = useState<RunRecord[]>(readHistory);
@@ -113,12 +104,25 @@ export function App() {
     () => readHistory()[0]?.id ?? null,
   );
   const abortRef = useRef<AbortController | null>(null);
-  const resultRef = useRef<HTMLElement | null>(null);
+  const resultRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const threadRef = useRef<HTMLDivElement | null>(null);
+  const followThread = useRef(true);
 
   const selectedRun = useMemo(
-    () => history.find((run) => run.id === selectedRunId) ?? history[0],
+    () => history.find((run) => run.id === selectedRunId),
     [history, selectedRunId],
   );
+
+  const shownPanel = running ? live.panel : panelOf(selectedRun);
+  const shownLive = running ? live : selectedRun?.live;
+  const turns = conversationThrough(history, selectedRun);
+  const latestSpeech = shownLive?.messages.at(-1);
+  const subtitle = latestSpeech?.text ?? selectedRun?.response?.message.content ?? '';
+
+  useEffect(() => {
+    if (followThread.current && threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
+  }, [live, selectedRunId, pendingMessage]);
 
   useEffect(() => {
     if (!running) return;
@@ -167,8 +171,12 @@ export function App() {
     const started = performance.now();
     const controller = new AbortController();
     abortRef.current = controller;
+    setPendingMessage(request.message);
+    followThread.current = true;
     setRunning(true);
-    let currentLive = emptyLiveRun();
+    let runConversationId = request.conversationId;
+    const previousPanel = panelOf(selectedRun);
+    let currentLive = { ...emptyLiveRun(), ...(previousPanel && conversationOf(selectedRun!) === request.conversationId ? { panel: previousPanel } : {}) };
     setLive(currentLive);
     startedRef.current = started;
     setElapsedMs(0);
@@ -192,7 +200,17 @@ export function App() {
         const item = JSON.parse(line) as { kind: string; event?: AgentEvent; result?: ChatCompletionResponse; message?: string };
         if (item.kind === 'error') throw new Error(item.message ?? '运行失败');
         if (item.event) {
+          runConversationId = item.event.conversationId;
           setConversationId(item.event.conversationId);
+          if (item.event.type === 'panel.state.updated') {
+            const panel = item.event.panel;
+            if (panel.mode !== 'editor' || panel.document?.id !== documentId || panel.document?.version !== documentVersion) {
+              setSelectedBlockId('');
+              setDocumentId('');
+              setDocumentVersion(0);
+              setExcerpt('');
+            }
+          }
           currentLive = applyLiveEvent(currentLive, item.event, Math.round(performance.now() - started));
           setLive(currentLive);
         }
@@ -214,6 +232,7 @@ export function App() {
       if (!completion) throw new Error('事件流结束但没有最终结果');
       const record: RunRecord = {
         id,
+        ...(runConversationId ? { conversationId: runConversationId } : {}),
         startedAt,
         durationMs: Math.round(performance.now() - started),
         request,
@@ -224,6 +243,7 @@ export function App() {
       setHistory((items) => [record, ...items].slice(0, 20));
       setSelectedRunId(id);
       setConversationId(completion.conversationId);
+      setMessage('');
     } catch (error) {
       const cancelled = error instanceof DOMException && error.name === 'AbortError';
       currentLive = {
@@ -236,6 +256,7 @@ export function App() {
       };
       const record: RunRecord = {
         id,
+        ...(runConversationId ? { conversationId: runConversationId } : {}),
         startedAt,
         durationMs: Math.round(performance.now() - started),
         request,
@@ -253,7 +274,22 @@ export function App() {
     } finally {
       abortRef.current = null;
       setRunning(false);
+      setPendingMessage('');
     }
+  }
+
+  function startNewConversation(): void {
+    setConversationId(''); setSelectedRunId(null); setDocumentId(''); setDocumentVersion(0);
+    setSelectedBlockId(''); setExcerpt(''); setAttachmentId(''); setAttachmentTitle('');
+    setAttachmentUrl(''); setAttachmentText(''); setLive(emptyLiveRun());
+  }
+
+  function selectBlock(panel: PanelState, block: PanelBlock): void {
+    if (!panel.document) return;
+    if (selectedRun) setConversationId(conversationOf(selectedRun) ?? '');
+    setDocumentId(panel.document.id); setDocumentVersion(panel.document.version);
+    setSelectedBlockId(block.id); setExcerpt(block.text);
+    inputRef.current?.focus();
   }
 
   function clearHistory(): void {
@@ -298,16 +334,75 @@ export function App() {
         </div>
       </header>
 
-      {productView === 'agent' ? <main className="workspace">
-        <aside className="control-panel">
-          <div className="panel-heading">
-            <div>
-              <span className="eyebrow">Configuration</span>
-              <h1>New run</h1>
+      {productView === 'agent' ? <main className="agent-lab">
+        <div className="lab-session-bar"><span>{conversationId ? '当前会话' : '新会话'} <small>{conversationId ? conversationId.slice(0, 8) : '准备就绪'}</small></span>
+          <button type="button" disabled={running} onClick={startNewConversation}>新会话</button>
+        </div>
+        <div className="lab-main" ref={resultRef}>
+          <section className="lab-preview-column">
+            <header className="lab-section-heading"><h1>用户界面预览</h1><span>手机 · 实时状态</span></header>
+            <PhonePreview subtitle={subtitle} speaking={running && !!latestSpeech && !latestSpeech.completed} running={running}>
+              {shownPanel ? <WorkspacePanel panel={shownPanel} selectedBlockId={selectedBlockId}
+                {...(!running ? { onSelectBlock: selectBlock } : {})} />
+                : <div className="phone-empty"><strong>今天想聊点什么？</strong><p>我在这里，陪你慢慢讲。</p></div>}
+            </PhonePreview>
+            <p className="lab-preview-note">动作按文本状态预览，尚未播放语音</p>
+          </section>
+          <section className="lab-conversation-column">
+            <header className="lab-section-heading"><h2>对话历史与输入</h2><span role="status">{running ? live.status : selectedRun?.error ? '本轮已中断' : selectedRun ? '本轮完成' : '等待输入'}{running && ` · ${formatDuration(elapsedMs)}`}</span></header>
+            <div className="lab-thread" ref={threadRef} onScroll={() => { const element = threadRef.current; if (element) followThread.current = element.scrollHeight - element.scrollTop - element.clientHeight < 70; }}>
+              {!turns.length && !running && <div className="lab-thread-empty">从右下方开始对话，左侧会同步呈现令狸和面板的变化。</div>}
+              {turns.map(run => <ConversationTurn key={run.id} request={run.request.message} live={run.live} fallback={run.response?.message.content} error={run.error} />)}
+              {running && <ConversationTurn request={pendingMessage} live={live} running />}
             </div>
-            <span className="model-chip">Model comparison</span>
+            {selectedBlockId && <div className="lab-selection">已选中 {selectedBlockId} · 版本 {documentVersion}<button type="button" disabled={running} onClick={() => { setSelectedBlockId(''); setDocumentId(''); setExcerpt(''); }}>取消选区</button></div>}
+            <div className="lab-composer">
+          <label className="field field--grow">
+            <span className="field-label">
+              本轮输入 <span>{message.length}/20000</span>
+            </span>
+            <textarea
+              className="textarea textarea--message"
+              value={message}
+              ref={inputRef}
+              disabled={running}
+              maxLength={20000}
+              onChange={(event) => setMessage(event.target.value)}
+              onKeyDown={(event) => {
+                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                  void runAgent();
+                }
+              }}
+            />
+          </label>
+
+          <div className="run-actions">
+            {running ? (
+              <button
+                className="button button--stop"
+                type="button"
+                onClick={() => abortRef.current?.abort()}
+              >
+                <span className="stop-icon" /> 停止
+              </button>
+            ) : (
+              <button
+                className="button button--run"
+                type="button"
+                disabled={!message.trim() || apiStatus === 'offline'}
+                onClick={() => void runAgent()}
+              >
+                发送 <span className="shortcut">⌘ ↵</span>
+              </button>
+            )}
           </div>
 
+            </div>
+          </section>
+        </div>
+        <details className="lab-settings">
+          <summary><span>配置与上下文</span><small>模型 · 人物设定 · 场景 · 附件</small></summary>
+          <div className="lab-config-grid">
           <fieldset className="model-switcher" disabled={running} aria-describedby="model-switcher-hint">
             <legend>切换模型</legend>
             <div className="model-options">
@@ -325,7 +420,7 @@ export function App() {
                     checked={provider === option.value}
                     onChange={() => {
                       setProvider(option.value);
-                      setConversationId('');
+                      startNewConversation();
                     }}
                   />
                   <span><strong>{option.label}</strong><small>{option.detail}</small></span>
@@ -342,6 +437,7 @@ export function App() {
             <textarea
               className="textarea textarea--system"
               value={systemPrompt}
+              disabled={running}
               maxLength={10000}
               onChange={(event) => setSystemPrompt(event.target.value)}
             />
@@ -352,8 +448,9 @@ export function App() {
             <input
               className="input"
               value={conversationId}
+              disabled={running}
               placeholder="自动创建"
-              onChange={(event) => setConversationId(event.target.value)}
+              onChange={(event) => { const id = event.target.value; setConversationId(id); setSelectedRunId(history.find(run => conversationOf(run) === id)?.id ?? null); setSelectedBlockId(''); setDocumentId(''); setExcerpt(''); }}
             />
           </label>
 
@@ -404,87 +501,30 @@ export function App() {
             <small>附件原件只供查看；修改会创建独立草稿。当前照片仅展示，未接入图像理解。</small>
           </fieldset>
 
-          <label className="field field--grow">
-            <span className="field-label">
-              User message <span>{message.length}/20000</span>
-            </span>
-            <textarea
-              className="textarea textarea--message"
-              value={message}
-              maxLength={20000}
-              onChange={(event) => setMessage(event.target.value)}
-              onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-                  void runAgent();
-                }
-              }}
-            />
-          </label>
 
-          <div className="run-actions">
-            {running ? (
-              <button
-                className="button button--stop"
-                type="button"
-                onClick={() => abortRef.current?.abort()}
-              >
-                <span className="stop-icon" /> Stop run
-              </button>
-            ) : (
-              <button
-                className="button button--run"
-                type="button"
-                disabled={!message.trim() || apiStatus === 'offline'}
-                onClick={() => void runAgent()}
-              >
-                Run agent <span className="shortcut">⌘ ↵</span>
-              </button>
-            )}
           </div>
-        </aside>
-
-        <section className="result-panel" ref={resultRef}>
-          <nav className="tabs" aria-label="Run views">
-            {(['result', 'inspector', 'history'] as const).map((item) => (
-              <button
-                className={`tab ${view === item ? 'tab--active' : ''}`}
-                type="button"
-                key={item}
-                onClick={() => setView(item)}
-              >
-                {item === 'result'
-                  ? 'Result'
-                  : item === 'inspector'
-                    ? 'Inspector'
-                    : `History ${history.length ? `(${history.length})` : ''}`}
-              </button>
-            ))}
+        </details>
+        <details className="lab-details">
+          <summary><span>运行详情与历史</span><small>Token · 缓存 · 费用 · 耗时 · Trace</small></summary>
+          <nav className="tabs" aria-label="运行详情视图">
+            {(['result', 'inspector', 'history'] as const).map(item => <button key={item} type="button" className={`tab ${view === item ? 'tab--active' : ''}`} onClick={() => setView(item)}>{item === 'result' ? '本轮过程' : item === 'inspector' ? '原始数据' : '历史运行'}</button>)}
           </nav>
-
-          <div className="view-content">
-            {view === 'result' && (
-              <ResultView run={selectedRun} running={running} live={live} elapsedMs={elapsedMs}
-                onSelectBlock={(panel, block) => {
-                  if (!panel.document) return;
-                  if (selectedRun?.response?.conversationId) setConversationId(selectedRun.response.conversationId);
-                  setDocumentId(panel.document.id); setDocumentVersion(panel.document.version);
-                  setSelectedBlockId(block.id); setExcerpt(block.text);
-                }} />
-            )}
+          <div className="lab-detail-content">
+            {view === 'result' && <>
+              <RunTimeline live={shownLive} />
+              {!running && selectedRun?.response && <UsageSummary response={selectedRun.response} />}
+              {!running && selectedRun?.response?.runId && <p className="trace-link"><a href={`/api/v1/agent/runs/${selectedRun.response.runId}/trace`} target="_blank" rel="noreferrer">查看本次运行 Trace</a></p>}
+            </>}
             {view === 'inspector' && <InspectorView run={selectedRun} />}
-            {view === 'history' && (
-              <HistoryView
-                history={history}
-                selectedRunId={selectedRunId}
-                onSelect={(id) => {
-                  setSelectedRunId(id);
-                  setView('result');
-                }}
-                onClear={clearHistory}
-              />
-            )}
+            {view === 'history' && <HistoryView history={history} selectedRunId={selectedRunId} onSelect={id => {
+              if (running) return;
+              const run = history.find(item => item.id === id);
+              setSelectedRunId(id); setConversationId(run ? conversationOf(run) ?? '' : '');
+              setProvider(run?.request.provider ?? '');
+              setDocumentId(''); setSelectedBlockId(''); setExcerpt(''); followThread.current = true;
+            }} onClear={() => { if (!running) clearHistory(); }} />}
           </div>
-        </section>
+        </details>
       </main> : <AnimationLab />}
     </div>
   );
@@ -678,91 +718,6 @@ function SpriteFrame({ animation, frame, className }: { animation: AnimationAsse
   );
 }
 
-function ResultView({
-  run,
-  running, live, elapsedMs, onSelectBlock,
-}: {
-  run: RunRecord | undefined;
-  running: boolean;
-  live: LiveRun;
-  elapsedMs: number;
-  onSelectBlock: (panel: PanelState, block: PanelBlock) => void;
-}) {
-  if (running) {
-    return <LiveWorkspace live={live} elapsedMs={elapsedMs} running />;
-  }
-
-  if (!run) {
-    return (
-      <div className="empty-state">
-        <div className="empty-glyph">⌁</div>
-        <h2>Ready for a new run</h2>
-        <p>配置提示词并运行 Agent，结果和调试信息会显示在这里。</p>
-      </div>
-    );
-  }
-
-  const panels = new Map<string, MarkdownPanel>();
-  for (const event of run.response?.events ?? []) {
-    if (event.type === 'panel.updated') panels.set(event.panel.id, event.panel);
-  }
-
-  return (
-    <div className="run-result">
-      <div className="run-meta">
-        <span className={`run-badge ${run.error ? 'run-badge--error' : ''}`}>
-          {run.error === '运行已取消' ? 'Cancelled' : run.error ? 'Failed' : 'Completed'}
-        </span>
-        <span>{formatTime(run.startedAt)}</span>
-        <span>{formatDuration(run.durationMs)}</span>
-        {run.response?.model && <span>{run.response.model}</span>}
-        {run.response?.finishReason && <span>{run.response.finishReason}</span>}
-      </div>
-
-      {run.error ? (
-        <div className="error-card">
-          <span className="error-mark">!</span>
-          <div><strong>{run.error === '运行已取消' ? '已停止接收' : '运行失败'}</strong><p>{run.error}</p></div>
-        </div>
-      ) : !run.live?.messages.length ? (
-        <article className="answer-card">
-          <div className="answer-label">Agent response</div>
-          <div className="answer-content">{run.response?.message.content}</div>
-        </article>
-      ) : null}
-
-      {run.live ? <LiveWorkspace live={run.live} elapsedMs={run.durationMs} running={false} onSelectBlock={onSelectBlock} />
-        : run.panel && <WorkspacePanel panel={run.panel} onSelectBlock={onSelectBlock} />}
-      {run.response && <UsageSummary response={run.response} />}
-
-      {Array.from(panels.values()).map((panel) => (
-        <article className="answer-card work-panel" key={panel.id}>
-          <div className="answer-label">工作面板 · {panel.title}</div>
-          <div className="answer-content">{panel.content}</div>
-        </article>
-      ))}
-
-      {run.response?.runId && (
-        <p className="trace-link">
-          <a href={`/api/v1/agent/runs/${run.response.runId}/trace`} target="_blank" rel="noreferrer">查看本次运行 Trace</a>
-        </p>
-      )}
-
-      {!run.live && <div className="timeline">
-        <div className="timeline-heading">Run timeline</div>
-        <div className="timeline-item timeline-item--done">
-          <span className="timeline-dot" />
-          <div><strong>Request prepared</strong><p>System prompt and user message assembled</p></div>
-        </div>
-        <div className={`timeline-item ${run.error ? 'timeline-item--error' : 'timeline-item--done'}`}>
-          <span className="timeline-dot" />
-          <div><strong>{run.response?.model ?? 'DeepSeek'} completion</strong><p>{formatDuration(run.durationMs)} total latency</p></div>
-        </div>
-      </div>}
-    </div>
-  );
-}
-
 function UsageSummary({ response }: { response: ChatCompletionResponse }) {
   const { usage, estimatedCost } = response;
 
@@ -802,7 +757,7 @@ function InspectorView({ run }: { run: RunRecord | undefined }) {
   return (
     <div className="inspector-grid">
       <section className="code-card">
-        <div className="code-heading"><span>Request</span><code>POST /api/v1/chat/completions</code></div>
+        <div className="code-heading"><span>Request</span><code>POST /api/v1/agent/runs/stream</code></div>
         <pre>{JSON.stringify(run.request, null, 2)}</pre>
       </section>
       <section className="code-card">
@@ -853,15 +808,16 @@ function HistoryView({
   );
 }
 
-function WorkspacePanel({ panel, onSelectBlock }: {
+function WorkspacePanel({ panel, onSelectBlock, selectedBlockId }: {
   panel: PanelState;
+  selectedBlockId?: string;
   onSelectBlock?: (panel: PanelState, block: PanelBlock) => void;
 }) {
   const modes = { conversation: '纯对话', attachment: '附件查看', editor: '共同编辑' };
   const safeUrl = panel.attachment?.url?.startsWith('https://') ? panel.attachment.url : undefined;
   return <article className="answer-card work-panel">
     <div className="answer-label">{modes[panel.mode]}</div>
-    {panel.mode === 'conversation' && <p>当前没有打开的内容，已有草稿仍然保留。</p>}
+    {panel.mode === 'conversation' && <div className="phone-empty"><strong>慢慢讲，我在听。</strong><p>今天想从哪里聊起？</p></div>}
     {panel.mode === 'attachment' && panel.attachment && <>
       <h3>{panel.attachment.title}</h3>
       {panel.attachment.kind === 'image' && safeUrl && <img className="panel-attachment-image" src={safeUrl} alt={panel.attachment.title} referrerPolicy="no-referrer" />}
@@ -872,13 +828,13 @@ function WorkspacePanel({ panel, onSelectBlock }: {
     </>}
     {panel.mode === 'editor' && panel.document && <>
       <h3>{panel.document.title} <small>版本 {panel.document.version}</small></h3>
-      {panel.document.blocks.map(block => <section className="panel-block" key={block.id}>
+      {panel.document.blocks.map(block => <section className={`panel-block ${selectedBlockId === block.id ? 'panel-block--selected' : ''}`} key={block.id}>
         {block.kind === 'heading' ? <h4>{block.text}</h4>
           : block.kind === 'list' ? <ul>{block.text.split('\n').map((text, index) => <li key={index}>{text}</li>)}</ul>
           : block.kind === 'quote' ? <blockquote>{block.text}</blockquote>
           : block.kind === 'code' ? <pre><code>{block.text}</code></pre>
           : <p>{block.text}</p>}
-        {onSelectBlock && <button type="button" onClick={() => onSelectBlock(panel, block)}>选中这段继续讨论</button>}
+        {onSelectBlock && <button type="button" onClick={() => onSelectBlock(panel, block)} aria-pressed={selectedBlockId === block.id}>{selectedBlockId === block.id ? '已选中' : '选中这段'}</button>}
       </section>)}
       {panel.lastChange && <details><summary>查看本次修改</summary>
         {panel.lastChange.before.map(block => <p className="panel-removed" key={`before-${block.id}`}>修改前：{block.text}</p>)}
@@ -889,35 +845,25 @@ function WorkspacePanel({ panel, onSelectBlock }: {
   </article>;
 }
 
-function LiveWorkspace({ live, elapsedMs, running, onSelectBlock }: {
-  live: LiveRun; elapsedMs: number; running: boolean;
-  onSelectBlock?: (panel: PanelState, block: PanelBlock) => void;
+function ConversationTurn({ request, live, fallback, error, running = false }: {
+  request: string; live?: LiveRun | undefined; fallback?: string | undefined; error?: string | undefined; running?: boolean;
 }) {
-  return <section className="live-workspace">
-    <header className="live-status" role="status">
-      <span className={running ? 'live-indicator live-indicator--active' : 'live-indicator'} />
-      <strong>{running ? live.status : '本轮记录'}</strong>
-      <span>{formatDuration(elapsedMs)}</span>
-    </header>
-    <div className="live-stage">
-      <section className="live-dialogue" aria-label="令狸的实时回复">
-        <div className="answer-label">令狸的回复</div>
-        {live.messages.length ? live.messages.map(message => <div className="live-utterance" key={message.id}>
-          <p>{message.text}</p>
-          {running && !message.completed && <span className="live-writing">正在说…</span>}
-          {!running && !message.completed && <span className="live-writing">回复未完成</span>}
-        </div>) : <p className="live-placeholder">{running ? '等待令狸回应…' : '本轮没有生成普通回复。'}</p>}
-      </section>
-      <section className="live-panel" aria-label="实时工作面板">
-        {live.panel ? <WorkspacePanel panel={live.panel} {...(onSelectBlock ? { onSelectBlock } : {})} />
-          : <div className="live-placeholder">{running ? '正在读取当前面板…' : '未收到面板状态。'}</div>}
-      </section>
-    </div>
-    <section className="live-timeline" aria-label="实时变化记录">
-      <h3>变化记录 <small>从本轮开始计时</small></h3>
-      <ol>{live.steps.map(step => <li key={step.sequence} className={step.failed ? 'live-step--failed' : ''}>
-        <time>{formatDuration(step.elapsedMs)}</time><span>{step.label}</span>
-      </li>)}</ol>
-    </section>
+  const messages = live?.messages.length ? live.messages : fallback ? [{ id: 'final', text: fallback, completed: true }] : [];
+  const actions = live?.steps.filter(step => step.label.startsWith('面板：') || step.failed) ?? [];
+  return <section className="conversation-turn">
+    <article className="conversation-bubble conversation-bubble--user"><small>你</small><p>{request}</p></article>
+    {messages.map(message => <article className="conversation-bubble" key={message.id}><small>令狸</small><p>{message.text}</p>{!message.completed && <span className="live-writing">{running ? '正在回复…' : '回复未完成'}</span>}</article>)}
+    {running && !messages.length && <p className="conversation-wait">令狸正在处理…</p>}
+    {actions.length > 0 && <details className="conversation-actions"><summary>{actions.at(-1)?.label}</summary>{actions.map(action => <p key={action.sequence}>{formatDuration(action.elapsedMs)} · {action.label}</p>)}</details>}
+    {error && <p className="conversation-error" role="alert">{error}</p>}
+  </section>;
+}
+
+function RunTimeline({ live }: { live: LiveRun | undefined }) {
+  return <section className="live-timeline" aria-label="实时变化记录">
+    <h3>变化记录 <small>从本轮开始计时</small></h3>
+    {live?.steps.length ? <ol>{live.steps.map(step => <li key={step.sequence} className={step.failed ? 'live-step--failed' : ''}>
+      <time>{formatDuration(step.elapsedMs)}</time><span>{step.label}</span>
+    </li>)}</ol> : <p className="live-placeholder">运行后可查看工具与面板事件。</p>}
   </section>;
 }
