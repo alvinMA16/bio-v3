@@ -42,6 +42,18 @@ button { color: inherit; }
 .eyebrow { color: #97958b; font-size: 10px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
 h1 { margin: 5px 0 0; font-family: Georgia, "Times New Roman", serif; font-size: 30px; font-weight: 500; letter-spacing: -.03em; }
 .model-chip { padding: 6px 9px; border: 1px solid #d4d1c6; border-radius: 7px; background: #fff; color: #68675f; font-size: 11px; }
+.model-switcher { min-width: 0; margin: 0; padding: 14px; border: 1px solid #d4d8c8; border-radius: 12px; background: #eeefe6; }
+.model-switcher legend { padding: 0 6px; color: #333d2d; font-size: 13px; font-weight: 700; }
+.model-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.model-option { display: flex; align-items: center; gap: 8px; padding: 12px 9px; border: 1px solid #d8d5ca; border-radius: 9px; background: #fdfcf9; cursor: pointer; }
+.model-option:has(input:checked) { border-color: #6d814e; background: #e3edcf; }
+.model-option:has(input:focus-visible) { outline: 2px solid #6d814e; outline-offset: 2px; }
+.model-option input { margin: 0; accent-color: #526837; }
+.model-option strong, .model-option small { display: block; }
+.model-option strong { font-size: 12px; }
+.model-option small { margin-top: 4px; color: #717465; font-size: 10px; }
+.model-switcher p { margin: 12px 0 0; color: #74776a; font-size: 11px; line-height: 1.6; }
+.model-switcher:disabled .model-option { opacity: .6; cursor: not-allowed; }
 .field { display: flex; flex-direction: column; gap: 8px; }
 .field--grow { flex: 1; }
 .field-label { display: flex; justify-content: space-between; color: #55564f; font-size: 12px; font-weight: 650; }

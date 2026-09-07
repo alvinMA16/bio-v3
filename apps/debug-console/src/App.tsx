@@ -234,18 +234,32 @@ export function App() {
             <span className="model-chip">Model comparison</span>
           </div>
 
-          <label className="field">
-            <span className="field-label">模型（切换后开始新会话）</span>
-            <select className="input" value={provider} disabled={running} onChange={(event) => {
-              setProvider(event.target.value as ModelProvider | '');
-              setConversationId('');
-            }}>
-              <option value="">服务端默认</option>
-              <option value="deepseek">DeepSeek V4 Flash</option>
-              <option value="qwen">Qwen 3.8 Flash</option>
-              <option value="openai-compatible">自定义 OpenAI 兼容模型</option>
-            </select>
-          </label>
+          <fieldset className="model-switcher" disabled={running} aria-describedby="model-switcher-hint">
+            <legend>切换模型</legend>
+            <div className="model-options">
+              {([
+                { value: 'qwen', label: '千问', detail: 'Qwen 3.8 Flash' },
+                { value: 'deepseek', label: 'DeepSeek', detail: 'V4 Flash' },
+                { value: '', label: '默认模型', detail: '使用服务端配置' },
+                { value: 'openai-compatible', label: '自定义模型', detail: 'OpenAI 兼容服务' },
+              ] as const).map((option) => (
+                <label className="model-option" key={option.value}>
+                  <input
+                    type="radio"
+                    name="model-provider"
+                    value={option.value}
+                    checked={provider === option.value}
+                    onChange={() => {
+                      setProvider(option.value);
+                      setConversationId('');
+                    }}
+                  />
+                  <span><strong>{option.label}</strong><small>{option.detail}</small></span>
+                </label>
+              ))}
+            </div>
+            <p id="model-switcher-hint">{running ? '运行中，结束后可切换模型。' : '切换后开始新会话，保留提示词和输入，方便对比。'}</p>
+          </fieldset>
 
           <label className="field">
             <span className="field-label">
