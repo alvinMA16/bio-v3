@@ -1,3 +1,4 @@
+import { applyLiveEvent, emptyLiveRun, type LiveRun } from './live-run';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AgentScene,
@@ -48,6 +49,7 @@ interface RunRecord {
   response?: ChatCompletionResponse;
   error?: string;
   panel?: PanelState;
+  live?: LiveRun;
 }
 
 const HISTORY_KEY = 'bio-agent-lab-history-v2';
@@ -101,8 +103,9 @@ export function App() {
   const [attachmentTitle, setAttachmentTitle] = useState('');
   const [attachmentUrl, setAttachmentUrl] = useState('');
   const [attachmentText, setAttachmentText] = useState('');
-  const [livePanel, setLivePanel] = useState<PanelState>();
-  const [liveSpeech, setLiveSpeech] = useState('');
+  const [live, setLive] = useState<LiveRun>(emptyLiveRun);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const startedRef = useRef(0);
   const [running, setRunning] = useState(false);
   const [view, setView] = useState<View>('result');
   const [history, setHistory] = useState<RunRecord[]>(readHistory);
@@ -110,11 +113,19 @@ export function App() {
     () => readHistory()[0]?.id ?? null,
   );
   const abortRef = useRef<AbortController | null>(null);
+  const resultRef = useRef<HTMLElement | null>(null);
 
   const selectedRun = useMemo(
     () => history.find((run) => run.id === selectedRunId) ?? history[0],
     [history, selectedRunId],
   );
+
+  useEffect(() => {
+    if (!running) return;
+    resultRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    const timer = window.setInterval(() => setElapsedMs(Math.round(performance.now() - startedRef.current)), 100);
+    return () => window.clearInterval(timer);
+  }, [running]);
 
   useEffect(() => {
     void fetch('/api/v1/health')
@@ -157,9 +168,10 @@ export function App() {
     const controller = new AbortController();
     abortRef.current = controller;
     setRunning(true);
-    setLivePanel(undefined);
-    setLiveSpeech('');
-    let latestPanel: PanelState | undefined;
+    let currentLive = emptyLiveRun();
+    setLive(currentLive);
+    startedRef.current = started;
+    setElapsedMs(0);
     setView('result');
 
     try {
@@ -181,14 +193,8 @@ export function App() {
         if (item.kind === 'error') throw new Error(item.message ?? '运行失败');
         if (item.event) {
           setConversationId(item.event.conversationId);
-          if (item.event.type === 'panel.state.updated') {
-            latestPanel = item.event.panel;
-            setLivePanel(item.event.panel);
-          }
-          if (item.event.type === 'speech.delta') {
-            const delta = item.event.delta;
-            setLiveSpeech(text => text + delta);
-          }
+          currentLive = applyLiveEvent(currentLive, item.event, Math.round(performance.now() - started));
+          setLive(currentLive);
         }
         if (item.kind === 'result') completion = item.result;
       };
@@ -211,19 +217,30 @@ export function App() {
         startedAt,
         durationMs: Math.round(performance.now() - started),
         request,
-        ...(latestPanel ? { panel: latestPanel } : {}),
+        ...(currentLive.panel ? { panel: currentLive.panel } : {}),
+        live: currentLive,
         response: completion,
       };
       setHistory((items) => [record, ...items].slice(0, 20));
       setSelectedRunId(id);
       setConversationId(completion.conversationId);
     } catch (error) {
+      const cancelled = error instanceof DOMException && error.name === 'AbortError';
+      currentLive = {
+        ...currentLive, status: cancelled ? '客户端已停止接收' : '运行中断',
+        steps: [...currentLive.steps, {
+          sequence: (currentLive.steps.at(-1)?.sequence ?? 0) + 1,
+          label: cancelled ? '客户端已停止接收，保留已收到的结果' : '运行中断，保留已收到的结果',
+          elapsedMs: Math.round(performance.now() - started), failed: !cancelled,
+        }],
+      };
       const record: RunRecord = {
         id,
         startedAt,
         durationMs: Math.round(performance.now() - started),
         request,
-        ...(latestPanel ? { panel: latestPanel } : {}),
+        ...(currentLive.panel ? { panel: currentLive.panel } : {}),
+        live: currentLive,
         error:
           error instanceof DOMException && error.name === 'AbortError'
             ? '运行已取消'
@@ -426,7 +443,7 @@ export function App() {
           </div>
         </aside>
 
-        <section className="result-panel">
+        <section className="result-panel" ref={resultRef}>
           <nav className="tabs" aria-label="Run views">
             {(['result', 'inspector', 'history'] as const).map((item) => (
               <button
@@ -446,7 +463,7 @@ export function App() {
 
           <div className="view-content">
             {view === 'result' && (
-              <ResultView run={selectedRun} running={running} livePanel={livePanel} liveSpeech={liveSpeech}
+              <ResultView run={selectedRun} running={running} live={live} elapsedMs={elapsedMs}
                 onSelectBlock={(panel, block) => {
                   if (!panel.document) return;
                   if (selectedRun?.response?.conversationId) setConversationId(selectedRun.response.conversationId);
@@ -663,23 +680,16 @@ function SpriteFrame({ animation, frame, className }: { animation: AnimationAsse
 
 function ResultView({
   run,
-  running, livePanel, liveSpeech, onSelectBlock,
+  running, live, elapsedMs, onSelectBlock,
 }: {
   run: RunRecord | undefined;
   running: boolean;
-  livePanel: PanelState | undefined;
-  liveSpeech: string;
+  live: LiveRun;
+  elapsedMs: number;
   onSelectBlock: (panel: PanelState, block: PanelBlock) => void;
 }) {
   if (running) {
-    return (
-      <div className="running-state">
-        <div className="orb"><span /></div>
-        <h2>令狸正在处理</h2>
-        <p>{liveSpeech || '正在理解你的请求…'}</p>
-        {livePanel && <WorkspacePanel panel={livePanel} />}
-      </div>
-    );
+    return <LiveWorkspace live={live} elapsedMs={elapsedMs} running />;
   }
 
   if (!run) {
@@ -701,7 +711,7 @@ function ResultView({
     <div className="run-result">
       <div className="run-meta">
         <span className={`run-badge ${run.error ? 'run-badge--error' : ''}`}>
-          {run.error ? 'Failed' : 'Completed'}
+          {run.error === '运行已取消' ? 'Cancelled' : run.error ? 'Failed' : 'Completed'}
         </span>
         <span>{formatTime(run.startedAt)}</span>
         <span>{formatDuration(run.durationMs)}</span>
@@ -712,17 +722,18 @@ function ResultView({
       {run.error ? (
         <div className="error-card">
           <span className="error-mark">!</span>
-          <div><strong>Run failed</strong><p>{run.error}</p></div>
+          <div><strong>{run.error === '运行已取消' ? '已停止接收' : '运行失败'}</strong><p>{run.error}</p></div>
         </div>
-      ) : (
+      ) : !run.live?.messages.length ? (
         <article className="answer-card">
           <div className="answer-label">Agent response</div>
           <div className="answer-content">{run.response?.message.content}</div>
         </article>
-      )}
+      ) : null}
 
+      {run.live ? <LiveWorkspace live={run.live} elapsedMs={run.durationMs} running={false} onSelectBlock={onSelectBlock} />
+        : run.panel && <WorkspacePanel panel={run.panel} onSelectBlock={onSelectBlock} />}
       {run.response && <UsageSummary response={run.response} />}
-      {run.panel && <WorkspacePanel panel={run.panel} onSelectBlock={onSelectBlock} />}
 
       {Array.from(panels.values()).map((panel) => (
         <article className="answer-card work-panel" key={panel.id}>
@@ -737,7 +748,7 @@ function ResultView({
         </p>
       )}
 
-      <div className="timeline">
+      {!run.live && <div className="timeline">
         <div className="timeline-heading">Run timeline</div>
         <div className="timeline-item timeline-item--done">
           <span className="timeline-dot" />
@@ -747,7 +758,7 @@ function ResultView({
           <span className="timeline-dot" />
           <div><strong>{run.response?.model ?? 'DeepSeek'} completion</strong><p>{formatDuration(run.durationMs)} total latency</p></div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -876,4 +887,37 @@ function WorkspacePanel({ panel, onSelectBlock }: {
       <small>草稿保存在本地会话中，未修改附件原件。</small>
     </>}
   </article>;
+}
+
+function LiveWorkspace({ live, elapsedMs, running, onSelectBlock }: {
+  live: LiveRun; elapsedMs: number; running: boolean;
+  onSelectBlock?: (panel: PanelState, block: PanelBlock) => void;
+}) {
+  return <section className="live-workspace">
+    <header className="live-status" role="status">
+      <span className={running ? 'live-indicator live-indicator--active' : 'live-indicator'} />
+      <strong>{running ? live.status : '本轮记录'}</strong>
+      <span>{formatDuration(elapsedMs)}</span>
+    </header>
+    <div className="live-stage">
+      <section className="live-dialogue" aria-label="令狸的实时回复">
+        <div className="answer-label">令狸的回复</div>
+        {live.messages.length ? live.messages.map(message => <div className="live-utterance" key={message.id}>
+          <p>{message.text}</p>
+          {running && !message.completed && <span className="live-writing">正在说…</span>}
+          {!running && !message.completed && <span className="live-writing">回复未完成</span>}
+        </div>) : <p className="live-placeholder">{running ? '等待令狸回应…' : '本轮没有生成普通回复。'}</p>}
+      </section>
+      <section className="live-panel" aria-label="实时工作面板">
+        {live.panel ? <WorkspacePanel panel={live.panel} {...(onSelectBlock ? { onSelectBlock } : {})} />
+          : <div className="live-placeholder">{running ? '正在读取当前面板…' : '未收到面板状态。'}</div>}
+      </section>
+    </div>
+    <section className="live-timeline" aria-label="实时变化记录">
+      <h3>变化记录 <small>从本轮开始计时</small></h3>
+      <ol>{live.steps.map(step => <li key={step.sequence} className={step.failed ? 'live-step--failed' : ''}>
+        <time>{formatDuration(step.elapsedMs)}</time><span>{step.label}</span>
+      </li>)}</ol>
+    </section>
+  </section>;
 }
