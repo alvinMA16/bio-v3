@@ -28,6 +28,18 @@
     <view id="bottom-anchor"></view>
   </scroll-view>
 
+  <view class="voice-controls">
+    <button wx:if="{{!voiceActive}}" bindtap="startVoice" disabled="{{sending || voiceActive}}">开始语音对话</button>
+    <block wx:else>
+      <text>{{voiceStatus}} {{audioPlaying ? '· 正在播放' : ''}}</text>
+      <text>{{voiceTranscript}}</text>
+      <view class="voice-buttons">
+        <button bindtap="finishVoice" disabled="{{voiceStatus !== '正在听你说'}}">说完了</button>
+        <button bindtap="interruptVoice" disabled="{{voiceStatus === '正在听你说'}}">打断并说话</button>
+        <button bindtap="stopVoice">结束语音</button>
+      </view>
+    </block>
+  </view>
   <view class="composer">
     <textarea
       class="composer__input"
@@ -35,13 +47,13 @@
       placeholder="给令狸发消息"
       auto-height
       maxlength="20000"
-      disabled="{{sending}}"
+      disabled="{{sending || voiceActive}}"
       bindinput="onInput"
       bindconfirm="sendMessage"
     />
     <button
       class="composer__send"
-      disabled="{{sending || !input}}"
+      disabled="{{sending || voiceActive || !input}}"
       bindtap="sendMessage"
     >{{sending ? '···' : '发送'}}</button>
   </view>

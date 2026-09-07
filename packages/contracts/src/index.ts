@@ -130,3 +130,5 @@ export interface AgentTraceEntry {
   type: string;
   data: unknown;
 }
+
+export type { VoiceRequest, VoiceClientMessage, VoiceServerMessage, VoiceState } from './voice.js';

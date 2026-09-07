@@ -1,0 +1,43 @@
+# 实时语音：ASR → Agent → TTS
+
+参考 `biography-v2` 的实时会话、火山 ASR 和豆包 TTS 实现，保留按轮隔离、ASR 最终结果稳定后断轮、分段音频播放的结构。这里中间层直接调用 `AgentService.run`，完整执行 Pi 会话、上下文拼装、工具循环、持久化及模型 Token/费用统计，没有另建一次性模型调用。
+
+## 模块与协议
+
+- `apps/api/src/voice/voice-session.ts`：会话编排与取消；依赖独立 ASR/TTS provider 接口及 Agent runner。
+- `volcengine-asr.ts`：火山 `bigmodel_async` WebSocket，16 kHz 单声道 PCM16；使用 gzip 二进制帧与正/负序列号，开启二遍识别以获得 definite 句末确认。累计文本按快照替换，不重复拼接；同一最终快照不反复重置断轮窗口。凭证留在服务端。
+- `doubao-tts.ts`：HTTP chunked PCM16 流；严格检查结束标记和服务错误，超时/打断可取消。
+- `spoken-segments.ts`：按 messageId 累积普通回复，句末或长片段时送合成；completed 快照不重复播。工具参数、面板正文和内部事件不进入合成。
+- `packages/contracts/src/voice.ts`：共享 WebSocket 协议。`/api/v1/voice` 接收 `listen`（轮次 ID、模型和上下文）、PCM 二进制帧、`finish`、`cancel`；返回 ASR、原始 Agent 事件、分段音频、结果和终态。所有返回事件均带 turnId 和相对轮次起点的 elapsedMs。
+- `apps/debug-console/src/voice/`：麦克风 AudioWorklet 采集、重采样、WebSocket、Web Audio 排队播放和资源回收。
+- `apps/miniprogram/miniprogram/lib/voice-client.ts`：微信录音管理器 PCM 帧和 WebAudio 播放适配；聊天页接收同一套协议、实时更新面板与回复。
+
+## 交互与生命周期
+
+点“开始语音对话”后申请麦克风，边录边显示识别结果。ASR 的句末最终结果稳定 2.5 秒后结束本轮；新的语音开始或中间识别结果会重置窗口，不把卡住的中间结果当作用户已说完。也可点“说完了”立即提交。语音中间结果不作为失败兜底提交给 Agent，避免错误执行用户操作。
+
+普通回复可以在 Agent 继续执行工具时合成和播放，多条回复依次排队。Agent 完成、TTS 完成和客户端播放结束是三个不同时间点；播放队列排空后才重新录音。通过“打断并说话”立即停止本地音频并取消旧 ASR/Agent/TTS，服务端等待旧 Agent 释放会话锁再开启下一轮。已完成的工具修改不会回滚，旧轮音频和 ASR 回调被丢弃。
+
+本次采用与参考项目相近的轮流收听/播放方式，支持按钮打断，**尚不支持播放中自动识别人声抢话的全双工 VAD**。默认稳定窗口保持 2.5 秒，避免人生故事讲述时抢话；可用 `VOICE_ENDPOINT_MS` 在 500～6000 ms 间调整。
+
+调试页将实际音频播放状态传给小狐狸动作模块；文字模式仍用文本生成模拟口型。小程序聊天页已有播放状态，独立角色展示页尚未与聊天页合并。关闭会话、断线、页面隐藏/退出需释放麦克风、WebSocket、音频节点和计时器。
+
+## 配置与验证
+
+填写根目录 `.env.example` 中列出的 ASR/TTS 配置到本地 `.env`，然后启动 `pnpm dev:api` 和 `pnpm dev:web`。未配置凭证时 WebSocket 返回 503，不影响原有文字对话。浏览器麦克风需要 HTTPS 或 localhost；小程序真机需配置实际服务地址、合法 WSS 域名、麦克风权限，并验证平台的 PCM 与 WebAudio 支持。已只读获取服务器运行容器中的火山配置，凭证仅保存到被 Git 忽略的本地 `.env`。ASR 使用 `volc.seedasr.sauc.duration`，TTS 使用 `seed-tts-2.0`。
+
+现有 API 与调试台尚无用户鉴权，这条语音入口同样是本地开发入口，不应直接作为多用户公网服务使用；有同源检查、连接数、帧大小、录音长度和缓冲队列上限，不能代替用户鉴权。
+
+调试历史保存识别文本、原始 Agent 结果和耗时，不保存音频；模型 Token、缓存与费用沿用 Agent 统计。语音时间字段均相对录音轮次开始，包括结束录音、最终识别、首文字、首音频、Agent 完成、合成完成、客户端开始/结束播放。ASR/TTS 费用未并入模型费用，也未在本次新增计费估算。当前播放器开始时点由 Web Audio 调度时间估算，不是扬声器硬件输出测量。
+
+自动化测试使用合成 ASR/TTS 和本地模型响应，包含真实 Pi 工具循环测试，不访问真实用户数据或付费服务。真实服务、麦克风、扬声器以及微信真机效果需要配置凭证后的联调确认。
+
+协议实现参考本地 `biography-v2/internal/provider/asr/volcengine/volcengine.go`；TTS 参考[火山引擎官方示例](https://github.com/bytedance/agentkit-samples/blob/main/skills/byted-text-to-speech/scripts/text_to_speech.py)。
+
+## 火山服务联调记录（2026-09-08）
+
+只读确认服务器运行容器使用火山 ASR（`volc.seedasr.sauc.duration`）和 TTS（`seed-tts-2.0`），本地使用同样资源。服务器未显式指定音色，按参考实现的默认首音色 `zh_male_shaonianzixin_uranus_bigtts` 验证；可通过本地配置切换。
+
+使用自拟文本合成测试音频后以实时速度送入 ASR，不使用真实用户录音。独立 TTS 测试首包约 436 ms，ASR 正常返回文本。完整链路将“请在面板里写一句问候语。”交给真实 `qwen3.8-flash` Agent，执行 `update_panel_content`，面板进入 editor 并返回语音。该轮首包回复音频距录音轮次开始约 5.724 秒（包含测试音频输入时间，不是纯推理耗时）；模型输入 3728 tokens，其中缓存命中 2688、未命中 1040，输出 145。
+
+完整链路首次测试出现一次 TTS 合成失败，重跑成功，尚不能据此断定真实服务稳定性。现增加供应商错误码用于诊断，并过滤纯标点分段；未确认首次失败的具体原因。浏览器麦克风/扬声器与微信真机仍需人工体验验证。测试会话及其临时凭证文件已清理。

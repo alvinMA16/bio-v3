@@ -11,6 +11,7 @@ export interface RunRecord {
   error?: string;
   panel?: PanelState;
   live?: LiveRun;
+  voiceTimings?: Record<string, number>;
 }
 
 export function conversationOf(run: RunRecord): string | undefined {

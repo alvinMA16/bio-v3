@@ -1,3 +1,4 @@
+import { VoiceModule } from './voice/voice.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
@@ -11,6 +12,7 @@ import { HealthController } from './health/health.controller.js';
       envFilePath: ['.env', '../../.env'],
     }),
     ChatModule,
+    VoiceModule,
   ],
   controllers: [HealthController],
 })

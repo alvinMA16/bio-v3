@@ -355,3 +355,26 @@ test('attachment input rejects executable URLs and missing display resources', a
     assert.equal((await post('chat/completions', { message: 'hello', context: { attachments: [attachment] } })).status, 400);
   }
 });
+
+test('voice ASR enters real Agent tool loop and streams panel plus speech to TTS', async () => {
+  const { VoiceSession } = await import('../dist/voice/voice-session.js');
+  const received = [], spoken = [];
+  let resolveDone;
+  const done = new Promise(resolve => { resolveDone = resolve; });
+  const voice = new VoiceSession(
+    { async open() { return { write() {}, close() {}, async finish() { return 'SHOW_PANEL'; } }; } },
+    { async synthesize(text, _signal, emit) { spoken.push(text); emit(new Uint8Array([0, 0])); } },
+    (input, emit, signal) => service.run(input, emit, signal),
+    event => { received.push(event); if (event.type === 'done' || event.type === 'error') resolveDone(event); },
+  );
+  const initialRequests = requests.length;
+  await voice.listen('voice-e2e', {});
+  voice.finish('voice-e2e');
+  assert.equal((await done).type, 'done');
+  assert.ok(requests.length - initialRequests >= 2, 'Agent must continue after executing a tool');
+  assert.ok(received.some(event => event.type === 'agent' && event.event.type === 'tool.started'));
+  assert.ok(received.some(event => event.type === 'agent' && event.event.type === 'panel.state.updated' && event.event.panel.mode === 'editor'));
+  assert.ok(received.some(event => event.type === 'result' && event.result.usage.totalTokens > 0));
+  assert.deepEqual(spoken, ['你好，我是令狸。']);
+  voice.close();
+});

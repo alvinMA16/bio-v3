@@ -1,3 +1,5 @@
+import { BrowserVoice } from './voice/browser-voice';
+import type { VoiceRequest, VoiceServerMessage } from '@bio/contracts';
 import { foxActivityOf } from './fox-activity';
 import { PhonePreview } from './phone-preview';
 import { conversationOf, conversationThrough, panelOf, type RunRecord } from './run-history';
@@ -99,6 +101,14 @@ export function App() {
   const startedRef = useRef(0);
   const [pendingMessage, setPendingMessage] = useState('');
   const [running, setRunning] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState('');
+  const [spokenSubtitle, setSpokenSubtitle] = useState('');
+  const voiceRef = useRef<BrowserVoice | null>(null);
+  const voiceTurn = useRef<{ record: RunRecord; saved: boolean } | null>(null);
+  const voiceContext = useRef<VoiceRequest>({});
+  const busy = running || voiceEnabled;
   const [view, setView] = useState<View>('result');
   const [history, setHistory] = useState<RunRecord[]>(readHistory);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(
@@ -119,7 +129,7 @@ export function App() {
   const shownLive = running ? live : selectedRun?.live;
   const turns = conversationThrough(history, selectedRun);
   const latestSpeech = shownLive?.messages.at(-1);
-  const subtitle = latestSpeech?.text ?? selectedRun?.response?.message.content ?? '';
+  const subtitle = (voiceEnabled && spokenSubtitle ? spokenSubtitle : undefined) ?? latestSpeech?.text ?? selectedRun?.response?.message.content ?? '';
 
   useEffect(() => {
     if (followThread.current && threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
@@ -143,11 +153,9 @@ export function App() {
     catch { /* Large panel histories may exceed browser storage; keep this session in memory. */ }
   }, [history]);
 
-  async function runAgent(): Promise<void> {
-    if (!message.trim() || running) return;
-
-    const request: ChatCompletionRequest = {
-      message: message.trim(),
+  function prepareRequest(text: string): ChatCompletionRequest {
+    return {
+      message: text,
       context: {
         scene,
         ...(attachmentId.trim() ? { attachments: [{
@@ -167,6 +175,90 @@ export function App() {
         : {}),
       ...(systemPrompt.trim() ? { systemPrompt: systemPrompt.trim() } : {}),
     };
+  }
+  const { message: _voiceText, ...latestContext } = prepareRequest('');
+  voiceContext.current = latestContext;
+  useEffect(() => () => voiceRef.current?.close(), []);
+
+  function saveVoiceTurn(error?: string): void {
+    const turn = voiceTurn.current;
+    if (!turn || turn.saved) return;
+    turn.saved = true;
+    const record = turn.record;
+    if (error) record.error = error;
+    record.durationMs = Math.round(performance.now() - startedRef.current);
+    if (record.request.message || record.response) {
+      setHistory(items => [record, ...items].slice(0, 20));
+      setSelectedRunId(record.id);
+    }
+    setRunning(false); setPendingMessage('');
+  }
+
+  function receiveVoice(event: VoiceServerMessage): void {
+    const turn = voiceTurn.current;
+    if (!turn || turn.record.id !== event.turnId) return;
+    const record = turn.record;
+    const timings = record.voiceTimings!;
+    if (event.type === 'state') {
+      const labels = { connecting: '正在连接语音识别', listening: '正在听你说', finalizing: '正在确认识别结果', agent: 'Agent 正在处理', synthesizing: '正在合成语音' };
+      setVoiceStatus(labels[event.state]);
+      if (event.state === 'finalizing') timings.inputEnded = event.elapsedMs;
+    }
+    if (event.type === 'asr') setPendingMessage(event.text || '正在听你说…');
+    if (event.type === 'transcript') {
+      record.request.message = event.text; timings.asrFinal = event.elapsedMs; setPendingMessage(event.text);
+    }
+    if (event.type === 'agent') {
+      record.conversationId = event.event.conversationId;
+      setConversationId(event.event.conversationId);
+      record.live = applyLiveEvent(record.live!, event.event, event.elapsedMs);
+      if (record.live.panel) record.panel = record.live.panel;
+      setLive(record.live);
+      if (event.event.type === 'speech.delta') timings.firstText ??= event.elapsedMs;
+      if (event.event.type === 'panel.state.updated') {
+        setSelectedBlockId(''); setDocumentId(''); setDocumentVersion(0); setExcerpt('');
+      }
+    }
+    if (event.type === 'audio') timings.firstAudio ??= event.elapsedMs;
+    if (event.type === 'result') { record.response = event.result; timings.agentDone = event.elapsedMs; }
+    if (event.type === 'done') { timings.synthesisDone = event.elapsedMs; setVoiceStatus('等待播放结束'); saveVoiceTurn(); }
+    if (event.type === 'cancelled') saveVoiceTurn('语音已打断');
+    if (event.type === 'error') { setVoiceStatus(event.message); saveVoiceTurn(event.message); }
+  }
+
+  function startVoice(): void {
+    if (busy) return;
+    voiceTurn.current = null;
+    setVoiceEnabled(true); setVoiceStatus('正在申请麦克风权限');
+    const client = new BrowserVoice({
+      request: () => ({ ...voiceContext.current }),
+      start: (id, request) => {
+        startedRef.current = performance.now(); followThread.current = true;
+        const currentLive = { ...emptyLiveRun(), ...(voiceTurn.current?.record.panel ? { panel: voiceTurn.current.record.panel } : shownPanel ? { panel: shownPanel } : {}) };
+        voiceTurn.current = { saved: false, record: { id, request: { ...request, message: '' }, startedAt: new Date().toISOString(), durationMs: 0, live: currentLive, voiceTimings: {} } };
+        setLive(currentLive); setPendingMessage('正在听你说…'); setRunning(true); setElapsedMs(0);
+      },
+      event: receiveVoice,
+      playback: (playing, text) => {
+        setAudioPlaying(playing);
+        if (text) setSpokenSubtitle(text);
+        const record = voiceTurn.current?.record;
+        if (record?.voiceTimings) {
+          const elapsed = Math.round(performance.now() - startedRef.current);
+          if (playing) record.voiceTimings.playbackStarted ??= elapsed;
+          else if (record.voiceTimings.playbackStarted !== undefined) record.voiceTimings.playbackEnded = elapsed;
+          if (voiceTurn.current?.saved) setHistory(items => items.map(item => item.id === record.id ? { ...record } : item));
+        }
+      },
+      error: error => { setVoiceStatus(error); saveVoiceTurn(error); },
+      ended: () => { saveVoiceTurn('语音会话已结束'); setVoiceEnabled(false); setAudioPlaying(false); setSpokenSubtitle(''); voiceRef.current = null; },
+    });
+    voiceRef.current = client; void client.start();
+  }
+
+  async function runAgent(): Promise<void> {
+    if (!message.trim() || busy) return;
+    const request = prepareRequest(message.trim());
     const id = crypto.randomUUID();
     const startedAt = new Date().toISOString();
     const started = performance.now();
@@ -337,26 +429,34 @@ export function App() {
 
       {productView === 'agent' ? <main className="agent-lab">
         <div className="lab-session-bar"><span>{conversationId ? '当前会话' : '新会话'} <small>{conversationId ? conversationId.slice(0, 8) : '准备就绪'}</small></span>
-          <button type="button" disabled={running} onClick={startNewConversation}>新会话</button>
+          <button type="button" disabled={busy} onClick={startNewConversation}>新会话</button>
         </div>
         <div className="lab-main" ref={resultRef}>
           <section className="lab-preview-column">
             <header className="lab-section-heading"><h1>用户界面预览</h1><span>手机 · 实时状态</span></header>
-            <PhonePreview subtitle={subtitle} running={running} activity={foxActivityOf({ running, live, panel: shownPanel })}>
+            <PhonePreview subtitle={subtitle} running={running} activity={foxActivityOf({ running, live, panel: shownPanel, ...(voiceEnabled ? { audioPlaying, userSpeaking: voiceStatus === '正在听你说' } : {}) })}>
               {shownPanel ? <WorkspacePanel panel={shownPanel} selectedBlockId={selectedBlockId}
-                {...(!running ? { onSelectBlock: selectBlock } : {})} />
+                {...(!busy ? { onSelectBlock: selectBlock } : {})} />
                 : <div className="phone-empty"><strong>今天想聊点什么？</strong><p>我在这里，陪你慢慢讲。</p></div>}
             </PhonePreview>
-            <p className="lab-preview-note">动作按文本状态预览，尚未播放语音</p>
+            <p className="lab-preview-note">{voiceEnabled ? '语音模式 · 动作跟随实际播放' : '文字模式 · 动作跟随文本生成'}</p>
           </section>
           <section className="lab-conversation-column">
-            <header className="lab-section-heading"><h2>对话历史与输入</h2><span role="status">{running ? live.status : selectedRun?.error ? '本轮已中断' : selectedRun ? '本轮完成' : '等待输入'}{running && ` · ${formatDuration(elapsedMs)}`}</span></header>
+            <header className="lab-section-heading"><h2>对话历史与输入</h2><span role="status">{voiceEnabled ? voiceStatus : running ? live.status : selectedRun?.error ? '本轮已中断' : selectedRun ? '本轮完成' : '等待输入'}{running && ` · ${formatDuration(elapsedMs)}`}</span></header>
             <div className="lab-thread" ref={threadRef} onScroll={() => { const element = threadRef.current; if (element) followThread.current = element.scrollHeight - element.scrollTop - element.clientHeight < 70; }}>
               {!turns.length && !running && <div className="lab-thread-empty">从右下方开始对话，左侧会同步呈现令狸和面板的变化。</div>}
               {turns.map(run => <ConversationTurn key={run.id} request={run.request.message} live={run.live} fallback={run.response?.message.content} error={run.error} />)}
               {running && <ConversationTurn request={pendingMessage} live={live} running />}
             </div>
-            {selectedBlockId && <div className="lab-selection">已选中 {selectedBlockId} · 版本 {documentVersion}<button type="button" disabled={running} onClick={() => { setSelectedBlockId(''); setDocumentId(''); setExcerpt(''); }}>取消选区</button></div>}
+            {selectedBlockId && <div className="lab-selection">已选中 {selectedBlockId} · 版本 {documentVersion}<button type="button" disabled={busy} onClick={() => { setSelectedBlockId(''); setDocumentId(''); setExcerpt(''); }}>取消选区</button></div>}
+            <div className="voice-controls">
+              {!voiceEnabled ? <button type="button" disabled={running} onClick={startVoice}>开始语音对话</button> : <>
+                <button type="button" onClick={() => voiceRef.current?.finish()} disabled={voiceStatus !== '正在听你说'}>说完了</button>
+                <button type="button" onClick={() => voiceRef.current?.interrupt()} disabled={voiceStatus === '正在听你说'}>打断并说话</button>
+                <button type="button" onClick={() => voiceRef.current?.close()}>结束语音</button>
+              </>}
+              <small role="status">{voiceStatus}</small>
+            </div>
             <div className="lab-composer">
           <label className="field field--grow">
             <span className="field-label">
@@ -366,7 +466,7 @@ export function App() {
               className="textarea textarea--message"
               value={message}
               ref={inputRef}
-              disabled={running}
+              disabled={busy}
               maxLength={20000}
               onChange={(event) => setMessage(event.target.value)}
               onKeyDown={(event) => {
@@ -382,7 +482,7 @@ export function App() {
               <button
                 className="button button--stop"
                 type="button"
-                onClick={() => abortRef.current?.abort()}
+                onClick={() => voiceEnabled ? voiceRef.current?.close() : abortRef.current?.abort()}
               >
                 <span className="stop-icon" /> 停止
               </button>
@@ -390,7 +490,7 @@ export function App() {
               <button
                 className="button button--run"
                 type="button"
-                disabled={!message.trim() || apiStatus === 'offline'}
+                disabled={voiceEnabled || !message.trim() || apiStatus === 'offline'}
                 onClick={() => void runAgent()}
               >
                 发送 <span className="shortcut">⌘ ↵</span>
@@ -404,7 +504,7 @@ export function App() {
         <details className="lab-settings">
           <summary><span>配置与上下文</span><small>模型 · 人物设定 · 场景 · 附件</small></summary>
           <div className="lab-config-grid">
-          <fieldset className="model-switcher" disabled={running} aria-describedby="model-switcher-hint">
+          <fieldset className="model-switcher" disabled={busy} aria-describedby="model-switcher-hint">
             <legend>切换模型</legend>
             <div className="model-options">
               {([
@@ -438,7 +538,7 @@ export function App() {
             <textarea
               className="textarea textarea--system"
               value={systemPrompt}
-              disabled={running}
+              disabled={busy}
               maxLength={10000}
               onChange={(event) => setSystemPrompt(event.target.value)}
             />
@@ -449,13 +549,13 @@ export function App() {
             <input
               className="input"
               value={conversationId}
-              disabled={running}
+              disabled={busy}
               placeholder="自动创建"
               onChange={(event) => { const id = event.target.value; setConversationId(id); setSelectedRunId(history.find(run => conversationOf(run) === id)?.id ?? null); setSelectedBlockId(''); setDocumentId(''); setExcerpt(''); }}
             />
           </label>
 
-          <fieldset className="context-settings" disabled={running}>
+          <fieldset className="context-settings" disabled={busy}>
             <legend>本轮动态上下文</legend>
             <label className="field">
               <span className="field-label">当前场景</span>
@@ -485,7 +585,7 @@ export function App() {
             <small>每轮提交当前快照；放在历史之后、用户消息之前。这里只提供参考内容，不保存文章。</small>
           </fieldset>
 
-          <fieldset className="context-settings" disabled={running}>
+          <fieldset className="context-settings" disabled={busy}>
             <legend>提供附件（可选）</legend>
             <label className="field"><span className="field-label">附件 ID（不同内容使用不同 ID）</span>
               <input className="input" value={attachmentId} maxLength={64} onChange={e => setAttachmentId(e.target.value)} /></label>
@@ -513,17 +613,18 @@ export function App() {
           <div className="lab-detail-content">
             {view === 'result' && <>
               <RunTimeline live={shownLive} />
+              {selectedRun?.voiceTimings && <div className="voice-timings">{Object.entries(selectedRun.voiceTimings).map(([key, value]) => <span key={key}>{({ inputEnded: '结束录音', asrFinal: 'ASR 最终结果', firstText: '首段文字', firstAudio: '首包音频', agentDone: 'Agent 完成', synthesisDone: '合成完成', playbackStarted: '开始播放', playbackEnded: '播放结束' } as Record<string, string>)[key] ?? key}：{formatDuration(value)}</span>)}<small>均从本轮开始录音计时；语音费用未计入模型费用。</small></div>}
               {!running && selectedRun?.response && <UsageSummary response={selectedRun.response} />}
               {!running && selectedRun?.response?.runId && <p className="trace-link"><a href={`/api/v1/agent/runs/${selectedRun.response.runId}/trace`} target="_blank" rel="noreferrer">查看本次运行 Trace</a></p>}
             </>}
             {view === 'inspector' && <InspectorView run={selectedRun} />}
             {view === 'history' && <HistoryView history={history} selectedRunId={selectedRunId} onSelect={id => {
-              if (running) return;
+              if (busy) return;
               const run = history.find(item => item.id === id);
               setSelectedRunId(id); setConversationId(run ? conversationOf(run) ?? '' : '');
               setProvider(run?.request.provider ?? '');
               setDocumentId(''); setSelectedBlockId(''); setExcerpt(''); followThread.current = true;
-            }} onClear={() => { if (!running) clearHistory(); }} />}
+            }} onClear={() => { if (!busy) clearHistory(); }} />}
           </div>
         </details>
       </main> : <AnimationLab />}

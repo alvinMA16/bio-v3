@@ -338,3 +338,10 @@ body { min-width: 320px; }
   .history-row { grid-template-columns: 10px minmax(0,1fr) 65px; }
   .history-row > span:nth-last-child(-n+2) { display: none; }
 }
+
+.voice-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid #e5e0d7; }
+.voice-controls button { border: 1px solid #bfb09a; border-radius: 8px; padding: 7px 10px; background: #f8f3ea; color: #4b3c2c; cursor: pointer; }
+.voice-controls button:disabled { opacity: .5; cursor: default; }
+.voice-controls small { flex-basis: 100%; color: #756957; }
+.voice-timings { display: flex; flex-wrap: wrap; gap: 12px; padding: 12px; font-size: 12px; }
+.voice-timings small { flex-basis: 100%; color: #756957; }

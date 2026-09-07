@@ -1,5 +1,8 @@
 {
-  "pages": ["pages/character/index", "pages/chat/index"],
+  "pages": [
+    "pages/character/index",
+    "pages/chat/index"
+  ],
   "window": {
     "navigationBarTitleText": "狐狸 Agent",
     "navigationBarBackgroundColor": "#f3efe7",
@@ -7,5 +10,10 @@
     "backgroundColor": "#f3efe7"
   },
   "style": "v2",
-  "lazyCodeLoading": "requiredComponents"
+  "lazyCodeLoading": "requiredComponents",
+  "permission": {
+    "scope.record": {
+      "desc": "用于实时语音对话，将你的讲述转成文字交给令狸。"
+    }
+  }
 }

@@ -108,3 +108,7 @@
 .work-panel__block--quote { border-left: 4rpx solid #aaa; color: #666; }
 .work-panel__block--code { font-family: monospace; background: #f1f1ed; }
 .work-panel__hint { color: #777; font-size: 24rpx; margin-top: 16rpx; }
+
+.voice-controls { padding: 16rpx 24rpx; display: flex; flex-direction: column; gap: 12rpx; font-size: 24rpx; }
+.voice-buttons { display: flex; gap: 8rpx; }
+.voice-buttons button { font-size: 24rpx; padding: 0 12rpx; }
