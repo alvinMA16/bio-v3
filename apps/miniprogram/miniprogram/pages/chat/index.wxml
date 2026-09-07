@@ -11,6 +11,20 @@
     >
       <view class="message__bubble">{{item.content}}</view>
     </view>
+    <view wx:if="{{panel.mode !== 'conversation'}}" class="work-panel">
+      <view wx:if="{{panel.mode === 'attachment'}}">
+        <view class="work-panel__title">{{panel.attachment.title}}</view>
+        <image wx:if="{{panel.attachment.kind === 'image'}}" src="{{panel.attachment.url}}" mode="widthFix" class="work-panel__image" />
+        <text wx:else selectable>{{panel.attachment.text || panel.attachment.url}}</text>
+      </view>
+      <view wx:if="{{panel.mode === 'editor'}}">
+        <view class="work-panel__title">{{panel.document.title}} · 版本 {{panel.document.version}}</view>
+        <view wx:for="{{panel.document.blocks}}" wx:key="id" class="work-panel__block work-panel__block--{{item.kind}} {{selectedBlockId === item.id ? 'work-panel__block--selected' : ''}}" bindtap="selectBlock" data-id="{{item.id}}">
+          <text selectable>{{item.text}}</text>
+        </view>
+        <view class="work-panel__hint">点选一段后，可以让令狸修改；草稿已保存在本地会话。</view>
+      </view>
+    </view>
     <view id="bottom-anchor"></view>
   </scroll-view>
 
@@ -18,7 +32,7 @@
     <textarea
       class="composer__input"
       value="{{input}}"
-      placeholder="给 Agent 发消息"
+      placeholder="给令狸发消息"
       auto-height
       maxlength="20000"
       disabled="{{sending}}"

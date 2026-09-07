@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  AgentScene,
   ModelProvider,
   ChatCompletionRequest,
   ChatCompletionResponse,
   MarkdownPanel,
+  AgentEvent,
+  PanelState,
+  PanelBlock,
 } from '@bio/contracts';
 
 type View = 'result' | 'inspector' | 'history';
@@ -43,10 +47,11 @@ interface RunRecord {
   request: ChatCompletionRequest;
   response?: ChatCompletionResponse;
   error?: string;
+  panel?: PanelState;
 }
 
 const HISTORY_KEY = 'bio-agent-lab-history-v2';
-const DEFAULT_SYSTEM_PROMPT = `你是 Bio Agent，一个清晰、可靠的对话式助手。
+const DEFAULT_SYSTEM_PROMPT = `你是令狸，一位自然亲切、可靠的人生故事记录伙伴。
 先理解用户目标，再给出具体且可执行的回答。
 信息不足时，明确指出缺少什么。`;
 
@@ -86,6 +91,18 @@ export function App() {
   const [message, setMessage] = useState('请介绍一下你自己，并说明你能帮我做什么。');
   const [conversationId, setConversationId] = useState('');
   const [provider, setProvider] = useState<ModelProvider | ''>('');
+  const [scene, setScene] = useState<AgentScene>('conversation');
+  const [documentId, setDocumentId] = useState('');
+  const [documentVersion, setDocumentVersion] = useState(0);
+  const [selectedBlockId, setSelectedBlockId] = useState('');
+  const [excerpt, setExcerpt] = useState('');
+  const [attachmentId, setAttachmentId] = useState('');
+  const [attachmentKind, setAttachmentKind] = useState<'image' | 'document'>('image');
+  const [attachmentTitle, setAttachmentTitle] = useState('');
+  const [attachmentUrl, setAttachmentUrl] = useState('');
+  const [attachmentText, setAttachmentText] = useState('');
+  const [livePanel, setLivePanel] = useState<PanelState>();
+  const [liveSpeech, setLiveSpeech] = useState('');
   const [running, setRunning] = useState(false);
   const [view, setView] = useState<View>('result');
   const [history, setHistory] = useState<RunRecord[]>(readHistory);
@@ -106,7 +123,8 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 20)));
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 20))); }
+    catch { /* Large panel histories may exceed browser storage; keep this session in memory. */ }
   }, [history]);
 
   async function runAgent(): Promise<void> {
@@ -114,6 +132,19 @@ export function App() {
 
     const request: ChatCompletionRequest = {
       message: message.trim(),
+      context: {
+        scene,
+        ...(attachmentId.trim() ? { attachments: [{
+          id: attachmentId.trim(), kind: attachmentKind, title: attachmentTitle.trim(),
+          ...(attachmentUrl.trim() ? { url: attachmentUrl.trim() } : {}),
+          ...(attachmentText ? { text: attachmentText } : {}),
+        }] } : {}),
+        ...(documentId.trim() ? { workspace: {
+          documentId: documentId.trim(), version: documentVersion,
+          ...(selectedBlockId.trim() ? { selectedBlockId: selectedBlockId.trim() } : {}),
+          excerpt,
+        } } : {}),
+      },
       ...(provider ? { provider } : {}),
       ...(conversationId.trim()
         ? { conversationId: conversationId.trim() }
@@ -126,36 +157,61 @@ export function App() {
     const controller = new AbortController();
     abortRef.current = controller;
     setRunning(true);
+    setLivePanel(undefined);
+    setLiveSpeech('');
+    let latestPanel: PanelState | undefined;
     setView('result');
 
     try {
-      const response = await fetch('/api/v1/chat/completions', {
+      const response = await fetch('/api/v1/agent/runs/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
         signal: controller.signal,
       });
-      const payload: unknown = await response.json();
-
-      if (!response.ok) {
-        const apiMessage =
-          typeof payload === 'object' &&
-          payload !== null &&
-          'message' in payload &&
-          typeof payload.message === 'string'
-            ? payload.message
-            : undefined;
-        throw new Error(
-          apiMessage ?? `请求失败（HTTP ${response.status}）`,
-        );
-      }
-
-      const completion = payload as ChatCompletionResponse;
+      if (!response.ok) throw new Error(`请求失败（HTTP ${response.status}）`);
+      if (!response.body) throw new Error('服务端未返回事件流');
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let completion: ChatCompletionResponse | undefined;
+      const consume = (line: string) => {
+        if (!line.trim()) return;
+        const item = JSON.parse(line) as { kind: string; event?: AgentEvent; result?: ChatCompletionResponse; message?: string };
+        if (item.kind === 'error') throw new Error(item.message ?? '运行失败');
+        if (item.event) {
+          setConversationId(item.event.conversationId);
+          if (item.event.type === 'panel.state.updated') {
+            latestPanel = item.event.panel;
+            setLivePanel(item.event.panel);
+          }
+          if (item.event.type === 'speech.delta') {
+            const delta = item.event.delta;
+            setLiveSpeech(text => text + delta);
+          }
+        }
+        if (item.kind === 'result') completion = item.result;
+      };
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          buffer += decoder.decode(value, { stream: !done });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+          for (const line of lines) consume(line);
+          if (done) { consume(buffer); break; }
+        }
+      } catch (error) {
+        await reader.cancel().catch(() => undefined);
+        throw error;
+      } finally { reader.releaseLock(); }
+      if (!completion) throw new Error('事件流结束但没有最终结果');
       const record: RunRecord = {
         id,
         startedAt,
         durationMs: Math.round(performance.now() - started),
         request,
+        ...(latestPanel ? { panel: latestPanel } : {}),
         response: completion,
       };
       setHistory((items) => [record, ...items].slice(0, 20));
@@ -167,6 +223,7 @@ export function App() {
         startedAt,
         durationMs: Math.round(performance.now() - started),
         request,
+        ...(latestPanel ? { panel: latestPanel } : {}),
         error:
           error instanceof DOMException && error.name === 'AbortError'
             ? '运行已取消'
@@ -194,7 +251,7 @@ export function App() {
         <div className="brand">
           <span className="brand-mark">B</span>
           <div>
-            <div className="brand-name">Bio Agent Lab</div>
+            <div className="brand-name">令狸 Agent Lab</div>
             <div className="brand-caption">Prompt & runtime debugger</div>
           </div>
         </div>
@@ -263,7 +320,7 @@ export function App() {
 
           <label className="field">
             <span className="field-label">
-              System prompt <span>{systemPrompt.length}/10000</span>
+              核心身份设定 <span>{systemPrompt.length}/10000</span>
             </span>
             <textarea
               className="textarea textarea--system"
@@ -282,6 +339,53 @@ export function App() {
               onChange={(event) => setConversationId(event.target.value)}
             />
           </label>
+
+          <fieldset className="context-settings" disabled={running}>
+            <legend>本轮动态上下文</legend>
+            <label className="field">
+              <span className="field-label">当前场景</span>
+              <select className="input" value={scene} onChange={event => setScene(event.target.value as AgentScene)}>
+                <option value="conversation">自然对话</option>
+                <option value="interview">故事访谈</option>
+                <option value="revision">共同编辑</option>
+              </select>
+            </label>
+            <label className="field">
+              <span className="field-label">文章 ID（留空表示无工作区）</span>
+              <input className="input" value={documentId} maxLength={200} onChange={event => setDocumentId(event.target.value)} />
+            </label>
+            <label className="field">
+              <span className="field-label">文章版本</span>
+              <input className="input" type="number" min={0} step={1} value={documentVersion}
+                onChange={event => setDocumentVersion(Math.max(0, Math.floor(Number(event.target.value) || 0)))} />
+            </label>
+            <label className="field">
+              <span className="field-label">选中段落 ID（可选）</span>
+              <input className="input" value={selectedBlockId} maxLength={200} onChange={event => setSelectedBlockId(event.target.value)} />
+            </label>
+            <label className="field">
+              <span className="field-label">选区或相关正文 · {excerpt.length}/12000</span>
+              <textarea className="textarea" value={excerpt} maxLength={12000} onChange={event => setExcerpt(event.target.value)} />
+            </label>
+            <small>每轮提交当前快照；放在历史之后、用户消息之前。这里只提供参考内容，不保存文章。</small>
+          </fieldset>
+
+          <fieldset className="context-settings" disabled={running}>
+            <legend>提供附件（可选）</legend>
+            <label className="field"><span className="field-label">附件 ID（不同内容使用不同 ID）</span>
+              <input className="input" value={attachmentId} maxLength={64} onChange={e => setAttachmentId(e.target.value)} /></label>
+            <label className="field"><span className="field-label">类型</span>
+              <select className="input" value={attachmentKind} onChange={e => setAttachmentKind(e.target.value as 'image' | 'document')}>
+                <option value="image">照片</option><option value="document">文档</option>
+              </select></label>
+            <label className="field"><span className="field-label">附件标题</span>
+              <input className="input" value={attachmentTitle} maxLength={300} onChange={e => setAttachmentTitle(e.target.value)} /></label>
+            <label className="field"><span className="field-label">HTTPS 地址（照片必填）</span>
+              <input className="input" value={attachmentUrl} maxLength={2048} onChange={e => setAttachmentUrl(e.target.value)} /></label>
+            <label className="field"><span className="field-label">文档文本（可选，最多 12000 字符）</span>
+              <textarea className="textarea" value={attachmentText} maxLength={12000} onChange={e => setAttachmentText(e.target.value)} /></label>
+            <small>附件原件只供查看；修改会创建独立草稿。当前照片仅展示，未接入图像理解。</small>
+          </fieldset>
 
           <label className="field field--grow">
             <span className="field-label">
@@ -342,7 +446,13 @@ export function App() {
 
           <div className="view-content">
             {view === 'result' && (
-              <ResultView run={selectedRun} running={running} />
+              <ResultView run={selectedRun} running={running} livePanel={livePanel} liveSpeech={liveSpeech}
+                onSelectBlock={(panel, block) => {
+                  if (!panel.document) return;
+                  if (selectedRun?.response?.conversationId) setConversationId(selectedRun.response.conversationId);
+                  setDocumentId(panel.document.id); setDocumentVersion(panel.document.version);
+                  setSelectedBlockId(block.id); setExcerpt(block.text);
+                }} />
             )}
             {view === 'inspector' && <InspectorView run={selectedRun} />}
             {view === 'history' && (
@@ -553,17 +663,21 @@ function SpriteFrame({ animation, frame, className }: { animation: AnimationAsse
 
 function ResultView({
   run,
-  running,
+  running, livePanel, liveSpeech, onSelectBlock,
 }: {
   run: RunRecord | undefined;
   running: boolean;
+  livePanel: PanelState | undefined;
+  liveSpeech: string;
+  onSelectBlock: (panel: PanelState, block: PanelBlock) => void;
 }) {
   if (running) {
     return (
       <div className="running-state">
         <div className="orb"><span /></div>
-        <h2>Agent is thinking</h2>
-        <p>Pi 正在执行，结果和面板将在完成后显示…</p>
+        <h2>令狸正在处理</h2>
+        <p>{liveSpeech || '正在理解你的请求…'}</p>
+        {livePanel && <WorkspacePanel panel={livePanel} />}
       </div>
     );
   }
@@ -608,6 +722,7 @@ function ResultView({
       )}
 
       {run.response && <UsageSummary response={run.response} />}
+      {run.panel && <WorkspacePanel panel={run.panel} onSelectBlock={onSelectBlock} />}
 
       {Array.from(panels.values()).map((panel) => (
         <article className="answer-card work-panel" key={panel.id}>
@@ -725,4 +840,40 @@ function HistoryView({
       </div>
     </div>
   );
+}
+
+function WorkspacePanel({ panel, onSelectBlock }: {
+  panel: PanelState;
+  onSelectBlock?: (panel: PanelState, block: PanelBlock) => void;
+}) {
+  const modes = { conversation: '纯对话', attachment: '附件查看', editor: '共同编辑' };
+  const safeUrl = panel.attachment?.url?.startsWith('https://') ? panel.attachment.url : undefined;
+  return <article className="answer-card work-panel">
+    <div className="answer-label">{modes[panel.mode]}</div>
+    {panel.mode === 'conversation' && <p>当前没有打开的内容，已有草稿仍然保留。</p>}
+    {panel.mode === 'attachment' && panel.attachment && <>
+      <h3>{panel.attachment.title}</h3>
+      {panel.attachment.kind === 'image' && safeUrl && <img className="panel-attachment-image" src={safeUrl} alt={panel.attachment.title} referrerPolicy="no-referrer" />}
+      {panel.attachment.kind === 'document' && <>
+        {panel.attachment.text && <div className="answer-content">{panel.attachment.text}</div>}
+        {safeUrl && <a href={safeUrl} target="_blank" rel="noreferrer">打开文档原件</a>}
+      </>}
+    </>}
+    {panel.mode === 'editor' && panel.document && <>
+      <h3>{panel.document.title} <small>版本 {panel.document.version}</small></h3>
+      {panel.document.blocks.map(block => <section className="panel-block" key={block.id}>
+        {block.kind === 'heading' ? <h4>{block.text}</h4>
+          : block.kind === 'list' ? <ul>{block.text.split('\n').map((text, index) => <li key={index}>{text}</li>)}</ul>
+          : block.kind === 'quote' ? <blockquote>{block.text}</blockquote>
+          : block.kind === 'code' ? <pre><code>{block.text}</code></pre>
+          : <p>{block.text}</p>}
+        {onSelectBlock && <button type="button" onClick={() => onSelectBlock(panel, block)}>选中这段继续讨论</button>}
+      </section>)}
+      {panel.lastChange && <details><summary>查看本次修改</summary>
+        {panel.lastChange.before.map(block => <p className="panel-removed" key={`before-${block.id}`}>修改前：{block.text}</p>)}
+        {panel.lastChange.after.map(block => <p className="panel-added" key={`after-${block.id}`}>修改后：{block.text}</p>)}
+      </details>}
+      <small>草稿保存在本地会话中，未修改附件原件。</small>
+    </>}
+  </article>;
 }

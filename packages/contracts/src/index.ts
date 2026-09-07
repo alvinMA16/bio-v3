@@ -9,7 +9,54 @@ export interface ChatMessage {
 
 export type ModelProvider = 'deepseek' | 'qwen' | 'openai-compatible';
 
+export type AgentScene = 'conversation' | 'interview' | 'revision';
+
+/** Client snapshot captured when the user submits this turn; not authoritative document storage. */
+export interface AgentWorkspaceSnapshot {
+  documentId: string;
+  version: number;
+  title?: string;
+  selectedBlockId?: string;
+  excerpt: string;
+}
+
+export interface PanelAttachment {
+  id: string;
+  kind: 'image' | 'document';
+  title: string;
+  url?: string;
+  text?: string;
+}
+
+export interface PanelBlock {
+  id: string;
+  kind: 'paragraph' | 'heading' | 'list' | 'quote' | 'code';
+  text: string;
+}
+
+export interface PanelDocument {
+  id: string;
+  title: string;
+  version: number;
+  blocks: PanelBlock[];
+}
+
+export interface PanelState {
+  revision: number;
+  mode: 'conversation' | 'attachment' | 'editor';
+  attachment?: PanelAttachment;
+  document?: PanelDocument;
+  lastChange?: { documentId: string; fromVersion: number; toVersion: number; before: PanelBlock[]; after: PanelBlock[] };
+}
+
+export interface AgentContextSnapshot {
+  attachments?: PanelAttachment[];
+  scene?: AgentScene;
+  workspace?: AgentWorkspaceSnapshot;
+}
+
 export interface ChatCompletionRequest {
+  context?: AgentContextSnapshot;
   provider?: ModelProvider;
   message: string;
   conversationId?: string;
@@ -57,7 +104,8 @@ export type AgentEventPayload =
   | { type: 'run.started' }
   | { type: 'speech.delta'; messageId: string; delta: string }
   | { type: 'speech.completed'; messageId: string; text: string }
-  | { type: 'panel.updated'; panel: MarkdownPanel }
+  | { type: 'panel.updated'; panel: MarkdownPanel } // Legacy traces only.
+  | { type: 'panel.state.updated'; panel: PanelState }
   | { type: 'tool.started'; toolCallId: string; name: string }
   | { type: 'tool.completed'; toolCallId: string; name: string; isError: boolean }
   | { type: 'context.compacting' }

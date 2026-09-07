@@ -15,7 +15,7 @@ export class ChatController {
     request.raw.on('aborted', disconnect);
     reply.raw.on('close', disconnect);
     try {
-      return await this.chatService.complete(body.message, body.conversationId, body.systemPrompt, controller.signal, body.provider);
+      return await this.chatService.complete(body.message, body.conversationId, body.systemPrompt, controller.signal, body.provider, body.context);
     } finally {
       request.raw.off('aborted', disconnect);
       reply.raw.off('close', disconnect);

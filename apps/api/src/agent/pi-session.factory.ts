@@ -5,27 +5,26 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AgentEventPayload } from '@bio/contracts';
 
+import { PanelWorkspace } from './panel-workspace.js';
 import { AgentStorage } from './agent-storage.js';
 import { createPresentationTools } from './presentation-tools.js';
 import { createModelRuntime } from '../models/model-provider.js';
-import type { ModelProvider } from '@bio/contracts';
-
-const DEFAULT_PERSONA = '你是 Bio，一个清晰、可靠、自然亲切的助手。帮助用户对话、整理内容和完成任务。';
-const PRESENTATION_RULES = `\n面向用户的普通回复用于人物字幕，也可能被语音播报，表达应简洁自然。
-长文章、清单等完整内容使用 show_panel 展示，随后简短说明。
-只有工具明确确认的操作才可以宣称完成。show_panel 只展示内容，不保存文章。
-当前尚未接入语音播放、长期记忆或文章编辑存储，不要宣称已执行这些能力。`;
+import { buildRuntimeContext, buildSystemPrompt, createContextExtension, DEFAULT_PERSONA } from './agent-context.js';
+import type { AgentContextSnapshot, ModelProvider } from '@bio/contracts';
 
 @Injectable()
 export class PiSessionFactory {
   constructor(private readonly config: ConfigService, private readonly storage: AgentStorage) {}
 
-  async create(conversationId: string, systemPrompt: string | undefined, emit: (event: AgentEventPayload) => void, provider?: ModelProvider) {
+  async create(conversationId: string, systemPrompt: string | undefined, emit: (event: AgentEventPayload) => void, provider?: ModelProvider, context?: AgentContextSnapshot) {
     const cwd = this.storage.conversationDirectory(conversationId);
     const personaPath = join(cwd, 'persona.json');
     const persona = systemPrompt?.trim()
       || (existsSync(personaPath) ? JSON.parse(readFileSync(personaPath, 'utf8')) as string : DEFAULT_PERSONA);
     writeFileSync(personaPath, JSON.stringify(persona), { mode: 0o600 });
+
+    const workspace = new PanelWorkspace(cwd, context?.attachments ?? []);
+    emit({ type: 'panel.state.updated', panel: workspace.state() });
 
     const { modelRuntime, model } = await createModelRuntime(this.config, cwd, provider);
 
@@ -36,14 +35,15 @@ export class PiSessionFactory {
     const resourceLoader = new DefaultResourceLoader({
       cwd, agentDir: cwd, settingsManager,
       noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
-      systemPromptOverride: () => persona + PRESENTATION_RULES,
+      systemPromptOverride: () => buildSystemPrompt(persona),
+      extensionFactories: [createContextExtension(buildRuntimeContext(context, workspace.context()))],
     });
     await resourceLoader.reload();
     const sessionManager = SessionManager.open(join(cwd, 'session.jsonl'), cwd, cwd);
     const { session } = await createAgentSession({
       cwd, agentDir: cwd, modelRuntime, model, thinkingLevel: 'off',
       settingsManager, resourceLoader, sessionManager,
-      tools: ['show_panel'], customTools: createPresentationTools(emit),
+      tools: ['set_panel_mode', 'update_panel_content', 'get_panel_state'], customTools: createPresentationTools(workspace, emit),
     });
     return session;
   }

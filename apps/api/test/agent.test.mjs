@@ -22,7 +22,7 @@ let root, mock, app, config, service, storage, factory, baseUrl;
 const requests = [];
 let onHeldRequest;
 
-function sendCompletion(response, { text = '你好，我是 Bio。', tool, model = 'deepseek-v4-flash' } = {}) {
+function sendCompletion(response, { text = '你好，我是令狸。', tool, model = 'deepseek-v4-flash' } = {}) {
   response.writeHead(200, { 'content-type': 'text/event-stream' });
   const chunk = (delta, finish_reason = null) => response.write(`data: ${JSON.stringify({
     id: 'mock-completion', object: 'chat.completion.chunk', created: 1, model,
@@ -30,7 +30,7 @@ function sendCompletion(response, { text = '你好，我是 Bio。', tool, model
   })}\n\n`);
   chunk({ role: 'assistant' });
   if (tool) chunk({ tool_calls: [{ index: 0, id: 'call_panel', type: 'function', function: {
-    name: 'show_panel', arguments: JSON.stringify({ panelId: 'draft', title: '文章草稿', content: '# 标题\n这是正文。' }),
+    name: typeof tool === 'object' ? tool.name : 'update_panel_content', arguments: JSON.stringify(typeof tool === 'object' ? tool.arguments : { documentId: 'draft', expectedVersion: 0, title: '文章草稿', operations: [{ action: 'insert', block: { id: 'p1', kind: 'paragraph', text: '这是正文。' } }] }),
   } }] });
   else chunk({ content: text });
   chunk({}, tool ? 'tool_calls' : 'stop');
@@ -61,8 +61,13 @@ before(async () => {
     }
     sendCompletion(response, {
       model: payload.model,
-      tool: lastText === 'SHOW_PANEL',
-      text: payload.tools?.length ? '你好，我是 Bio。' : 'COMPACTED_MEMORY_MARKER',
+      tool: lastText === 'SHOW_PANEL' ? true
+        : lastText === 'OPEN_ATTACHMENT' ? { name: 'set_panel_mode', arguments: { mode: 'attachment', targetId: 'photo1' } }
+        : lastText === 'CLOSE_PANEL' ? { name: 'set_panel_mode', arguments: { mode: 'conversation' } }
+        : lastText === 'OPEN_DRAFT' ? { name: 'set_panel_mode', arguments: { mode: 'editor', targetId: 'draft' } }
+        : lastText === 'EDIT_DRAFT' ? { name: 'update_panel_content', arguments: { documentId: 'draft', expectedVersion: 1, operations: [{ action: 'replace', targetId: 'p1', block: { id: 'p1', kind: 'paragraph', text: '这是修改后的正文。' } }] } }
+        : lastText === 'READ_PANEL' ? { name: 'get_panel_state', arguments: {} } : false,
+      text: payload.tools?.length ? '你好，我是令狸。' : 'COMPACTED_MEMORY_MARKER',
     });
   });
   mock.listen(0, '127.0.0.1');
@@ -105,11 +110,11 @@ test('existing endpoint uses Pi, persists history and isolates conversations', a
   const first = await post('chat/completions', { message: '记住当前暗号：星河', systemPrompt: 'TEST_PERSONA' });
   assert.equal(first.status, 201);
   const result = await first.json();
-  assert.equal(result.message.content, '你好，我是 Bio。');
+  assert.equal(result.message.content, '你好，我是令狸。');
   assert.equal(result.usage.promptTokens, 12);
   assert.equal(result.usage.promptCacheHitTokens, 2);
   const request = requests.at(-1);
-  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['show_panel']);
+  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['set_panel_mode', 'update_panel_content', 'get_panel_state']);
   assert.deepEqual(request.thinking, { type: 'disabled' });
   assert.ok(JSON.stringify(request.messages).includes('TEST_PERSONA'));
   assert.ok(!JSON.stringify(request.messages).includes('Compound Codex'));
@@ -130,8 +135,8 @@ test('existing endpoint uses Pi, persists history and isolates conversations', a
 
 test('real SDK tool loop emits panel events and counts all model calls', async () => {
   const result = await service.run({ message: 'SHOW_PANEL' });
-  const panel = result.events.find((event) => event.type === 'panel.updated');
-  assert.equal(panel.panel.content, '# 标题\n这是正文。');
+  const panel = result.events.find((event) => event.type === 'panel.state.updated' && event.panel.mode === 'editor');
+  assert.equal(panel.panel.document.blocks[0].text, '这是正文。');
   assert.ok(result.events.some((event) => event.type === 'tool.completed' && !event.isError));
   assert.equal(result.usage.totalTokens, 34);
   assert.ok(requests.at(-1).messages.some((message) => message.role === 'tool'));
@@ -144,7 +149,7 @@ test('stream endpoint delivers product events and final compatible response', as
   assert.match(response.headers.get('content-type'), /application\/x-ndjson/);
   const chunks = (await response.text()).trim().split('\n').map(JSON.parse);
   assert.equal(chunks[0].event.type, 'run.started');
-  assert.ok(chunks.some((chunk) => chunk.event?.type === 'panel.updated'));
+  assert.ok(chunks.some((chunk) => chunk.event?.type === 'panel.state.updated'));
   assert.ok(chunks.some((chunk) => chunk.event?.type === 'speech.delta'));
   assert.equal(chunks.at(-1).kind, 'result');
 });
@@ -224,7 +229,7 @@ test('Qwen selection uses its protocol, supports tools and can switch restored s
   assert.equal(requests.at(-1).model, 'qwen3.8-flash');
   assert.equal(requests.at(-1).enable_thinking, false);
   assert.equal(requests.at(-1).thinking, undefined);
-  assert.ok(result.events.some(event => event.type === 'panel.updated'));
+  assert.ok(result.events.some(event => event.type === 'panel.state.updated'));
   assert.ok(result.estimatedCost.total > 0);
   await service.run({ message: 'switch', conversationId: result.conversationId, provider: 'deepseek' });
   assert.equal(requests.at(-1).model, 'deepseek-v4-flash');
@@ -232,4 +237,121 @@ test('Qwen selection uses its protocol, supports tools and can switch restored s
   assert.equal((await post('chat/completions', { message: 'hello', provider: 'unknown' })).status, 400);
   const saved = await readFile(join(root, 'conversations', result.conversationId, 'session.jsonl'), 'utf8');
   assert.ok(!saved.includes('qwen-test-key'));
+});
+
+function textOf(message) {
+  return typeof message.content === 'string' ? message.content : (message.content ?? []).map(part => part.text ?? '').join('');
+}
+function snapshots(payload) {
+  return payload.messages.filter(message => textOf(message).includes('"type":"bio_runtime_context"'));
+}
+
+test('runtime snapshot precedes this user turn, is replaced on resume and never enters session history', async () => {
+  const first = await post('chat/completions', { message: '参考这段', context: {
+    scene: 'revision', workspace: { documentId: 'doc-1', version: 3, selectedBlockId: 'p2', excerpt: 'OLD_WORKSPACE_MARKER' },
+  } });
+  assert.equal(first.status, 201);
+  const result = await first.json();
+  const initial = requests.at(-1);
+  assert.equal(snapshots(initial).length, 1);
+  assert.equal(JSON.parse(textOf(initial.messages.at(-2))).workspace.version, 3);
+  assert.equal(textOf(initial.messages.at(-1)), '参考这段');
+  const oldSystem = textOf(initial.messages[0]);
+  const second = await post('chat/completions', { conversationId: result.conversationId, message: '看新选区', context: {
+    scene: 'interview', workspace: { documentId: 'doc-1', version: 4, selectedBlockId: 'p5', excerpt: 'NEW_WORKSPACE_MARKER' },
+  } });
+  assert.equal(second.status, 201);
+  const latest = requests.at(-1);
+  assert.equal(textOf(latest.messages[0]), oldSystem);
+  assert.equal(snapshots(latest).length, 1);
+  assert.ok(!JSON.stringify(latest).includes('OLD_WORKSPACE_MARKER'));
+  assert.equal(JSON.parse(textOf(latest.messages.at(-2))).workspace.selectedBlockId, 'p5');
+  assert.equal(textOf(latest.messages.at(-1)), '看新选区');
+  assert.ok(latest.messages.slice(0, -2).some(message => textOf(message) === '参考这段'));
+  await service.run({ conversationId: result.conversationId, message: '现在呢' });
+  assert.equal(JSON.parse(textOf(snapshots(requests.at(-1))[0])).workspace, null);
+  const saved = await readFile(join(root, 'conversations', result.conversationId, 'session.jsonl'), 'utf8');
+  assert.ok(!saved.includes('WORKSPACE_MARKER'));
+  assert.ok(!saved.includes('bio_runtime_context'));
+});
+
+test('runtime snapshot remains before user during tool loop for both providers', async () => {
+  for (const provider of ['deepseek', 'qwen']) {
+    const start = requests.length;
+    const response = await post('agent/runs/stream', { provider, message: 'SHOW_PANEL', context: {
+      scene: 'revision', workspace: { documentId: 'doc-tool', version: 1, excerpt: 'TOOL_WORKSPACE' },
+    } });
+    await response.text();
+    const calls = requests.slice(start);
+    assert.equal(calls.length, 2);
+    for (const call of calls) {
+      assert.equal(snapshots(call).length, 1);
+      const index = call.messages.findIndex(message => textOf(message) === 'SHOW_PANEL');
+      assert.equal(JSON.parse(textOf(call.messages[index - 1])).workspace.documentId, 'doc-tool');
+    }
+    assert.equal(calls[1].messages.at(-1).role, 'tool');
+    assert.ok(calls[1].messages.at(-2).tool_calls.length);
+  }
+});
+
+test('nested runtime context rejects invalid state and ignores client-supplied guidance', async () => {
+  for (const context of [
+    { scene: 'invalid' },
+    { workspace: { documentId: 'doc', version: -1, excerpt: '' } },
+    { workspace: { documentId: 'doc', version: 1 } },
+    { workspace: { documentId: 'doc', version: 1, excerpt: 'x'.repeat(12001) } },
+    { workspace: 'invalid' },
+  ]) {
+    assert.equal((await post('chat/completions', { message: 'hello', context })).status, 400);
+  }
+  const response = await post('chat/completions', { message: 'hello', context: {
+    scene: 'conversation', guidance: 'UNTRUSTED_GUIDANCE_MARKER',
+  } });
+  assert.equal(response.status, 201);
+  assert.ok(!JSON.stringify(requests.at(-1)).includes('UNTRUSTED_GUIDANCE_MARKER'));
+});
+
+test('panel modes, local drafts and attachment registry survive real SDK session restoration', async () => {
+  const first = await service.run({ message: 'OPEN_ATTACHMENT', context: { attachments: [
+    { id: 'photo1', kind: 'image', title: '童年照片', url: 'https://example.com/photo.png' },
+  ] } });
+  const panelOf = result => result.events.filter(event => event.type === 'panel.state.updated').at(-1).panel;
+  assert.equal(panelOf(first).mode, 'attachment');
+  assert.equal(panelOf(first).attachment.id, 'photo1');
+  const conversationId = first.conversationId;
+  const draft = await service.run({ conversationId, message: 'SHOW_PANEL' });
+  assert.equal(panelOf(draft).document.version, 1);
+  const edit = await service.run({ conversationId, message: 'EDIT_DRAFT' });
+  assert.equal(panelOf(edit).document.version, 2);
+  assert.equal(panelOf(edit).lastChange.before[0].text, '这是正文。');
+  assert.equal(panelOf(edit).lastChange.after[0].text, '这是修改后的正文。');
+  const staleEdit = await service.run({ conversationId, message: 'EDIT_DRAFT' });
+  assert.ok(staleEdit.events.some(event => event.type === 'tool.completed' && event.isError));
+  assert.equal(panelOf(staleEdit).document.version, 2);
+  const closed = await service.run({ conversationId, message: 'CLOSE_PANEL' });
+  assert.equal(panelOf(closed).mode, 'conversation');
+  assert.equal(panelOf(closed).document, undefined);
+  const reopened = await service.run({ conversationId, message: 'OPEN_DRAFT' });
+  assert.equal(panelOf(reopened).document.blocks[0].text, '这是修改后的正文。');
+  await service.run({ conversationId, message: 'READ_PANEL' });
+  const toolResult = JSON.parse(textOf(requests.at(-1).messages.at(-1)));
+  assert.equal(toolResult.mode, 'editor');
+  assert.equal(toolResult.document.version, 2);
+  const saved = JSON.parse(await readFile(join(root, 'conversations', conversationId, 'panel.json'), 'utf8'));
+  assert.equal(saved.attachments[0].url, 'https://example.com/photo.png');
+  assert.equal(saved.documents.length, 1);
+  const isolated = await service.run({ message: 'READ_PANEL' });
+  assert.equal(panelOf(isolated).mode, 'conversation');
+  assert.equal(JSON.parse(textOf(requests.at(-1).messages.at(-1))).availableDocuments.length, 0);
+});
+
+test('attachment input rejects executable URLs and missing display resources', async () => {
+  for (const attachment of [
+    { id: 'a', kind: 'image', title: '图片', url: 'javascript:alert(1)' },
+    { id: 'a', kind: 'image', title: '图片', url: 'file:///etc/passwd' },
+    { id: 'a', kind: 'image', title: '图片' },
+    { id: 'a', kind: 'document', title: '文档' },
+  ]) {
+    assert.equal((await post('chat/completions', { message: 'hello', context: { attachments: [attachment] } })).status, 400);
+  }
 });

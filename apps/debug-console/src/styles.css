@@ -197,3 +197,16 @@ h1 { margin: 5px 0 0; font-family: Georgia, "Times New Roman", serif; font-size:
   .control-panel { padding: 22px; }
   .animation-workspace { grid-template-columns: 240px minmax(0, 1fr); }
 }
+
+.panel-attachment-image { display: block; max-width: 100%; max-height: 480px; object-fit: contain; }
+.panel-block { text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px 0; }
+.panel-block pre { overflow-x: auto; }
+.panel-block button { font: inherit; cursor: pointer; padding: 4px 8px; }
+.panel-removed { color: #985454; white-space: pre-wrap; }
+.panel-added { color: #276b50; white-space: pre-wrap; }
+.running-state .work-panel { width: 100%; text-align: left; }
+
+.context-settings { min-width: 0; margin: 0; padding: 16px; border: 1px solid #d9dccf; border-radius: 16px; }
+.context-settings legend { padding: 0 6px; font-size: 13px; font-weight: 600; }
+.context-settings .field { margin-bottom: 12px; }
+.context-settings small { display: block; color: #717567; line-height: 1.5; }

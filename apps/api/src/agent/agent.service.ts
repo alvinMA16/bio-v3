@@ -60,7 +60,7 @@ export class AgentService {
       emit({ type: 'run.started' });
       trace('input', 'request', input);
       if (signal?.aborted) throw new Error('Run cancelled');
-      session = await this.factory.create(conversationId, input.systemPrompt, emit, input.provider);
+      session = await this.factory.create(conversationId, input.systemPrompt, emit, input.provider, input.context);
       if (signal?.aborted || timedOut) throw new Error('Run cancelled');
       unsubscribe = session.subscribe((event: AgentSessionEvent) => {
         try {

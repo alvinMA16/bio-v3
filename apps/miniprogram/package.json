@@ -11,5 +11,8 @@
   "devDependencies": {
     "miniprogram-api-typings": "^4.0.8",
     "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@bio/contracts": "workspace:*"
   }
 }

@@ -98,3 +98,13 @@
   background: #e8e8e2;
   color: #999991;
 }
+
+.work-panel { padding: 24rpx; margin-top: 24rpx; background: #fff; border-radius: 20rpx; white-space: pre-wrap; }
+.work-panel__title { font-weight: 600; margin-bottom: 20rpx; }
+.work-panel__image { width: 100%; }
+.work-panel__block { padding: 16rpx; border: 2rpx solid transparent; }
+.work-panel__block--selected { border-color: #88b63d; background: #f3f9e8; }
+.work-panel__block--heading { font-weight: 600; font-size: 34rpx; }
+.work-panel__block--quote { border-left: 4rpx solid #aaa; color: #666; }
+.work-panel__block--code { font-family: monospace; background: #f1f1ed; }
+.work-panel__hint { color: #777; font-size: 24rpx; margin-top: 16rpx; }
