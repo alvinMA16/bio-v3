@@ -6,9 +6,6 @@ export interface SessionReceipt {
   duration: string;
   shares: number;
   replies: number;
-  summary: string;
-  topics: string[];
-  status: 'pending' | 'ready' | 'excerpt';
 }
 
 const pad = (value: number) => String(value).padStart(2, '0');
@@ -19,7 +16,6 @@ export function createReceipt(messages: ReceiptMessage[], startedAt: number, end
   if (!shares.length) return null;
   const start = new Date(startedAt), end = new Date(endedAt);
   const seconds = Math.max(1, Math.floor(activeMs / 1000));
-  const excerpt = shares[0]!.content.replace(/\s+/g, ' ').trim();
   return {
     id: `${startedAt}-${endedAt}`,
     date: `${start.getFullYear()}.${pad(start.getMonth() + 1)}.${pad(start.getDate())}`,
@@ -27,9 +23,17 @@ export function createReceipt(messages: ReceiptMessage[], startedAt: number, end
     duration: seconds < 60 ? `${seconds} 秒` : `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`,
     shares: shares.length,
     replies: messages.filter(message => message.role === 'assistant' && message.content.trim()).length,
-    summary: `“${excerpt.slice(0, 70)}${excerpt.length > 70 ? '…' : ''}”`,
-    topics: [],
-    status: 'pending',
   };
 }
 
+
+/** Retain basic data from older receipts without carrying forward their generated text. */
+export function parseReceipt(value: unknown): SessionReceipt | null {
+  if (!value || typeof value !== 'object') return null;
+  const data = value as Record<string, unknown>;
+  if (!['id', 'date', 'timeRange', 'duration'].every(key => typeof data[key] === 'string')
+    || typeof data.shares !== 'number' || !Number.isSafeInteger(data.shares) || data.shares < 0
+    || typeof data.replies !== 'number' || !Number.isSafeInteger(data.replies) || data.replies < 0) return null;
+  return { id: data.id as string, date: data.date as string, timeRange: data.timeRange as string,
+    duration: data.duration as string, shares: data.shares, replies: data.replies };
+}

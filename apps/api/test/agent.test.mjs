@@ -18,7 +18,6 @@ import { PiSessionFactory } from '../dist/agent/pi-session.factory.js';
 import { AgentController } from '../dist/agent/agent.controller.js';
 import { ChatController } from '../dist/chat/chat.controller.js';
 import { ChatService } from '../dist/chat/chat.service.js';
-import { SessionSummaryService } from '../dist/chat/session-summary.service.js';
 
 let root, mock, app, config, service, storage, factory, baseUrl;
 const requests = [];
@@ -50,10 +49,7 @@ before(async () => {
     for await (const chunk of request) body += chunk;
     const payload = JSON.parse(body);
     requests.push(payload);
-    if (textOf(payload.messages[0]).includes('会话小票')) {
-      sendCompletion(response, { text: JSON.stringify({ summary: '回忆与奶奶做饭的童年时光。', topics: ['童年', '家人'] }) });
-      return;
-    }
+
     const last = payload.messages.at(-1);
     const lastText = typeof last?.content === 'string' ? last.content : last?.content?.map((part) => part.text ?? '').join('');
     if (lastText === 'HOLD') {
@@ -94,7 +90,7 @@ before(async () => {
   });
   const module = await Test.createTestingModule({
     controllers: [AgentController, ChatController],
-    providers: [MaterialsService, AgentService, AgentStorage, PiSessionFactory, ChatService, SessionSummaryService, { provide: ConfigService, useValue: config }],
+    providers: [MaterialsService, AgentService, AgentStorage, PiSessionFactory, ChatService, { provide: ConfigService, useValue: config }],
   }).compile();
   app = module.createNestApplication(new FastifyAdapter(), { logger: false });
   app.setGlobalPrefix('api/v1');
@@ -119,12 +115,10 @@ async function post(path, body) {
   });
 }
 
-test('receipt summary uses a tool-free model request and validates input', async () => {
-  const response = await post('chat/session-summary', { messages: [{ role: 'user', content: '小时候常和奶奶做饭。' }] });
-  assert.equal(response.status, 201);
-  assert.deepEqual(await response.json(), { summary: '回忆与奶奶做饭的童年时光。', topics: ['童年', '家人'] });
-  assert.ok(!requests.at(-1).tools?.length);
-  assert.equal((await post('chat/session-summary', { messages: [] })).status, 400);
+test('retired receipt summary endpoint does not invoke the model', async () => {
+  const before = requests.length;
+  assert.equal((await post('chat/session-summary', { messages: [{ role: 'user', content: 'hello' }] })).status, 404);
+  assert.equal(requests.length, before);
 });
 
 test('existing endpoint uses Pi, persists history and isolates conversations', async () => {

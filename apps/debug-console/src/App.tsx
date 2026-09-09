@@ -1,4 +1,4 @@
-import { collectReceiptMessage, createReceipt, readReceipt, saveReceipt, summarizeReceipt, type CallMessages } from './session-receipt';
+import { collectReceiptMessage, createReceipt, readReceipt, saveReceipt, type CallMessages } from './session-receipt';
 import { FeltMicrophone } from './felt-microphone';
 import { BrowserVoice } from './voice/browser-voice';
 import type { VoiceRequest, VoiceServerMessage } from '@bio/contracts';
@@ -105,7 +105,6 @@ export function App() {
   const [callOpen, setCallOpen] = useState(false);
   const [receipt, setReceipt] = useState(readReceipt);
   const [receiptVisible, setReceiptVisible] = useState(false);
-  const receiptId = useRef(receipt?.id);
   const receiptCall = useRef<{ startedAt: number; endedAt?: number; messages: CallMessages } | null>(null);
   const [callStartedAt, setCallStartedAt] = useState<number | null>(null);
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
@@ -292,12 +291,8 @@ export function App() {
     const messages = [...call.messages.values()];
     const next = createReceipt(messages, call.startedAt, endedAt, endedAt - call.startedAt);
     if (!next) return;
-    receiptId.current = next.id;
     saveReceipt(next); setReceipt(next); setReceiptVisible(true);
-    void summarizeReceipt(next, messages).then(updated => {
-      if (receiptId.current !== updated.id) return;
-      saveReceipt(updated); setReceipt(updated);
-    });
+
   }
 
   async function runAgent(): Promise<void> {

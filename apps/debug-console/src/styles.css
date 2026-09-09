@@ -434,32 +434,6 @@ body { min-width: 320px; }
 .phone-desk { transition: opacity 220ms ease; }
 .phone-desk--printing { opacity: 0; pointer-events: none; }
 .phone-screen { container-type: inline-size; }
-/* The slot is anchored just inside the illustrated panel's upper rim (47.5%). */
-.phone-receipt { position: absolute; z-index: 5; top: 50.5%; bottom: 3%; left: 12%; right: 12%; display: flex; flex-direction: column; align-items: center; color: #5e5546; }
-.phone-receipt-slot { position: relative; z-index: 2; flex-shrink: 0; width: 100%; height: 4.0625cqw; border-radius: 2.1875cqw; background: linear-gradient(#b5a68e, #e2d6c2 48%, #f6edde); box-shadow: inset 0 0.3125cqw 0.9375cqw #64503b50, 0 0.3125cqw 0 #fff9e7; animation: receipt-slot-in 300ms ease-out both; }
-.phone-receipt-slot i { position: absolute; inset: 1.25cqw 2.8125cqw 0.9375cqw; border-radius: 0.9375cqw; background: #4d473b; box-shadow: inset 0 0.625cqw 0.9375cqw #241f19, 0 0.3125cqw 0 #fff9e788; }
-.phone-receipt-slot span { position: absolute; top: 1.5625cqw; right: 1.25cqw; width: 0.9375cqw; height: 0.9375cqw; border-radius: 50%; background: #97a478; animation: receipt-light 450ms steps(2) 6; }
-.phone-receipt-feed { position: relative; width: 100%; flex: 1; min-height: 0; margin-top: -1.5625cqw; padding: 0 3.75cqw 2.8125cqw; box-sizing: border-box; overflow: hidden; animation: receipt-feed 2600ms 300ms linear both; }
-.phone-receipt-paper { position: relative; height: 100%; box-sizing: border-box; padding: 3.75cqw 4.0625cqw 3.125cqw; background: repeating-linear-gradient(0deg, #b5a38106 0, #b5a38106 0.3125cqw, transparent 0.3125cqw, transparent 0.9375cqw), linear-gradient(100deg, #f3ebd9, #fffdf2 12%, #fcf7e9 88%, #eae0cb); box-shadow: 0.625cqw 1.5625cqw 2.8125cqw #6c573d26, inset 0 2.1875cqw 1.875cqw -1.875cqw #67513870; }
-.phone-receipt-paper::after { content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 2.1875cqw; background: linear-gradient(135deg, #fcf7e9 25%, transparent 25%) -1.5625cqw 0, linear-gradient(225deg, #fcf7e9 25%, transparent 25%) -1.5625cqw 0; background-size: 3.125cqw 3.125cqw; }
-.phone-receipt-scroll { height: 100%; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #cfc3ac transparent; }
-.phone-receipt-paper small { display: block; text-align: center; font-size: 2.1875cqw; color: #988b75; letter-spacing: 0.3125cqw; }
-.phone-receipt-paper h2 { text-align: center; font: 600 5.9375cqw 'Songti SC', serif; letter-spacing: 1.25cqw; margin: 2.1875cqw 0; }
-.phone-receipt-date { text-align: center; font: 2.5cqw/1.7 monospace; color: #8c806d; margin: 0; }
-.phone-receipt-paper hr { border: 0; border-top: 0.3125cqw dashed #bdb19a; margin: 2.1875cqw 0; }
-.phone-receipt-paper dl { margin: 0; font-size: 3.125cqw; }.phone-receipt-paper dl div { display: flex; justify-content: space-between; margin: 1.5625cqw 0; }.phone-receipt-paper dd { margin: 0; font-family: monospace; }
-.phone-receipt-topics { display: flex; flex-wrap: wrap; gap: 1.875cqw; font-size: 2.5cqw; color: #83775f; }
-.phone-receipt-summary { font: 3.4375cqw/1.7 'Songti SC', serif; overflow-wrap: anywhere; margin: 1.875cqw 0; }
-.phone-receipt-status { font-size: 2.1875cqw; color: #a2947e; line-height: 1.5; margin: 1.5625cqw 0; }
-.phone-receipt-thanks { text-align: center; font: 3.125cqw/1.5 'Songti SC', serif; margin: 1.875cqw 0; }
-.phone-receipt-stamp { width: fit-content; margin: 2.1875cqw auto; padding: 0.9375cqw 2.5cqw; border: 0.3125cqw solid #ac795d99; border-radius: 50%; color: #a57a60; font: 2.8125cqw/1.5 serif; transform: rotate(-9deg); }
-.phone-receipt-barcode { width: 23.75cqw; height: 3.75cqw; margin: 2.1875cqw auto; opacity: .48; background: repeating-linear-gradient(90deg, #75664f 0 0.3125cqw, transparent 0.3125cqw 0.9375cqw, #75664f 0.9375cqw 1.5625cqw, transparent 1.5625cqw 1.875cqw, #75664f 1.875cqw 2.1875cqw, transparent 2.1875cqw 3.125cqw); }
-.phone-receipt-keep { margin-top: 2.8125cqw; flex-shrink: 0; border: 0.3125cqw solid #cabc9f; border-radius: 5.625cqw; padding: 2.1875cqw 8.125cqw; background: #f7f0e1; color: #75664e; font-size: 3.4375cqw; cursor: pointer; box-shadow: 0 0.625cqw 0.9375cqw #77634b12; }
-.phone-receipt-keep:focus-visible { outline: 0.625cqw solid #8b9875; outline-offset: 0.9375cqw; }
-@keyframes receipt-slot-in { from { opacity: 0; transform: scaleX(.88); } to { opacity: 1; transform: scaleX(1); } }
-@keyframes receipt-feed { 0% { clip-path: inset(0 0 100%); transform: translateY(-1.875cqw); } 25% { clip-path: inset(0 0 74%); transform: translateY(-1.25cqw); } 29% { clip-path: inset(0 0 74%); transform: translateY(-1.25cqw); } 62% { clip-path: inset(0 0 35%); transform: translateY(-0.625cqw); } 67% { clip-path: inset(0 0 35%); transform: translateY(-0.625cqw); } 100% { clip-path: inset(0); transform: translateY(0); } }
-@keyframes receipt-light { to { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .phone-receipt-slot, .phone-receipt-feed, .phone-receipt-slot span { animation: none; } }
 
 
 .phone-desk-drawer:has(.material-folder) { max-height: 82%; overflow-y: auto; text-align: left; }
@@ -481,10 +455,42 @@ body { min-width: 320px; }
 .material-list strong { overflow-wrap: anywhere; font-size: 12px; }
 .material-folder pre { white-space: pre-wrap; max-height: 200px; overflow: auto; font: inherit; }
 
-.phone-receipt-memento { display: flex; align-items: center; justify-content: center; gap: 3cqw; }
-.phone-receipt-memento .phone-receipt-stamp, .phone-receipt-memento .phone-receipt-barcode { margin: 1cqw 0; }
+
 
 .material-selection { padding: 8px 16px; font-size: 12px; color: #796349; overflow-wrap: anywhere; }
 .material-selection button { margin-left: 12px; font-size: 11px; }
 .material-folder button { float: none; }
 .material-folder button:disabled { opacity: .45; cursor: default; }
+
+/* Felt-lined opening, lit from the same upper-left direction as the miniature set. */
+.receipt-workshop { position: absolute; z-index: 5; top: 50.1%; bottom: 2.3%; left: 6%; right: 6%; display: flex; flex-direction: column; align-items: center; color: #80715a; animation: receipt-workshop-in 350ms ease-out both; }
+.receipt-mouth { position: absolute; top: 0; z-index: 0; flex-shrink: 0; width: 97%; height: 6cqw; border-radius: 2.6cqw; background: radial-gradient(ellipse at 40% 0, #fff9e6aa, transparent 65%), #c6b89d; box-shadow: inset 0 .35cqw .7cqw #8d7a5d70, inset 0 -.4cqw .5cqw #fffae8b0, 0 .3cqw .6cqw #fffbee; }
+.receipt-mouth::before { content: ''; position: absolute; inset: .6cqw .9cqw; border: .2cqw dashed #a08f7260; border-radius: 2cqw; }
+.receipt-mouth__well { position: absolute; inset: 1.65cqw 2.7cqw 1.4cqw; border-radius: 1.1cqw; background: #494033; box-shadow: inset 0 .9cqw 1cqw #211a11cc, 0 -.3cqw .35cqw #a6977d; }
+.receipt-mouth__lip { position: absolute; z-index: 3; height: 1.1cqw; left: 4cqw; right: 4cqw; top: 4.5cqw; border-radius: 50%; background: #dfd1b8; box-shadow: 0 -.2cqw .4cqw #71604766, 0 .3cqw .4cqw #fff8e5; }
+.receipt-stage { position: relative; z-index: 1; width: 100%; flex: 1; min-height: 0; margin-top: 2.4cqw; overflow: hidden; }
+.receipt-stage::after { content: ''; position: absolute; z-index: 2; top: 0; left: 7%; right: 7%; height: 3.2cqw; background: linear-gradient(#48392380, transparent); pointer-events: none; }
+.receipt-canvas { position: absolute; inset: 0; }
+.receipt-canvas canvas { display: block; width: 100%; height: 100%; }
+.receipt-readable { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.receipt-dismiss { flex-shrink: 0; min-height: 10cqw; padding: 1.8cqw 9cqw; color: #fafbf7; background: #596b60; border: 0; border-radius: 5cqw; box-shadow: inset 0 .25cqw .3cqw #ffffff20, 0 .6cqw 1.4cqw #34463b24; font: 4cqw/1.5 'Songti SC', serif; letter-spacing: .25cqw; cursor: pointer; transition: background 150ms, transform 150ms; }
+.receipt-dismiss:hover { background: #4c5f53; }
+.receipt-dismiss:active { transform: translateY(.3cqw); }
+.receipt-dismiss:focus-visible { outline: .5cqw solid #596b60; outline-offset: .8cqw; }
+.receipt-workshop--closing { pointer-events: none; animation: receipt-workshop-out 360ms ease-in both; }
+.receipt-fallback { position: absolute; inset: 0 6% 2cqw; overflow: hidden; }
+.receipt-fallback__paper { box-sizing: border-box; height: 100%; position: relative; padding: 6cqw 5cqw 4cqw; background: #f5f5f2; color: #655a48; font: 4cqw/1.6 'Songti SC', serif; box-shadow: 1cqw 2cqw 3cqw #6f59372b; animation: receipt-physical-feed 4200ms both; }
+.receipt-fallback__paper small, .receipt-fallback__paper h2 { display: block; text-align: center; }
+.receipt-fallback__paper h2 { font-size: 5cqw; margin: 2cqw 0; }
+.receipt-fallback__paper p { margin: 2cqw 0; }
+.receipt-fallback__paper hr { border: 0; border-top: .2cqw dashed #ac9a7c; }
+.receipt-fallback__paper dl { margin: 0; }.receipt-fallback__paper dl div { display: flex; justify-content: space-between; }.receipt-fallback__paper dd { margin: 0; }
+@keyframes receipt-physical-feed { 0%, 8.33% { transform: translateY(-100%); } 32.14%, 35.95% { transform: translateY(-73%); } 64.28%, 68.57% { transform: translateY(-34%); } 95.23%, 100% { transform: translateY(0); } }
+@keyframes receipt-workshop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes receipt-workshop-out { to { opacity: 0; transform: translateY(1.5cqw); } }
+@media (prefers-reduced-motion: reduce) { .receipt-workshop, .receipt-fallback__paper { animation: none; } }
+
+.receipt-preview .phone-preview { width: 320px; max-width: 100%; }
+
+.receipt-actions { width: 100%; flex-shrink: 0; height: 12cqw; display: flex; align-items: flex-end; justify-content: center; }
+.receipt-fallback__paper::after { content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 2cqw; background: linear-gradient(135deg, #f5f5f2 25%, transparent 25%) -2cqw 0, linear-gradient(225deg, #f5f5f2 25%, transparent 25%) -2cqw 0; background-size: 4cqw 4cqw; }

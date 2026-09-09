@@ -1,5 +1,5 @@
 import type { FoxActivity } from '../../lib/fox-behavior';
-import { getLatestReceipt, takePendingReceipt, summarizeReceipt, type SessionReceipt } from '../../lib/session-receipt';
+import { getLatestReceipt, takePendingReceipt, type SessionReceipt } from '../../lib/session-receipt';
 import {
   FOX_ANIMATION_CLIPS,
   FoxAnimationController,
@@ -14,9 +14,13 @@ let animationController: FoxAnimationController | null = null;
 
 Page({
   unloaded: false,
+  receiptCloseTimer: undefined as ReturnType<typeof setTimeout> | undefined,
+  receiptPrintTimer: undefined as ReturnType<typeof setTimeout> | undefined,
   data: {
     receipt: null as SessionReceipt | null,
     receiptVisible: false,
+    receiptClosing: false,
+    receiptFinished: false,
     activeDrawer: '',
     environmentSrc: ENVIRONMENT_SRC,
     innerPanelSrc: INNER_PANEL_SRC,
@@ -50,12 +54,9 @@ Page({
   onShow(): void {
     animationController?.resume();
     const pending = takePendingReceipt();
-    this.setData({ receipt: getLatestReceipt(), ...(pending ? { receiptVisible: true } : {}) });
-    if (pending) {
-      summarizeReceipt(pending.receipt, pending.messages, receipt => {
-        if (!this.unloaded) this.setData({ receipt });
-      });
-    }
+    if (pending) this.openReceipt();
+    else this.setData({ receipt: getLatestReceipt() });
+
   },
 
   onHide(): void {
@@ -64,16 +65,31 @@ Page({
 
   onUnload(): void {
     this.unloaded = true;
+    clearTimeout(this.receiptCloseTimer);
+    clearTimeout(this.receiptPrintTimer);
     animationController?.destroy();
     animationController = null;
   },
 
   openReceipt(): void {
-    this.setData({ receipt: getLatestReceipt(), receiptVisible: true });
+    clearTimeout(this.receiptCloseTimer);
+    clearTimeout(this.receiptPrintTimer);
+    this.setData({ receipt: getLatestReceipt(), receiptVisible: true, receiptClosing: false, receiptFinished: false }, () => {
+      this.receiptPrintTimer = setTimeout(() => this.onReceiptPrinted(), 4200);
+    });
+  },
+
+  onReceiptPrinted(): void {
+    if (!this.unloaded && this.data.receiptVisible && !this.data.receiptClosing) this.setData({ receiptFinished: true });
   },
 
   closeReceipt(): void {
-    this.setData({ receiptVisible: false });
+    if (this.data.receiptClosing) return;
+    clearTimeout(this.receiptPrintTimer);
+    this.setData({ receiptClosing: true });
+    this.receiptCloseTimer = setTimeout(() => {
+      if (!this.unloaded) this.setData({ receiptVisible: false, receiptClosing: false });
+    }, 360);
   },
 
   openFolder(): void {

@@ -1,4 +1,5 @@
 import { MaterialFolder } from './material-folder';
+import { ReceiptPrinter } from './receipt-printer';
 import type { Material } from '@bio/contracts';
 import type { SessionReceipt } from './session-receipt';
 import type { FoxActivity } from '../../miniprogram/miniprogram/lib/fox-behavior';
@@ -128,27 +129,7 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
           </button><span>{speakerEnabled ? '扬声器' : '扬声器已关'}</span></div>
         </footer>
       </>}
-      {receiptVisible && receipt && !callOpen && <section className="phone-receipt" role="dialog" aria-label="令狸送你的聊天小票" onKeyDown={event => { if (event.key === 'Escape') onReceiptClose(); }}>
-        <div className="phone-receipt-slot" aria-hidden="true"><i /><span /></div>
-        <div className="phone-receipt-feed" key={receipt.id}>
-          <div className="phone-receipt-paper">
-            <div className="phone-receipt-scroll" tabIndex={0} aria-label="小票内容，可滚动阅读">
-              <small>令 狸 的 故 事 收 集 处</small>
-              <h2>聊天留念</h2>
-              <p className="phone-receipt-date">{receipt.date} · {receipt.timeRange}</p>
-              <hr />
-              <dl><div><dt>相伴时长</dt><dd>{receipt.duration}</dd></div><div><dt>你说了</dt><dd>{receipt.shares} 次</dd></div><div><dt>令狸回应</dt><dd>{receipt.replies} 次</dd></div></dl>
-              <hr />
-              <div className="phone-receipt-topics">{receipt.topics.map(topic => <span key={topic}># {topic}</span>)}</div>
-              <p className="phone-receipt-summary">{receipt.summary}</p>
-              <p className="phone-receipt-status" hidden={receipt.status === 'ready'} role="status">{receipt.status === 'pending' ? '正在写下这次的小小回忆…' : receipt.status === 'excerpt' ? '先留住你说的这一句。' : '根据聊天整理'}</p>
-              <hr /><p className="phone-receipt-thanks">谢谢你，愿意说给我听。</p>
-              <div className="phone-receipt-memento" aria-hidden="true"><div className="phone-receipt-barcode" /><div className="phone-receipt-stamp">令狸 · 留念</div></div>
-            </div>
-          </div>
-        </div>
-        <button type="button" autoFocus className="phone-receipt-keep" onClick={onReceiptClose}>我知道了</button>
-      </section>}
+      {receiptVisible && receipt && !callOpen && <ReceiptPrinter key={receipt.id} receipt={receipt} onClose={onReceiptClose} />}
     </div>
   </div>;
 }

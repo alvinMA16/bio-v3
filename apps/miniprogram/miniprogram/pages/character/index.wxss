@@ -9,31 +9,27 @@
 }
 
 .last-receipt { margin: auto 0 0; padding: 14rpx 26rpx; background: #faf3e3b8; color: #81735d; font-size: 22rpx; line-height: 1.5; border-radius: 8rpx; }
-.receipt-printer { position: fixed; z-index: 5; top: 50.5%; bottom: calc(3% + env(safe-area-inset-bottom)); left: 12%; right: 12%; display: flex; flex-direction: column; align-items: center; color: #5e5546; }
-.receipt-slot { position: relative; z-index: 2; flex-shrink: 0; width: 100%; height: 30rpx; border-radius: 16rpx; background: linear-gradient(#b5a68e, #e2d6c2 48%, #f6edde); box-shadow: inset 0 2rpx 7rpx #64503b50, 0 2rpx 0 #fff9e7; animation: receipt-slot-in 300ms ease-out both; }
-.receipt-slot__mouth { position: absolute; top: 9rpx; right: 21rpx; bottom: 7rpx; left: 21rpx; border-radius: 7rpx; background: #4d473b; box-shadow: inset 0 5rpx 7rpx #241f19, 0 2rpx 0 #fff9e788; }
-.receipt-slot__light { position: absolute; top: 12rpx; right: 9rpx; width: 7rpx; height: 7rpx; border-radius: 50%; background: #97a478; animation: receipt-light 450ms steps(2) 6; }
-.receipt-feed { position: relative; width: 100%; flex: 1; min-height: 0; margin-top: -12rpx; padding: 0 28rpx 21rpx; box-sizing: border-box; overflow: hidden; animation: receipt-feed 2600ms 300ms linear both; }
-.receipt-paper { position: relative; height: 100%; box-sizing: border-box; padding: 28rpx 30rpx 23rpx; background: repeating-linear-gradient(0deg, #b5a38106 0, #b5a38106 2rpx, transparent 2rpx, transparent 7rpx), linear-gradient(100deg, #f3ebd9, #fffdf2 12%, #fcf7e9 88%, #eae0cb); box-shadow: 5rpx 12rpx 21rpx #6c573d26, inset 0 16rpx 14rpx -14rpx #67513870; }
-.receipt-paper::after { content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 16rpx; background: linear-gradient(135deg, #fcf7e9 25%, transparent 25%) -12rpx 0, linear-gradient(225deg, #fcf7e9 25%, transparent 25%) -12rpx 0; background-size: 24rpx 24rpx; }
-.receipt-scroll { height: 100%; }
-.receipt-paper__brand { text-align: center; font-size: 17rpx; color: #988b75; letter-spacing: 2rpx; }
-.receipt-paper__title { text-align: center; font-family: serif; font-size: 44rpx; letter-spacing: 9rpx; margin: 16rpx 0; }
-.receipt-paper__date { text-align: center; font-family: monospace; font-size: 19rpx; line-height: 1.7; color: #8c806d; }
-.receipt-paper__rule { border-top: 2rpx dashed #bdb19a; margin: 16rpx 0; }
-.receipt-paper__row { display: flex; justify-content: space-between; margin: 12rpx 0; font-size: 24rpx; }
+.receipt-printer { position: fixed; z-index: 5; top: 50.1%; bottom: calc(2.3% + env(safe-area-inset-bottom)); left: 6%; right: 6%; display: flex; flex-direction: column; align-items: center; color: #5e5546; }
+.receipt-slot { position: absolute; top: 0; z-index: 0; flex-shrink: 0; width: 97%; height: 45rpx; border-radius: 20rpx; background: radial-gradient(ellipse at 40% 0, #fff9e6aa, transparent 65%), #c6b89d; box-shadow: inset 0 3rpx 5rpx #8d7a5d70, inset 0 -3rpx 4rpx #fffae8b0, 0 2rpx 5rpx #fffbee; }
+.receipt-slot::before { content: ''; position: absolute; top: 5rpx; right: 7rpx; bottom: 5rpx; left: 7rpx; border: 1rpx dashed #a08f7260; border-radius: 15rpx; }
+.receipt-slot__mouth { position: absolute; top: 12rpx; right: 20rpx; bottom: 11rpx; left: 20rpx; border-radius: 8rpx; background: #494033; box-shadow: inset 0 7rpx 8rpx #211a11cc, 0 -2rpx 3rpx #a6977d; }
+.receipt-slot__lip { position: absolute; z-index: 3; height: 8rpx; left: 30rpx; right: 30rpx; top: 34rpx; border-radius: 50%; background: #dfd1b8; box-shadow: 0 -2rpx 3rpx #71604766, 0 2rpx 3rpx #fff8e5; }
+.receipt-feed { position: relative; z-index: 1; width: 100%; flex: 1; min-height: 0; margin-top: 18rpx; padding: 0 28rpx 24rpx; box-sizing: border-box; overflow: hidden; perspective: 1800rpx; }
+.receipt-feed::after { content: ''; position: absolute; top: 0; left: 28rpx; right: 28rpx; height: 24rpx; background: linear-gradient(#48392380, transparent); pointer-events: none; }
+.receipt-paper { position: relative; display: flex; flex-direction: column; justify-content: space-evenly; height: 100%; box-sizing: border-box; padding: 20rpx 30rpx; transform-origin: center top; background: linear-gradient(95deg, #e4e4df, #f5f5f2 6%, #f5f5f2 92%, #e7e7e2); box-shadow: 3rpx 8rpx 14rpx #6c573d26, inset 0 -12rpx 15rpx -12rpx #b9b9b2; animation: receipt-physical-feed 4200ms both; }
+.receipt-paper::after { content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 18rpx; background: linear-gradient(135deg, #f5f5f2 25%, transparent 25%) -16rpx 0, linear-gradient(225deg, #f5f5f2 25%, transparent 25%) -16rpx 0; background-size: 32rpx 32rpx; filter: drop-shadow(0 4rpx 3rpx #79603a20); }
+.receipt-paper__time { margin-top: 4rpx; text-align: center; font: 32rpx/1.5 monospace; }
+.receipt-paper__title { text-align: center; font-family: serif; font-size: 52rpx; letter-spacing: 5rpx; line-height: 1.25; margin: 0 0 8rpx; }
+.receipt-paper__date { text-align: center; font-family: monospace; font-size: 30rpx; line-height: 1.5; color: #8c806d; }
+.receipt-paper__rule { border-top: 2rpx dashed #bdb19a; margin: 12rpx 0; }
+.receipt-paper__row { display: flex; justify-content: space-between; margin: 0; padding: 16rpx 0; font-size: 34rpx; line-height: 1.35; }
 .receipt-paper__row text:last-child { font-family: monospace; }
-.receipt-paper__topics { display: flex; flex-wrap: wrap; gap: 14rpx; font-size: 19rpx; color: #83775f; }
-.receipt-paper__summary { font-family: serif; font-size: 26rpx; line-height: 1.7; overflow-wrap: anywhere; margin: 14rpx 0; }
-.receipt-paper__status { font-size: 17rpx; color: #a2947e; line-height: 1.5; margin: 12rpx 0; }
-.receipt-paper__thanks { text-align: center; font-family: serif; font-size: 24rpx; margin: 14rpx 0; }
-.receipt-paper__stamp { width: 132rpx; margin: 16rpx auto; padding: 7rpx 18rpx; border: 2rpx solid #ac795d99; border-radius: 50%; color: #a57a60; font-family: serif; font-size: 21rpx; text-align: center; transform: rotate(-9deg); }
-.receipt-paper__barcode { width: 178rpx; height: 28rpx; margin: 16rpx auto; opacity: .48; background: repeating-linear-gradient(90deg, #75664f 0 2rpx, transparent 2rpx 7rpx, #75664f 7rpx 12rpx, transparent 12rpx 14rpx, #75664f 14rpx 16rpx, transparent 16rpx 23rpx); }
-.receipt-keep { margin-top: 21rpx; flex-shrink: 0; border: 2rpx solid #cabc9f; border-radius: 42rpx; padding: 0 61rpx; line-height: 70rpx; background: #f7f0e1; color: #75664e; font-size: 26rpx; box-shadow: 0 5rpx 7rpx #77634b12; }
-@keyframes receipt-slot-in { from { opacity: 0; transform: scaleX(.88); } to { opacity: 1; transform: scaleX(1); } }
-@keyframes receipt-feed { 0% { clip-path: inset(0 0 100%); transform: translateY(-14rpx); } 25% { clip-path: inset(0 0 74%); transform: translateY(-9rpx); } 29% { clip-path: inset(0 0 74%); transform: translateY(-9rpx); } 62% { clip-path: inset(0 0 35%); transform: translateY(-5rpx); } 67% { clip-path: inset(0 0 35%); transform: translateY(-5rpx); } 100% { clip-path: inset(0); transform: translateY(0); } }
-@keyframes receipt-light { to { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .receipt-slot, .receipt-feed, .receipt-slot__light { animation: none; } }
+.receipt-keep { margin: 0; flex-shrink: 0; border: 0; border-radius: 40rpx; padding: 0 68rpx; line-height: 76rpx; background: #596b60; color: #fafbf7; font-size: 30rpx; letter-spacing: 2rpx; box-shadow: inset 0 2rpx 3rpx #ffffff20, 0 5rpx 10rpx #34463b24; }
+.receipt-keep::after { border: 0; }
+@keyframes receipt-physical-feed { 0%, 8.33% { transform: translateY(-104%) rotateX(-4deg); } 32.14%, 35.95% { transform: translateY(-76%) rotateX(-3deg); } 64.28%, 68.57% { transform: translateY(-35%) rotateX(-2deg); } 95.23%, 100% { transform: translateY(0) rotateX(-1deg); } }
+.receipt-printer--closing { pointer-events: none; animation: receipt-close 360ms ease-in both; }
+@keyframes receipt-close { to { opacity: 0; transform: translateY(12rpx); } }
+@media (prefers-reduced-motion: reduce) { .receipt-paper, .receipt-printer--closing { animation: none; } }
 
 .stage__layer, .stage__actor { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; }
 .stage__actor { z-index: 1; overflow: hidden; }
@@ -75,5 +71,4 @@
   .desk-entry__name { font-size: 26rpx; }
 }
 
-.receipt-paper__memento { display: flex; align-items: center; justify-content: center; gap: 22rpx; }
-.receipt-paper__memento .receipt-paper__stamp, .receipt-paper__memento .receipt-paper__barcode { margin: 7rpx 0; }
+.receipt-actions { width: 100%; flex-shrink: 0; height: 90rpx; display: flex; align-items: flex-end; justify-content: center; }

@@ -154,7 +154,7 @@ Page({
     if (this.receiptQueued) return;
     this.receiptQueued = true;
     const receipt = createReceipt(this.data.messages, this.startedAt, Date.now(), this.activeMs);
-    if (receipt) queueReceipt(receipt, this.data.messages);
+    if (receipt) queueReceipt(receipt);
   },
 
   onInput(event: WechatMiniprogram.Input): void {

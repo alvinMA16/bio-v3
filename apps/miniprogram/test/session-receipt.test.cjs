@@ -36,39 +36,18 @@ test('empty chats produce no receipt; counts and active duration are independent
   assert.equal(value.duration, '1 分 5 秒');
   assert.equal(value.shares, 1);
   assert.equal(value.replies, 1);
-  assert.match(value.summary, /奶奶/);
+  assert.equal('summary' in value, false);
 });
 
-test('pending receipt is consumed once; failure preserves excerpt and late results cannot overwrite new sessions', () => {
+test('receipt is queued once and only contains basic information without any network request', () => {
   const { receipt, requests } = setup();
   const first = receipt.createReceipt(messages, 1000, 5000, 4000);
-  receipt.queueReceipt(first, messages);
-  assert.equal(receipt.takePendingReceipt().receipt.id, first.id);
+  receipt.queueReceipt(first);
+  assert.equal(receipt.takePendingReceipt().id, first.id);
   assert.equal(receipt.takePendingReceipt(), null);
-  let updates = 0;
-  receipt.summarizeReceipt(first, messages, () => updates++);
-  requests[0].fail();
-  assert.equal(receipt.getLatestReceipt().status, 'excerpt');
-  receipt.summarizeReceipt(first, messages, () => updates++);
-  const second = receipt.createReceipt(messages, 6000, 9000, 3000);
-  receipt.queueReceipt(second, messages);
-  requests[1].success({ statusCode: 201, data: { summary: '旧总结', topics: ['回忆'] } });
-  assert.equal(receipt.getLatestReceipt().id, second.id);
-  assert.equal(updates, 1);
-});
-
-test('long transcript is bounded and successful summary is retained', () => {
-  const { receipt, requests } = setup();
-  const long = Array.from({ length: 100 }, (_, index) => ({ role: 'user', content: `${index}:` + '字'.repeat(2000) }));
-  const value = receipt.createReceipt(long, 1000, 5000, 4000);
-  receipt.queueReceipt(value, long);
-  const pending = receipt.takePendingReceipt();
-  assert.equal(pending.messages.length, 40);
-  assert.equal(pending.messages[0].content.length, 1000);
-  assert.match(pending.messages[39].content, /^99:/);
-  receipt.summarizeReceipt(value, pending.messages, () => {});
-  requests[0].success({ statusCode: 201, data: { summary: '回忆和奶奶一起做饭的童年时光。', topics: ['童年', '家人'] } });
-  assert.equal(receipt.getLatestReceipt().status, 'ready');
+  assert.equal(receipt.getLatestReceipt().shares, 1);
+  assert.deepEqual(Object.keys(first).sort(), ['date', 'duration', 'id', 'replies', 'shares', 'timeRange']);
+  assert.equal(requests.length, 0);
 });
 
 test('chat backgrounding does not print; unloading prints once and cancels pending request', () => {
@@ -87,7 +66,7 @@ test('chat backgrounding does not print; unloading prints once and cancels pendi
   page.requestTask = { abort: () => { aborted = true; } };
   page.onUnload();
   assert.equal(aborted, true);
-  assert.equal(receipt.takePendingReceipt().receipt.shares, 1);
+  assert.equal(receipt.takePendingReceipt().shares, 1);
   page.onUnload();
   assert.equal(receipt.takePendingReceipt(), null);
 });
@@ -102,7 +81,7 @@ test('explicit hang-up prepares receipt before the home page becomes visible', (
   });
   page.onLoad(); page.onShow(); page.data.messages = messages;
   page.leaveChat();
-  assert.equal(shown.receipt.shares, 1);
+  assert.equal(shown.shares, 1);
   page.onUnload();
   assert.equal(receipt.takePendingReceipt(), null);
 });
