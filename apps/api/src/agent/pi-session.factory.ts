@@ -36,14 +36,14 @@ export class PiSessionFactory {
       cwd, agentDir: cwd, settingsManager,
       noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
       systemPromptOverride: () => buildSystemPrompt(persona),
-      extensionFactories: [createContextExtension(buildRuntimeContext(context, workspace.context()))],
+      extensionFactories: [createContextExtension(() => buildRuntimeContext(context, workspace.context()))],
     });
     await resourceLoader.reload();
     const sessionManager = SessionManager.open(join(cwd, 'session.jsonl'), cwd, cwd);
     const { session } = await createAgentSession({
       cwd, agentDir: cwd, modelRuntime, model, thinkingLevel: 'off',
       settingsManager, resourceLoader, sessionManager,
-      tools: ['show_content', 'update_content', 'get_content'], customTools: createPresentationTools(workspace, emit),
+      tools: ['switch_mode', 'update_content', 'get_content'], customTools: createPresentationTools(workspace, emit),
     });
     return session;
   }

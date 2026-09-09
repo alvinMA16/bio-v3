@@ -29,7 +29,7 @@ function sendCompletion(response, { text = '你好，我是令狸。', tool, mod
     choices: [{ index: 0, delta, finish_reason }],
   })}\n\n`);
   chunk({ role: 'assistant' });
-  if (tool) chunk({ tool_calls: [{ index: 0, id: 'call_panel', type: 'function', function: {
+  if (tool) chunk({ tool_calls: [{ index: 0, id: `call_${randomUUID()}`, type: 'function', function: {
     name: typeof tool === 'object' ? tool.name : 'update_content', arguments: JSON.stringify(typeof tool === 'object' ? tool.arguments : { documentId: 'draft', expectedVersion: 0, title: '文章草稿', operations: [{ action: 'insert', block: { id: 'p1', kind: 'paragraph', text: '这是正文。' } }] }),
   } }] });
   else chunk({ content: text });
@@ -59,12 +59,19 @@ before(async () => {
       response.end(JSON.stringify({ error: { message: 'mock provider failure', type: 'invalid_request_error' } }));
       return;
     }
+    const lastCall = payload.messages.at(-2)?.tool_calls?.[0]?.function;
+    const createAfterSwitch = last?.role === 'tool' && lastCall?.name === 'switch_mode'
+      && JSON.parse(lastCall.arguments).mode === 'revision'
+      && textOf(payload.messages.findLast(message => message.role === 'user')) === 'SHOW_PANEL';
+    const runtime = snapshots(payload)[0];
     sendCompletion(response, {
       model: payload.model,
-      tool: lastText === 'SHOW_PANEL' ? true
-        : lastText === 'OPEN_ATTACHMENT' ? { name: 'show_content', arguments: { mode: 'attachment', targetId: 'photo1' } }
-        : lastText === 'CLOSE_PANEL' ? { name: 'show_content', arguments: { mode: 'conversation' } }
-        : lastText === 'OPEN_DRAFT' ? { name: 'show_content', arguments: { mode: 'editor', targetId: 'draft' } }
+      tool: createAfterSwitch ? true
+        : lastText === 'SHOW_PANEL' ? (JSON.parse(textOf(runtime)).scene === 'revision' ? true : { name: 'switch_mode', arguments: { mode: 'revision' } })
+        : lastText === 'OPEN_ATTACHMENT' ? { name: 'switch_mode', arguments: { mode: 'attachment_conversation', targetId: 'photo1' } }
+        : lastText === 'OPEN_MISSING_ATTACHMENT' ? { name: 'switch_mode', arguments: { mode: 'attachment_conversation', targetId: 'missing' } }
+        : lastText === 'CLOSE_PANEL' ? { name: 'switch_mode', arguments: { mode: 'conversation' } }
+        : lastText === 'OPEN_DRAFT' ? { name: 'switch_mode', arguments: { mode: 'revision', targetId: 'draft' } }
         : lastText === 'EDIT_DRAFT' ? { name: 'update_content', arguments: { documentId: 'draft', expectedVersion: 1, operations: [{ action: 'replace', targetId: 'p1', block: { id: 'p1', kind: 'paragraph', text: '这是修改后的正文。' } }] } }
         : lastText === 'READ_PANEL' ? { name: 'get_content', arguments: {} } : false,
       text: payload.tools?.length ? '你好，我是令狸。' : 'COMPACTED_MEMORY_MARKER',
@@ -114,7 +121,7 @@ test('existing endpoint uses Pi, persists history and isolates conversations', a
   assert.equal(result.usage.promptTokens, 12);
   assert.equal(result.usage.promptCacheHitTokens, 2);
   const request = requests.at(-1);
-  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['show_content', 'update_content', 'get_content']);
+  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['switch_mode', 'update_content', 'get_content']);
   assert.deepEqual(request.thinking, { type: 'disabled' });
   assert.ok(JSON.stringify(request.messages).includes('TEST_PERSONA'));
   assert.ok(!JSON.stringify(request.messages).includes('Compound Codex'));
@@ -135,10 +142,10 @@ test('existing endpoint uses Pi, persists history and isolates conversations', a
 
 test('real SDK tool loop emits panel events and counts all model calls', async () => {
   const result = await service.run({ message: 'SHOW_PANEL' });
-  const panel = result.events.find((event) => event.type === 'panel.state.updated' && event.panel.mode === 'editor');
+  const panel = result.events.find((event) => event.type === 'panel.state.updated' && event.panel.document);
   assert.equal(panel.panel.document.blocks[0].text, '这是正文。');
   assert.ok(result.events.some((event) => event.type === 'tool.completed' && !event.isError));
-  assert.equal(result.usage.totalTokens, 34);
+  assert.equal(result.usage.totalTokens, 51);
   assert.ok(requests.at(-1).messages.some((message) => message.role === 'tool'));
   assert.ok(storage.readTrace(result.runId).some((entry) => entry.type === 'tool_execution_end'));
 });
@@ -258,7 +265,9 @@ test('runtime snapshot precedes this user turn, is replaced on resume and never 
   assert.equal(textOf(initial.messages.at(-1)), '参考这段');
   const oldSystem = textOf(initial.messages[0]);
   const second = await post('chat/completions', { conversationId: result.conversationId, message: '看新选区', context: {
-    scene: 'interview', workspace: { documentId: 'doc-1', version: 4, selectedBlockId: 'p5', excerpt: 'NEW_WORKSPACE_MARKER' },
+    scene: 'attachment_conversation',
+    attachments: [{ id: 'letter', kind: 'document', title: '家书', text: 'LETTER_CONTENT' }],
+    workspace: { documentId: 'doc-1', version: 4, selectedBlockId: 'p5', excerpt: 'NEW_WORKSPACE_MARKER' },
   } });
   assert.equal(second.status, 201);
   const latest = requests.at(-1);
@@ -266,10 +275,17 @@ test('runtime snapshot precedes this user turn, is replaced on resume and never 
   assert.equal(snapshots(latest).length, 1);
   assert.ok(!JSON.stringify(latest).includes('OLD_WORKSPACE_MARKER'));
   assert.equal(JSON.parse(textOf(latest.messages.at(-2))).workspace.selectedBlockId, 'p5');
+  const attachmentContext = JSON.parse(textOf(latest.messages.at(-2)));
+  assert.equal(attachmentContext.scene, 'conversation');
+  assert.equal(attachmentContext.requestedScene, 'attachment_conversation');
+  assert.deepEqual(attachmentContext.submittedAttachmentIds, ['letter']);
+  assert.ok(attachmentContext.contentView.availableAttachments.some(item => item.id === 'letter'));
+  assert.equal(attachmentContext.guidance, JSON.parse(textOf(initial.messages.at(-2))).guidance);
   assert.equal(textOf(latest.messages.at(-1)), '看新选区');
   assert.ok(latest.messages.slice(0, -2).some(message => textOf(message) === '参考这段'));
   await service.run({ conversationId: result.conversationId, message: '现在呢' });
   assert.equal(JSON.parse(textOf(snapshots(requests.at(-1))[0])).workspace, null);
+  assert.deepEqual(JSON.parse(textOf(snapshots(requests.at(-1))[0])).submittedAttachmentIds, []);
   const saved = await readFile(join(root, 'conversations', result.conversationId, 'session.jsonl'), 'utf8');
   assert.ok(!saved.includes('WORKSPACE_MARKER'));
   assert.ok(!saved.includes('bio_runtime_context'));
@@ -283,7 +299,7 @@ test('runtime snapshot remains before user during tool loop for both providers',
     } });
     await response.text();
     const calls = requests.slice(start);
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 3);
     for (const call of calls) {
       assert.equal(snapshots(call).length, 1);
       const index = call.messages.findIndex(message => textOf(message) === 'SHOW_PANEL');
@@ -291,12 +307,27 @@ test('runtime snapshot remains before user during tool loop for both providers',
     }
     assert.equal(calls[1].messages.at(-1).role, 'tool');
     assert.ok(calls[1].messages.at(-2).tool_calls.length);
+    const before = JSON.parse(textOf(snapshots(calls[0])[0]));
+    const switched = JSON.parse(textOf(snapshots(calls[1])[0]));
+    const after = JSON.parse(textOf(snapshots(calls[2])[0]));
+    assert.equal(before.scene, 'conversation');
+    assert.equal(after.scene, 'revision');
+    assert.equal(switched.scene, 'revision');
+    assert.equal(switched.screen.targetId, null);
+    assert.equal(switched.contentView.document, undefined);
+    assert.equal(after.guidance, switched.guidance);
+    assert.notEqual(after.guidance, before.guidance);
+    assert.equal(after.screen.mainContent, 'document');
+    assert.equal(after.screen.targetId, 'draft');
+    assert.equal(after.screen.documentVersion, 1);
+    assert.equal(after.contentView.document.blocks[0].text, '这是正文。');
   }
 });
 
 test('nested runtime context rejects invalid state and ignores client-supplied guidance', async () => {
   for (const context of [
     { scene: 'invalid' },
+    { scene: 'interview' },
     { workspace: { documentId: 'doc', version: -1, excerpt: '' } },
     { workspace: { documentId: 'doc', version: 1 } },
     { workspace: { documentId: 'doc', version: 1, excerpt: 'x'.repeat(12001) } },
@@ -343,6 +374,42 @@ test('panel modes, local drafts and attachment registry survive real SDK session
   const isolated = await service.run({ message: 'READ_PANEL' });
   assert.equal(panelOf(isolated).mode, 'conversation');
   assert.equal(JSON.parse(textOf(requests.at(-1).messages.at(-1))).availableDocuments.length, 0);
+});
+
+test('switch_mode refreshes guidance and screen within the tool loop and retains state on failure', async () => {
+  const runtime = request => JSON.parse(textOf(snapshots(request)[0]));
+  const start = requests.length;
+  const first = await service.run({ message: 'OPEN_ATTACHMENT', context: {
+    scene: 'conversation', attachments: [
+      { id: 'photo1', kind: 'image', title: '合照', url: 'https://example.com/group.png' },
+    ],
+  } });
+  const calls = requests.slice(start);
+  assert.equal(calls.length, 2);
+  assert.equal(runtime(calls[0]).screen.mainContent, 'assistant_speech_text');
+  const opened = runtime(calls[1]);
+  assert.equal(opened.scene, 'attachment_conversation');
+  assert.equal(opened.requestedScene, 'conversation');
+  assert.notEqual(opened.guidance, runtime(calls[0]).guidance);
+  assert.equal(opened.screen.mainContent, 'attachment');
+  assert.equal(opened.screen.targetId, 'photo1');
+  assert.equal(opened.screen.renderAcknowledged, false);
+  assert.equal(opened.contentView.attachment.url, 'https://example.com/group.png');
+  assert.equal(JSON.parse(textOf(calls[1].messages.at(-1))).mode, opened.scene);
+  const conversationId = first.conversationId;
+  await service.run({ conversationId, message: '继续聊' });
+  assert.equal(runtime(requests.at(-1)).scene, 'attachment_conversation');
+  assert.equal(runtime(requests.at(-1)).requestedScene, null);
+  const failed = await service.run({ conversationId, message: 'OPEN_MISSING_ATTACHMENT' });
+  assert.ok(failed.events.some(event => event.type === 'tool.completed' && event.isError));
+  assert.deepEqual(runtime(requests.at(-1)).screen, opened.screen);
+  assert.equal(runtime(requests.at(-1)).guidance, opened.guidance);
+  await service.run({ conversationId, message: 'CLOSE_PANEL' });
+  assert.equal(runtime(requests.at(-1)).scene, 'conversation');
+  assert.equal(runtime(requests.at(-1)).screen.mainContent, 'assistant_speech_text');
+  assert.equal(runtime(requests.at(-1)).screen.targetId, null);
+  assert.equal(runtime(requests.at(-1)).contentView.attachment, undefined);
+  assert.equal(runtime(requests.at(-1)).contentView.availableAttachments.length, 1);
 });
 
 test('attachment input rejects executable URLs and missing display resources', async () => {

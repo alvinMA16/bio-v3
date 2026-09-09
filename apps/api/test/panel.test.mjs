@@ -8,10 +8,44 @@ import { createPresentationTools } from '../dist/agent/presentation-tools.js';
 import { buildSystemPrompt, DEFAULT_PERSONA } from '../dist/agent/agent-context.js';
 
 const paragraph = (id, text) => ({ id, text, kind: 'paragraph' });
+test('update_content requires revision and changes content without changing mode', async () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'lingli-modes-'));
+  try {
+    const workspace = new PanelWorkspace(cwd, [{ id: 'photo', kind: 'image', title: '照片', url: 'https://example.com/photo.png' }]);
+    const events = [];
+    const tools = createPresentationTools(workspace, event => events.push(event));
+    const switchMode = tools.find(tool => tool.name === 'switch_mode');
+    const update = tools.find(tool => tool.name === 'update_content');
+    const input = { documentId: 'draft', title: '记录', expectedVersion: 0, operations: [
+      { action: 'insert', block: paragraph('p1', '用户的原话') },
+    ] };
+    for (const mode of ['conversation', 'attachment_conversation']) {
+      workspace.switchMode(mode, mode === 'attachment_conversation' ? 'photo' : undefined);
+      const before = readFileSync(join(cwd, 'panel.json'), 'utf8');
+      await assert.rejects(update.execute('update', input), /先调用 switch_mode/);
+      assert.equal(readFileSync(join(cwd, 'panel.json'), 'utf8'), before);
+      assert.equal(events.length, 0);
+    }
+    await switchMode.execute('switch', { mode: 'revision' });
+    assert.equal(workspace.scene(), 'revision');
+    assert.equal(workspace.state().document, undefined);
+    assert.equal(new PanelWorkspace(cwd).scene(), 'revision');
+    const beforeInvalid = workspace.context();
+    await assert.rejects(switchMode.execute('invalid', { mode: 'revision', targetId: 'missing' }), /不存在/);
+    assert.deepEqual(workspace.context(), beforeInvalid);
+    await update.execute('update', input);
+    assert.equal(workspace.scene(), 'revision');
+    assert.equal(workspace.context().screen.targetId, 'draft');
+    assert.equal(workspace.context().screen.documentVersion, 1);
+    assert.deepEqual(events.map(event => event.panel.mode), ['editor', 'editor']);
+  } finally { rmSync(cwd, { recursive: true, force: true }); }
+});
+
 test('local draft updates are atomic, version checked and retain unaffected blocks', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'lingli-panel-'));
   try {
     const workspace = new PanelWorkspace(cwd);
+    workspace.switchMode('revision');
     workspace.update({ documentId: 'draft', title: '回忆', expectedVersion: 0, operations: [
       { action: 'insert', block: paragraph('p1', '第一段') }, { action: 'insert', block: paragraph('p2', '第二段') },
     ] });

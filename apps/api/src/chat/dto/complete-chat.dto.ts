@@ -63,7 +63,7 @@ export class ContextSnapshotDto implements AgentContextSnapshot {
   attachments?: PanelAttachmentDto[];
 
   @IsOptional()
-  @IsIn(['conversation', 'interview', 'revision'])
+  @IsIn(['conversation', 'attachment_conversation', 'revision'])
   scene?: AgentScene;
 
   @IsOptional()

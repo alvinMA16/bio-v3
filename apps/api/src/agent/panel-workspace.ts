@@ -1,4 +1,4 @@
-import type { PanelAttachment, PanelBlock, PanelDocument, PanelState } from '@bio/contracts';
+import type { AgentScene, PanelAttachment, PanelBlock, PanelDocument, PanelState } from '@bio/contracts';
 import { existsSync, readFileSync, renameSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -46,6 +46,16 @@ export class PanelWorkspace {
 
   state(): PanelState { return structuredClone(this.value.panel); }
 
+  scene(): AgentScene {
+    return this.value.panel.mode === 'attachment' ? 'attachment_conversation'
+      : this.value.panel.mode === 'editor' ? 'revision' : 'conversation';
+  }
+
+  switchMode(mode: AgentScene, targetId?: string): PanelState {
+    return this.setMode(mode === 'attachment_conversation' ? 'attachment'
+      : mode === 'revision' ? 'editor' : 'conversation', targetId);
+  }
+
   /** Bounded model context. Full content is available through get_content. */
   context() {
     const panel = this.value.panel;
@@ -59,7 +69,23 @@ export class PanelWorkspace {
       }),
     };
     return {
+      scene: this.scene(),
       revision: panel.revision, mode: panel.mode, document,
+      screen: {
+        source: 'server_display_state', renderAcknowledged: false,
+        mainContent: panel.mode === 'conversation' ? 'assistant_speech_text'
+          : panel.mode === 'attachment' ? 'attachment' : 'document',
+        description: panel.mode === 'conversation'
+          ? '主区域展示 agent 说话的文字，随回复更新；不展示附件或文档。服务端未获取客户端当前字幕的精确文本。'
+          : panel.mode === 'attachment'
+            ? '主区域展示当前附件；普通回复用于播报，不替换附件。'
+            : panel.document
+              ? '主区域展示当前文档；普通回复用于播报，不替换文档正文，正文修改必须调用内容工具。'
+              : '主区域为空白文档编辑区，尚未选择或创建文档；使用 update_content 写入新文档。',
+        targetId: panel.attachment?.id ?? panel.document?.id ?? null,
+        title: panel.attachment?.title ?? panel.document?.title ?? null,
+        documentVersion: panel.document?.version ?? null,
+      },
       attachment: panel.attachment && { ...panel.attachment, text: panel.attachment.text?.slice(0, 6000), textTruncated: (panel.attachment.text?.length ?? 0) > 6000 },
       availableAttachments: this.value.attachments.map(({ id, kind, title }) => ({ id, kind, title })),
       availableDocuments: this.value.documents.map(({ id, title, version }) => ({ id, title, version })),
@@ -91,7 +117,7 @@ export class PanelWorkspace {
       const attachment = next.attachments.find(item => item.id === targetId);
       if (!attachment) throw new Error('附件不存在，只能打开已提供的附件 ID');
       panel.attachment = attachment;
-    } else if (mode === 'editor') {
+    } else if (mode === 'editor' && targetId) {
       const document = next.documents.find(item => item.id === targetId);
       if (!document) throw new Error('草稿不存在；先通过 update_content 创建草稿');
       panel.document = document;
@@ -102,6 +128,7 @@ export class PanelWorkspace {
   }
 
   update(input: PanelUpdate): PanelState {
+    if (this.value.panel.mode !== 'editor') throw new Error('请先调用 switch_mode 进入 revision 模式，再更新文档');
     const next = structuredClone(this.value);
     let document = next.documents.find(item => item.id === input.documentId);
     if (!document) {

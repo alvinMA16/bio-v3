@@ -17,7 +17,8 @@
         <image wx:if="{{panel.attachment.kind === 'image'}}" src="{{panel.attachment.url}}" mode="widthFix" class="work-panel__image" />
         <text wx:else selectable>{{panel.attachment.text || panel.attachment.url}}</text>
       </view>
-      <view wx:if="{{panel.mode === 'editor'}}">
+      <view wx:if="{{panel.mode === 'editor' && !panel.document}}">还没有文档内容。</view>
+      <view wx:if="{{panel.mode === 'editor' && panel.document}}">
         <view class="work-panel__title">{{panel.document.title}} · 版本 {{panel.document.version}}</view>
         <view wx:for="{{panel.document.blocks}}" wx:key="id" class="work-panel__block work-panel__block--{{item.kind}} {{selectedBlockId === item.id ? 'work-panel__block--selected' : ''}}" bindtap="selectBlock" data-id="{{item.id}}">
           <text selectable>{{item.text}}</text>

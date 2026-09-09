@@ -9,7 +9,7 @@ export interface ChatMessage {
 
 export type ModelProvider = 'deepseek' | 'qwen' | 'openai-compatible';
 
-export type AgentScene = 'conversation' | 'interview' | 'revision';
+export type AgentScene = 'conversation' | 'attachment_conversation' | 'revision';
 
 /** Client snapshot captured when the user submits this turn; not authoritative document storage. */
 export interface AgentWorkspaceSnapshot {
@@ -51,6 +51,7 @@ export interface PanelState {
 
 export interface AgentContextSnapshot {
   attachments?: PanelAttachment[];
+  /** Requested mode only; actual mode and guidance follow the server's displayed content. */
   scene?: AgentScene;
   workspace?: AgentWorkspaceSnapshot;
 }

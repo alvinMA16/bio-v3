@@ -8,7 +8,7 @@
   → AgentService（运行 ID、并发保护、取消、超时、事件与用量）
   → PiSessionFactory（模型、人物设定、会话恢复、压缩、工具白名单）
   → Pi Coding Agent SDK（模型调用和工具循环）
-  → 产品工具（show_content / update_content / get_content）
+  → 产品工具（switch_mode / update_content / get_content）
 ```
 
 前端依赖 `@bio/contracts`，不依赖 Pi 事件类型。API 使用 ESM / NodeNext，与 Pi 的 ESM 发布包兼容。
@@ -38,19 +38,23 @@ Pi 自动压缩已启用：为输出预留 16,384 tokens，保留近期约 20,00
 
 `apps/api/src/agent/agent-context.ts` 统一组装三段常驻规则：核心身份与边界、语言表达规则、能力与操作约定。已有 `systemPrompt` 参数只覆盖人物设定，仍保留公共规则；名称固定为令狸，旧人物设定中的名称不再生效。所有普通输出（包括工具前后说明）直接用于播报，不应出现 Markdown 或排版符号；结构化内容写入面板。
 
+默认身份为“令狸，用户的人生记录伙伴”，调试台使用同一文案。常驻规则只保留跨场景约束：记录保留原意与口气、不编造或假装记忆、用户纠正和明确任务优先、播报格式、操作结果真实性及上下文信任边界。工具用途、参数、版本冲突处理和内容模式操作细节放在工具描述中。
+
+每次模型调用前按服务端当前 `scene` 注入具体行为：`conversation`（对话模式）和 `attachment_conversation`（有附件的对话模式）共用对话策略，约束回应长度、单问题追问、总结频率、无新信息时的转场、情绪回应和成文时机。附件场景额外约束对象选择、按需读取、首次开场、故事主线跟随、换附件及原件保护。当前不具备图像识别能力，不沿用看图聊天中“先描述画面”的做法。`revision` 区分建议与执行，确定目标与版本，默认轻量整理，限定修改范围并简短报告结果。场景指引是默认策略，用户明确任务优先；打开文档会进入 revision 指引，但不构成修改正文的授权。
+
 每轮请求的逻辑顺序：
 
 ```text
 常驻 system prompt
 Pi 历史（含已有压缩摘要、近期原文与完整工具调用/结果）
-本轮动态上下文：场景 + 服务端场景指引 + 服务端 panel 状态 + 客户端选区快照
+动态上下文（每次模型调用前刷新）：当前模式 + 场景/切换指引 + screen + 服务端 panel 状态 + 本轮客户端选区
 本轮用户消息
 本轮随后产生的助手工具调用 / 工具结果
 ```
 
 使用应用内置的 Pi `context` 扩展，在每次模型调用前插入一个临时 custom message。Pi 0.84.4 将其转换为独立 user-role 消息；它不是高优先级 system 指令，也不是用户新发言。常驻规则说明其用途、数据边界和用户明确任务优先的约定。`display: false`，不产生产品字幕事件。
 
-插入只作用于发送给模型的消息副本，不写进 `session.jsonl`，不进入历史压缩源。每轮只保留一份提交时快照，工具循环中位置不变，不拆开工具调用与结果。工具执行后的新状态应由工具结果表达。请求 Trace 仍保留输入快照，便于追溯。
+插入只作用于发送给模型的消息副本，不写进 `session.jsonl`，不进入历史压缩源。每次调用只保留一份动态上下文，位置仍在本轮用户消息之前，不拆开工具调用与结果。扩展通过回调读取实时 PanelWorkspace，switch_mode 成功后，同轮下一次模型调用即获得新模式与新指引；update_content 只刷新当前 revision 中的正文，不切换模式。客户端提交信息仍保持本轮快照；工具失败时服务端状态不变。请求 Trace 仍保留输入快照，便于追溯。
 
 两个入口（JSON 与 NDJSON）均接受可选字段：
 
@@ -69,11 +73,11 @@ Pi 历史（含已有压缩摘要、近期原文与完整工具调用/结果）
 }
 ```
 
-场景为 `conversation`（默认）、`interview`、`revision`。详细指引在服务端维护，客户端不能提交任意指引。客户端选区快照的文档 ID 和非负整数版本必填，标题、选区 ID 可选，正文上限 12,000 字符；这是字符上限，不是 Token 计量。长文应由调用方选择相关片段，不自动截断选区。
+模式为 `conversation`、`attachment_conversation`、`revision`，由服务端持久化的展示状态唯一确定，新会话默认为 conversation。请求中的 `context.scene` 只作为 `requestedScene` 模式意图注入，不覆盖实际模式；省略时沿用当前展示。Agent 根据用户上传/指定附件、打开文档、返回对话的意图调用切换工具。原 `interview` 已移除，旧调用方需要更新枚举值。详细指引在服务端维护，客户端不能提交任意指引。动态上下文的 `submittedAttachmentIds` 标记本轮提交的附件 ID（重复提交不代表新附件），与服务端可用附件列表共同用于确定对象，每轮重建、不沿用旧值。客户端选区快照的文档 ID 和非负整数版本必填，标题、选区 ID 可选，正文上限 12,000 字符；这是字符上限，不是 Token 计量。长文应由调用方选择相关片段，不自动截断选区。
 
 每次提交完整当前选区快照；省略 workspace 表示本轮没有客户端选区，不恢复历史选区。panel 则从本地会话存储恢复，包含当前模式和可用对象；正文提供最多 6000 字符的预览，标明截断，可通过读取工具补足。workspace 只是参考，不能覆盖 panel 的正文或版本。工具更新草稿时检查本地存储版本。
 
-调试台提供场景、文章 ID、版本、选区和正文输入；Inspector 中可查看本轮请求。此次没有增加额外模型分类调用、技能读取或第二套历史摘要机制。
+调试台提供可选的请求模式（默认跟随当前展示）、文章 ID、版本、选区和正文输入；Inspector 中可查看本轮请求。此次没有增加额外模型分类调用、技能读取或第二套历史摘要机制。
 
 人物设定独立保存，恢复会话时重新加载。长期 Memory 尚未实现；以后可从用户资料库读取偏好，再通过资源加载或上下文扩展注入。文章内容和版本应由业务存储管理，不以会话摘要作为文章原文。
 
@@ -81,10 +85,12 @@ Pi 历史（含已有压缩摘要、近期原文与完整工具调用/结果）
 
 普通助手文本生成 `speech.delta` 和 `speech.completed`，表示可供字幕/播报使用的文本；不表示音频已经合成或播放。每次助手消息都有独立 `messageId`，重试和后续回复不会被拼成一条消息。
 
-面板有三个独立于对话场景的模式：`conversation`（不打开正文或附件）、`attachment`（查看原件）、`editor`（共同编辑草稿）。切回纯对话保留已有附件和草稿。
+面板沿用三个渲染值，与 Agent 模式固定映射：conversation → conversation，attachment_conversation → attachment，revision → editor。切回纯对话保留已有附件和草稿。
 
-- `show_content(mode, targetId?)`：切换模式并打开已登记对象；禁止编造附件 ID。
-- `update_content(documentId, expectedVersion, title?, operations)`：创建草稿或按段落插入、替换、删除，成功后自动进入 editor。新建版本为 0，保存后递增。操作批次在副本上校验后原子替换本地文件，版本冲突或任一操作失败均不部分保存。
+注入的 `screen` 明确主区域内容：conversation 显示 Agent 说话的文字，attachment_conversation 显示当前附件，revision 显示当前文档；包含对象 ID、标题及文档版本。附件和文档模式中，普通回复继续播报，不替换主内容。screen 来自服务端下发状态，`renderAcknowledged: false` 明确尚无客户端渲染回执；服务端也不声称掌握实时字幕的精确文本。
+
+- `switch_mode(mode, targetId?)`：mode 使用 Agent 三种模式名，原子切换模式与展示对象，并让后续调用刷新指引。conversation 不接受目标；attachment_conversation 必须指定已有附件 ID；revision 可指定已有文档 ID，省略则进入空白编辑区，随后用 update_content 新建文档。无效目标失败时不改变模式。替代旧 show_content，新会话不再注册旧工具。
+- `update_content(documentId, expectedVersion, title?, operations)`：仅在 revision（面板 editor）中创建草稿或按段落插入、替换、删除，更新展示文档但不切换模式。其他模式调用失败且不写入，必须先调用 switch_mode。新建版本为 0，保存后递增。操作批次在副本上校验后原子替换本地文件，版本冲突或任一操作失败均不部分保存。
 - `get_content(documentId?, blockId?, attachmentId?)`：默认获取有界状态；按 ID 读取完整草稿、单段或附件文本。不能把附件和草稿选择器混用。
 
 草稿使用带稳定 ID 的结构化块：paragraph、heading、list（每行一项）、quote、code。前端按块类型渲染，不执行正文 HTML。工具结果只返回模式、版本、对象 ID 等简短确认；完整 UI 数据通过 `panel.state.updated` 事件发送。初始恢复也发送一次状态事件，错误或取消前已经保存的更新不会回滚。客户端是否完成渲染尚无确认协议，不能把更新事件当作渲染确认。

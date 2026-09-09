@@ -47,9 +47,7 @@ interface AnimationManifest {
 }
 
 const HISTORY_KEY = 'bio-agent-lab-history-v2';
-const DEFAULT_SYSTEM_PROMPT = `你是令狸，一位自然亲切、可靠的人生故事记录伙伴。
-先理解用户目标，再给出具体且可执行的回答。
-信息不足时，明确指出缺少什么。`;
+const DEFAULT_SYSTEM_PROMPT = '你是令狸，用户的人生记录伙伴。';
 
 function readHistory(): RunRecord[] {
   try {
@@ -87,7 +85,7 @@ export function App() {
   const [message, setMessage] = useState('请介绍一下你自己，并说明你能帮我做什么。');
   const [conversationId, setConversationId] = useState(() => { const latest = readHistory()[0]; return latest ? conversationOf(latest) ?? '' : ''; });
   const [provider, setProvider] = useState<ModelProvider | ''>('');
-  const [scene, setScene] = useState<AgentScene>('conversation');
+  const [scene, setScene] = useState<AgentScene | ''>('');
   const [documentId, setDocumentId] = useState('');
   const [documentVersion, setDocumentVersion] = useState(0);
   const [selectedBlockId, setSelectedBlockId] = useState('');
@@ -165,7 +163,7 @@ export function App() {
     return {
       message: text,
       context: {
-        scene,
+        ...(scene ? { scene } : {}),
         ...(attachmentId.trim() ? { attachments: [{
           id: attachmentId.trim(), kind: attachmentKind, title: attachmentTitle.trim(),
           ...(attachmentUrl.trim() ? { url: attachmentUrl.trim() } : {}),
@@ -587,10 +585,11 @@ export function App() {
           <fieldset className="context-settings" disabled={busy}>
             <legend>本轮动态上下文</legend>
             <label className="field">
-              <span className="field-label">当前场景</span>
-              <select className="input" value={scene} onChange={event => setScene(event.target.value as AgentScene)}>
+              <span className="field-label">请求模式（实际模式由工具切换）</span>
+              <select className="input" value={scene} onChange={event => setScene(event.target.value as AgentScene | '')}>
+                <option value="">跟随当前展示</option>
                 <option value="conversation">自然对话</option>
-                <option value="interview">故事访谈</option>
+                <option value="attachment_conversation">有附件的对话</option>
                 <option value="revision">共同编辑</option>
               </select>
             </label>
@@ -957,6 +956,7 @@ function WorkspacePanel({ panel, onSelectBlock, selectedBlockId }: {
         {safeUrl && <a href={safeUrl} target="_blank" rel="noreferrer">打开文档原件</a>}
       </>}
     </>}
+    {panel.mode === 'editor' && !panel.document && <p>还没有文档内容。</p>}
     {panel.mode === 'editor' && panel.document && <>
       <h3>{panel.document.title} <small>版本 {panel.document.version}</small></h3>
       {panel.document.blocks.map(block => <section className={`panel-block ${selectedBlockId === block.id ? 'panel-block--selected' : ''}`} key={block.id}>
