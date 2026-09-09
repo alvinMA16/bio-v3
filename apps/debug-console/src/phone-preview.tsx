@@ -1,3 +1,4 @@
+import type { SessionReceipt } from './session-receipt';
 import type { FoxActivity } from '../../miniprogram/miniprogram/lib/fox-behavior';
 import { FoxAnimationController, type FoxAnimationState } from '../../miniprogram/miniprogram/lib/fox-animation-controller';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -11,7 +12,8 @@ interface Manifest {
   animations: Animation[];
 }
 
-export function PhonePreview({ children, subtitle, activity, running, microphone, callOpen, callStartedAt, status, mode, startDisabled, onStart, speakerEnabled, onSpeakerToggle, onEnd }: {
+export function PhonePreview({ children, subtitle, activity, running, microphone, callOpen, callStartedAt, status, mode, startDisabled, onStart, speakerEnabled, onSpeakerToggle, onEnd, receipt, receiptVisible, onReceiptClose, onReceiptOpen }: {
+  receipt: SessionReceipt | null; receiptVisible: boolean; onReceiptClose: () => void; onReceiptOpen: () => void;
   children: ReactNode; subtitle: string; activity: FoxActivity; running: boolean; microphone?: ReactNode;
   callOpen: boolean; callStartedAt: number | null; status: string; mode: 'conversation' | 'attachment' | 'editor';
   startDisabled: boolean; onStart: () => void; speakerEnabled: boolean; onSpeakerToggle: () => void; onEnd: () => void;
@@ -90,6 +92,7 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
           <button type="button" className="phone-desk-entry phone-desk-entry--folder" onClick={() => setDrawer('folder')}><img src="/desk/folder.png" alt="" /><span>资料夹</span></button>
           <button type="button" className="phone-desk-entry phone-desk-entry--call" disabled={startDisabled} onClick={onStart}><img src="/desk/phone.png" alt="" /><span>呼叫令狸</span></button>
           <button type="button" className="phone-desk-entry phone-desk-entry--manuscripts" onClick={() => setDrawer('manuscripts')}><img src="/desk/manuscripts.png" alt="" /><span>文稿集</span></button>
+          {receipt && <button type="button" className="phone-last-receipt" onClick={onReceiptOpen}>上次聊天小票</button>}
         </section>
         {drawer && <div className="phone-desk-backdrop" onClick={() => setDrawer(null)}>
           <section className="phone-desk-drawer" role="dialog" aria-modal="true" aria-label={drawer === 'folder' ? '资料夹' : '文稿集'} onClick={event => event.stopPropagation()} onKeyDown={event => { if (event.key === 'Escape') setDrawer(null); }}>
@@ -122,6 +125,22 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
           </button><span>{speakerEnabled ? '扬声器' : '扬声器已关'}</span></div>
         </footer>
       </>}
+      {receiptVisible && receipt && <div className="phone-receipt-backdrop">
+        <section className="phone-receipt" role="dialog" aria-modal="true" aria-label="本次聊天小票" onKeyDown={event => { if (event.key === 'Escape') onReceiptClose(); }}>
+          <div className="phone-receipt-slot">令狸 · 故事收集处</div>
+          <div className="phone-receipt-paper" key={receipt.id}>
+            <small>一 通 聊 天 ， 一 张 留 念</small>
+            <h2>本次聊天小票</h2>
+            <p className="phone-receipt-date">{receipt.date}<br />{receipt.timeRange}</p>
+            <hr /><dl><div><dt>相伴时长</dt><dd>{receipt.duration}</dd></div><div><dt>你的分享</dt><dd>{receipt.shares} 次</dd></div><div><dt>令狸的回应</dt><dd>{receipt.replies} 次</dd></div></dl><hr />
+            <div className="phone-receipt-topics">{receipt.topics.map(topic => <span key={topic}>{topic}</span>)}</div>
+            <p className="phone-receipt-summary">{receipt.summary}</p>
+            <p className="phone-receipt-status" role="status">{receipt.status === 'pending' ? '令狸正在整理这次聊天…' : receipt.status === 'excerpt' ? '概括暂未生成，先留存这句聊天摘录。' : '根据聊天内容自动整理 · 仅供回顾'}</p>
+            <hr /><p className="phone-receipt-thanks">谢谢你，把这一段时光交给我。</p>
+          </div>
+          <button type="button" autoFocus className="phone-receipt-keep" onClick={onReceiptClose}>收好这张小票</button>
+        </section>
+      </div>}
     </div>
   </div>;
 }

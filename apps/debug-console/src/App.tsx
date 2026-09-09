@@ -1,3 +1,4 @@
+import { collectReceiptMessage, createReceipt, readReceipt, saveReceipt, summarizeReceipt, type CallMessages } from './session-receipt';
 import { FeltMicrophone } from './felt-microphone';
 import { BrowserVoice } from './voice/browser-voice';
 import type { VoiceRequest, VoiceServerMessage } from '@bio/contracts';
@@ -102,6 +103,10 @@ export function App() {
   const [running, setRunning] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
+  const [receipt, setReceipt] = useState(readReceipt);
+  const [receiptVisible, setReceiptVisible] = useState(false);
+  const receiptId = useRef(receipt?.id);
+  const receiptCall = useRef<{ startedAt: number; endedAt?: number; messages: CallMessages } | null>(null);
   const [callStartedAt, setCallStartedAt] = useState<number | null>(null);
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
   const [micEnabled, setMicEnabled] = useState(false);
@@ -203,6 +208,7 @@ export function App() {
   function receiveVoice(event: VoiceServerMessage): void {
     const turn = voiceTurn.current;
     if (!turn || turn.record.id !== event.turnId) return;
+    if (receiptCall.current) collectReceiptMessage(receiptCall.current.messages, event);
     const record = turn.record;
     const timings = record.voiceTimings!;
     if (event.type === 'state') {
@@ -235,6 +241,9 @@ export function App() {
 
   function startVoice(): void {
     if (busy) return;
+    if (!receiptCall.current) receiptCall.current = { startedAt: Date.now(), messages: new Map() };
+    delete receiptCall.current.endedAt;
+    setReceiptVisible(false);
     setCallOpen(true); setSpeakerEnabled(true); setCallStartedAt(null);
     setVoiceState('connecting');
     voiceTurn.current = null;
@@ -265,9 +274,27 @@ export function App() {
         }
       },
       error: error => { setVoiceStatus(error); saveVoiceTurn(error); },
-      ended: () => { saveVoiceTurn('语音会话已结束'); setCallStartedAt(null); setVoiceEnabled(false); setMicEnabled(false); setAudioPlaying(false); setSpokenSubtitle(''); voiceRef.current = null; },
+      ended: () => { if (receiptCall.current) receiptCall.current.endedAt = Date.now(); saveVoiceTurn('语音会话已结束'); setCallStartedAt(null); setVoiceEnabled(false); setMicEnabled(false); setAudioPlaying(false); setSpokenSubtitle(''); voiceRef.current = null; },
     });
     voiceRef.current = client; void client.start();
+  }
+
+  function endCall(): void {
+    voiceRef.current?.close();
+    setCallOpen(false);
+    const call = receiptCall.current;
+    receiptCall.current = null;
+    if (!call) return;
+    const endedAt = call.endedAt ?? Date.now();
+    const messages = [...call.messages.values()];
+    const next = createReceipt(messages, call.startedAt, endedAt, endedAt - call.startedAt);
+    if (!next) return;
+    receiptId.current = next.id;
+    saveReceipt(next); setReceipt(next); setReceiptVisible(true);
+    void summarizeReceipt(next, messages).then(updated => {
+      if (receiptId.current !== updated.id) return;
+      saveReceipt(updated); setReceipt(updated);
+    });
   }
 
   async function runAgent(): Promise<void> {
@@ -452,7 +479,8 @@ export function App() {
               callOpen={callOpen} callStartedAt={callStartedAt} status={voiceStatus} mode={shownPanel?.mode ?? 'conversation'}
               startDisabled={busy} onStart={startVoice} speakerEnabled={speakerEnabled}
               onSpeakerToggle={() => { const enabled = !speakerEnabled; voiceRef.current?.setSpeaker(enabled); setSpeakerEnabled(enabled); }}
-              onEnd={() => { voiceRef.current?.close(); setCallOpen(false); }}
+              onEnd={endCall}
+              receipt={receipt} receiptVisible={receiptVisible} onReceiptClose={() => setReceiptVisible(false)} onReceiptOpen={() => setReceiptVisible(true)}
               microphone={<FeltMicrophone enabled={micEnabled} listening={micEnabled && micListening} level={micLevel}
                 replying={audioPlaying || (running && voiceStatus !== '正在听你说' && voiceStatus !== '正在申请麦克风权限' && voiceStatus !== '正在连接语音识别')}
                 disabled={!voiceEnabled && running} onToggle={() => {

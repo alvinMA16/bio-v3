@@ -10,7 +10,7 @@ function load(relative, globals = {}) {
   const source = ts.transpileModule(readFileSync(resolve(__dirname, '../miniprogram', relative), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
-  vm.runInNewContext(source, { exports, Date, ...globals });
+  vm.runInNewContext(source, { exports, Date, require: id => { if (id === './session-receipt-data') return load('lib/session-receipt-data.ts'); throw new Error(`Unexpected module ${id}`); }, ...globals });
   return exports;
 }
 
@@ -88,6 +88,21 @@ test('chat backgrounding does not print; unloading prints once and cancels pendi
   page.onUnload();
   assert.equal(aborted, true);
   assert.equal(receipt.takePendingReceipt().receipt.shares, 1);
+  page.onUnload();
+  assert.equal(receipt.takePendingReceipt(), null);
+});
+
+test('explicit hang-up prepares receipt before the home page becomes visible', () => {
+  const { receipt } = setup();
+  let page, shown;
+  load('pages/chat/index.ts', {
+    Page: value => { page = value; },
+    wx: { navigateBack: () => { shown = receipt.takePendingReceipt(); } },
+    require: id => id.includes('session-receipt') ? receipt : { MiniVoiceClient: class {} },
+  });
+  page.onLoad(); page.onShow(); page.data.messages = messages;
+  page.leaveChat();
+  assert.equal(shown.receipt.shares, 1);
   page.onUnload();
   assert.equal(receipt.takePendingReceipt(), null);
 });

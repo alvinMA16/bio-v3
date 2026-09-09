@@ -71,7 +71,10 @@ Page({
   },
 
   leaveChat(): void {
-    wx.navigateBack({ fail: () => this.showRequestError('暂时无法返回，请再试一次。') });
+    this.pauseTimer();
+    voiceClient?.close();
+    this.prepareReceipt();
+    wx.navigateBack({ fail: () => { this.receiptQueued = false; this.visibleSince = Date.now(); this.showRequestError('暂时无法返回，请再试一次。'); } });
   },
 
   startVoice(): void {
@@ -133,6 +136,10 @@ Page({
     this.animationController = null;
     voiceClient?.close();
     this.requestTask?.abort();
+    this.prepareReceipt();
+  },
+
+  prepareReceipt(): void {
     if (this.receiptQueued) return;
     this.receiptQueued = true;
     const receipt = createReceipt(this.data.messages, this.startedAt, Date.now(), this.activeMs);

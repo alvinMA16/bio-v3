@@ -429,3 +429,19 @@ body { min-width: 320px; }
 .phone-desk-drawer { width: 100%; padding: 20px; border-radius: 20px 20px 0 0; background: #f7f2e8; color: #514a3e; }
 .phone-desk-drawer h2 { font-size: 20px; }.phone-desk-drawer p { font-size: 12px; }
 .phone-desk-drawer button { float: right; border: 0; background: transparent; font-size: 24px; cursor: pointer; color: inherit; }
+
+.phone-last-receipt { position: absolute; bottom: 0; right: 0; border: 0; border-radius: 5px; padding: 6px 8px; color: #81735d; background: #faf3e3b8; font-size: 10px; cursor: pointer; }
+.phone-receipt-backdrop { position: absolute; z-index: 9; inset: 0; display: flex; align-items: center; justify-content: center; background: #30291fa8; padding: 16px; }
+.phone-receipt { width: 100%; max-height: 100%; display: flex; flex-direction: column; align-items: center; color: #514b40; }
+.phone-receipt-slot { width: 100%; padding: 12px; border-radius: 12px 12px 0 0; border-bottom: 7px solid #28271f; background: #655f50; color: #e6dcc7; font-size: 11px; text-align: center; letter-spacing: 2px; box-sizing: border-box; }
+.phone-receipt-paper { min-height: 0; overflow-y: auto; width: calc(100% - 20px); box-sizing: border-box; padding: 20px 16px; background: #fff9ec; box-shadow: 0 8px 18px #211d1733; animation: receipt-appear .65s ease-out; }
+.phone-receipt-paper small { display: block; text-align: center; font-size: 8px; color: #978b77; }
+.phone-receipt-paper h2 { text-align: center; font-size: 20px; font-family: 'Songti SC', serif; margin: 12px 0; }
+.phone-receipt-date { text-align: center; font-size: 10px; line-height: 1.6; color: #8c806d; }
+.phone-receipt-paper hr { border: 0; border-top: 1px dashed #cfc3ac; margin: 16px 0; }
+.phone-receipt-paper dl { margin: 0; font-size: 12px; }.phone-receipt-paper dl div { display: flex; justify-content: space-between; margin: 8px 0; }.phone-receipt-paper dd { margin: 0; }
+.phone-receipt-topics { display: flex; flex-wrap: wrap; gap: 5px; }.phone-receipt-topics span { border: 1px solid #c9bca5; padding: 2px 5px; font-size: 10px; }
+.phone-receipt-summary { font-size: 13px; line-height: 1.85; overflow-wrap: anywhere; }.phone-receipt-status { font-size: 10px; color: #9b8d76; line-height: 1.6; }.phone-receipt-thanks { text-align: center; font-size: 11px; }
+.phone-receipt-keep { margin-top: 15px; flex-shrink: 0; border: 0; border-radius: 24px; padding: 10px 24px; background: #f6edda; color: #625944; cursor: pointer; }
+@keyframes receipt-appear { from { opacity: 0; transform: translateY(-24px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .phone-receipt-paper { animation: none; } }
