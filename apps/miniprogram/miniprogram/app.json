@@ -1,7 +1,8 @@
 {
   "pages": [
     "pages/character/index",
-    "pages/chat/index"
+    "pages/chat/index",
+    "pages/folder/index"
   ],
   "window": {
     "navigationBarTitleText": "狐狸 Agent",

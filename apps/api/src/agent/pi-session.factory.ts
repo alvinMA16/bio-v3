@@ -1,3 +1,4 @@
+import { MaterialsService } from '../materials/materials.service.js';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DefaultResourceLoader, SessionManager, SettingsManager, createAgentSession } from '@earendil-works/pi-coding-agent';
@@ -14,9 +15,13 @@ import type { AgentContextSnapshot, ModelProvider } from '@bio/contracts';
 
 @Injectable()
 export class PiSessionFactory {
-  constructor(private readonly config: ConfigService, private readonly storage: AgentStorage) {}
+  constructor(private readonly config: ConfigService, private readonly storage: AgentStorage, private readonly materials: MaterialsService) {}
 
   async create(conversationId: string, systemPrompt: string | undefined, emit: (event: AgentEventPayload) => void, provider?: ModelProvider, context?: AgentContextSnapshot) {
+    if (context?.materialIds?.length) {
+      const attachments = await Promise.all(context.materialIds.map(id => this.materials.attachment(id)));
+      context = { ...context, attachments: [...(context.attachments ?? []), ...attachments] };
+    }
     const cwd = this.storage.conversationDirectory(conversationId);
     const personaPath = join(cwd, 'persona.json');
     const persona = systemPrompt?.trim()

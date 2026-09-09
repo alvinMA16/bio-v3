@@ -431,17 +431,60 @@ body { min-width: 320px; }
 .phone-desk-drawer button { float: right; border: 0; background: transparent; font-size: 24px; cursor: pointer; color: inherit; }
 
 .phone-last-receipt { position: absolute; bottom: 0; right: 0; border: 0; border-radius: 5px; padding: 6px 8px; color: #81735d; background: #faf3e3b8; font-size: 10px; cursor: pointer; }
-.phone-receipt-backdrop { position: absolute; z-index: 9; inset: 0; display: flex; align-items: center; justify-content: center; background: #30291fa8; padding: 16px; }
-.phone-receipt { width: 100%; max-height: 100%; display: flex; flex-direction: column; align-items: center; color: #514b40; }
-.phone-receipt-slot { width: 100%; padding: 12px; border-radius: 12px 12px 0 0; border-bottom: 7px solid #28271f; background: #655f50; color: #e6dcc7; font-size: 11px; text-align: center; letter-spacing: 2px; box-sizing: border-box; }
-.phone-receipt-paper { min-height: 0; overflow-y: auto; width: calc(100% - 20px); box-sizing: border-box; padding: 20px 16px; background: #fff9ec; box-shadow: 0 8px 18px #211d1733; animation: receipt-appear .65s ease-out; }
-.phone-receipt-paper small { display: block; text-align: center; font-size: 8px; color: #978b77; }
-.phone-receipt-paper h2 { text-align: center; font-size: 20px; font-family: 'Songti SC', serif; margin: 12px 0; }
-.phone-receipt-date { text-align: center; font-size: 10px; line-height: 1.6; color: #8c806d; }
-.phone-receipt-paper hr { border: 0; border-top: 1px dashed #cfc3ac; margin: 16px 0; }
-.phone-receipt-paper dl { margin: 0; font-size: 12px; }.phone-receipt-paper dl div { display: flex; justify-content: space-between; margin: 8px 0; }.phone-receipt-paper dd { margin: 0; }
-.phone-receipt-topics { display: flex; flex-wrap: wrap; gap: 5px; }.phone-receipt-topics span { border: 1px solid #c9bca5; padding: 2px 5px; font-size: 10px; }
-.phone-receipt-summary { font-size: 13px; line-height: 1.85; overflow-wrap: anywhere; }.phone-receipt-status { font-size: 10px; color: #9b8d76; line-height: 1.6; }.phone-receipt-thanks { text-align: center; font-size: 11px; }
-.phone-receipt-keep { margin-top: 15px; flex-shrink: 0; border: 0; border-radius: 24px; padding: 10px 24px; background: #f6edda; color: #625944; cursor: pointer; }
-@keyframes receipt-appear { from { opacity: 0; transform: translateY(-24px); } to { opacity: 1; transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) { .phone-receipt-paper { animation: none; } }
+.phone-desk { transition: opacity 220ms ease; }
+.phone-desk--printing { opacity: 0; pointer-events: none; }
+.phone-screen { container-type: inline-size; }
+/* The slot is anchored just inside the illustrated panel's upper rim (47.5%). */
+.phone-receipt { position: absolute; z-index: 5; top: 50.5%; bottom: 3%; left: 12%; right: 12%; display: flex; flex-direction: column; align-items: center; color: #5e5546; }
+.phone-receipt-slot { position: relative; z-index: 2; flex-shrink: 0; width: 100%; height: 4.0625cqw; border-radius: 2.1875cqw; background: linear-gradient(#b5a68e, #e2d6c2 48%, #f6edde); box-shadow: inset 0 0.3125cqw 0.9375cqw #64503b50, 0 0.3125cqw 0 #fff9e7; animation: receipt-slot-in 300ms ease-out both; }
+.phone-receipt-slot i { position: absolute; inset: 1.25cqw 2.8125cqw 0.9375cqw; border-radius: 0.9375cqw; background: #4d473b; box-shadow: inset 0 0.625cqw 0.9375cqw #241f19, 0 0.3125cqw 0 #fff9e788; }
+.phone-receipt-slot span { position: absolute; top: 1.5625cqw; right: 1.25cqw; width: 0.9375cqw; height: 0.9375cqw; border-radius: 50%; background: #97a478; animation: receipt-light 450ms steps(2) 6; }
+.phone-receipt-feed { position: relative; width: 100%; flex: 1; min-height: 0; margin-top: -1.5625cqw; padding: 0 3.75cqw 2.8125cqw; box-sizing: border-box; overflow: hidden; animation: receipt-feed 2600ms 300ms linear both; }
+.phone-receipt-paper { position: relative; height: 100%; box-sizing: border-box; padding: 3.75cqw 4.0625cqw 3.125cqw; background: repeating-linear-gradient(0deg, #b5a38106 0, #b5a38106 0.3125cqw, transparent 0.3125cqw, transparent 0.9375cqw), linear-gradient(100deg, #f3ebd9, #fffdf2 12%, #fcf7e9 88%, #eae0cb); box-shadow: 0.625cqw 1.5625cqw 2.8125cqw #6c573d26, inset 0 2.1875cqw 1.875cqw -1.875cqw #67513870; }
+.phone-receipt-paper::after { content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 2.1875cqw; background: linear-gradient(135deg, #fcf7e9 25%, transparent 25%) -1.5625cqw 0, linear-gradient(225deg, #fcf7e9 25%, transparent 25%) -1.5625cqw 0; background-size: 3.125cqw 3.125cqw; }
+.phone-receipt-scroll { height: 100%; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #cfc3ac transparent; }
+.phone-receipt-paper small { display: block; text-align: center; font-size: 2.1875cqw; color: #988b75; letter-spacing: 0.3125cqw; }
+.phone-receipt-paper h2 { text-align: center; font: 600 5.9375cqw 'Songti SC', serif; letter-spacing: 1.25cqw; margin: 2.1875cqw 0; }
+.phone-receipt-date { text-align: center; font: 2.5cqw/1.7 monospace; color: #8c806d; margin: 0; }
+.phone-receipt-paper hr { border: 0; border-top: 0.3125cqw dashed #bdb19a; margin: 2.1875cqw 0; }
+.phone-receipt-paper dl { margin: 0; font-size: 3.125cqw; }.phone-receipt-paper dl div { display: flex; justify-content: space-between; margin: 1.5625cqw 0; }.phone-receipt-paper dd { margin: 0; font-family: monospace; }
+.phone-receipt-topics { display: flex; flex-wrap: wrap; gap: 1.875cqw; font-size: 2.5cqw; color: #83775f; }
+.phone-receipt-summary { font: 3.4375cqw/1.7 'Songti SC', serif; overflow-wrap: anywhere; margin: 1.875cqw 0; }
+.phone-receipt-status { font-size: 2.1875cqw; color: #a2947e; line-height: 1.5; margin: 1.5625cqw 0; }
+.phone-receipt-thanks { text-align: center; font: 3.125cqw/1.5 'Songti SC', serif; margin: 1.875cqw 0; }
+.phone-receipt-stamp { width: fit-content; margin: 2.1875cqw auto; padding: 0.9375cqw 2.5cqw; border: 0.3125cqw solid #ac795d99; border-radius: 50%; color: #a57a60; font: 2.8125cqw/1.5 serif; transform: rotate(-9deg); }
+.phone-receipt-barcode { width: 23.75cqw; height: 3.75cqw; margin: 2.1875cqw auto; opacity: .48; background: repeating-linear-gradient(90deg, #75664f 0 0.3125cqw, transparent 0.3125cqw 0.9375cqw, #75664f 0.9375cqw 1.5625cqw, transparent 1.5625cqw 1.875cqw, #75664f 1.875cqw 2.1875cqw, transparent 2.1875cqw 3.125cqw); }
+.phone-receipt-keep { margin-top: 2.8125cqw; flex-shrink: 0; border: 0.3125cqw solid #cabc9f; border-radius: 5.625cqw; padding: 2.1875cqw 8.125cqw; background: #f7f0e1; color: #75664e; font-size: 3.4375cqw; cursor: pointer; box-shadow: 0 0.625cqw 0.9375cqw #77634b12; }
+.phone-receipt-keep:focus-visible { outline: 0.625cqw solid #8b9875; outline-offset: 0.9375cqw; }
+@keyframes receipt-slot-in { from { opacity: 0; transform: scaleX(.88); } to { opacity: 1; transform: scaleX(1); } }
+@keyframes receipt-feed { 0% { clip-path: inset(0 0 100%); transform: translateY(-1.875cqw); } 25% { clip-path: inset(0 0 74%); transform: translateY(-1.25cqw); } 29% { clip-path: inset(0 0 74%); transform: translateY(-1.25cqw); } 62% { clip-path: inset(0 0 35%); transform: translateY(-0.625cqw); } 67% { clip-path: inset(0 0 35%); transform: translateY(-0.625cqw); } 100% { clip-path: inset(0); transform: translateY(0); } }
+@keyframes receipt-light { to { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .phone-receipt-slot, .phone-receipt-feed, .phone-receipt-slot span { animation: none; } }
+
+
+.phone-desk-drawer:has(.material-folder) { max-height: 82%; overflow-y: auto; text-align: left; }
+.material-folder { display: grid; gap: 12px; font-size: 13px; }
+.material-folder p { margin: 0; font-size: 13px; }
+.material-folder small { color: #857565; font-size: 10px; }
+.material-folder label { display: grid; gap: 6px; }
+.material-folder input, .material-folder textarea { width: 100%; box-sizing: border-box; padding: 9px; border: 1px solid #d8c8b5; border-radius: 8px; background: #fffaf1; }
+.material-folder textarea { min-height: 80px; resize: vertical; }
+.material-folder button { position: static; width: auto; height: auto; padding: 9px; border-radius: 8px; font-size: 12px; }
+.material-upload { padding: 12px; background: #ede0cc; border-radius: 10px; cursor: pointer; }
+.material-upload input { font-size: 11px; }
+.material-image { width: 100%; max-height: 190px; object-fit: contain; border-radius: 8px; }
+.material-list { display: grid; gap: 8px; }
+.material-list button { display: flex; align-items: center; gap: 9px; text-align: left; background: #fffbf3; border: 1px solid #e4d8c5; }
+.material-list img, .material-icon { width: 38px; height: 42px; object-fit: cover; border-radius: 4px; }
+.material-icon { display: grid; place-items: center; background: #eee1cf; }
+.material-list button > span:nth-child(2) { display: grid; gap: 5px; flex: 1; min-width: 0; }
+.material-list strong { overflow-wrap: anywhere; font-size: 12px; }
+.material-folder pre { white-space: pre-wrap; max-height: 200px; overflow: auto; font: inherit; }
+
+.phone-receipt-memento { display: flex; align-items: center; justify-content: center; gap: 3cqw; }
+.phone-receipt-memento .phone-receipt-stamp, .phone-receipt-memento .phone-receipt-barcode { margin: 1cqw 0; }
+
+.material-selection { padding: 8px 16px; font-size: 12px; color: #796349; overflow-wrap: anywhere; }
+.material-selection button { margin-left: 12px; font-size: 11px; }
+.material-folder button { float: none; }
+.material-folder button:disabled { opacity: .45; cursor: default; }

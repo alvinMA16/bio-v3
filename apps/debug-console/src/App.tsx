@@ -119,6 +119,8 @@ export function App() {
   const voiceRef = useRef<BrowserVoice | null>(null);
   const voiceTurn = useRef<{ record: RunRecord; saved: boolean } | null>(null);
   const voiceContext = useRef<VoiceRequest>({});
+  const [materialTitle, setMaterialTitle] = useState('');
+  const [materialIds, setMaterialIds] = useState<string[]>([]);
   const busy = running || voiceEnabled;
   const [view, setView] = useState<View>('result');
   const [history, setHistory] = useState<RunRecord[]>(readHistory);
@@ -168,6 +170,7 @@ export function App() {
     return {
       message: text,
       context: {
+        materialIds,
         ...(scene ? { scene } : {}),
         ...(attachmentId.trim() ? { attachments: [{
           id: attachmentId.trim(), kind: attachmentKind, title: attachmentTitle.trim(),
@@ -413,6 +416,7 @@ export function App() {
   }
 
   function startNewConversation(): void {
+    setMaterialIds([]); setMaterialTitle('');
     setConversationId(''); setSelectedRunId(null); setDocumentId(''); setDocumentVersion(0);
     setSelectedBlockId(''); setExcerpt(''); setAttachmentId(''); setAttachmentTitle('');
     setAttachmentUrl(''); setAttachmentText(''); setLive(emptyLiveRun());
@@ -477,6 +481,7 @@ export function App() {
             <header className="lab-section-heading"><h1>用户界面预览</h1><span>手机 · 实时状态</span></header>
             <PhonePreview subtitle={subtitle} running={running} activity={foxActivityOf({ running, live, panel: shownPanel, ...(callOpen ? { audioPlaying, ...(voiceEnabled ? { voiceState } : {}), userSpeaking: micEnabled && micListening } : {}) })}
               callOpen={callOpen} callStartedAt={callStartedAt} status={voiceStatus} mode={shownPanel?.mode ?? 'conversation'}
+              onMaterialChat={item => { setMaterialTitle(item.title); setMaterialIds([item.id]); setScene('attachment_conversation'); setMessage(`我们聊聊《${item.title}》这份资料吧。`); inputRef.current?.focus(); }}
               startDisabled={busy} onStart={startVoice} speakerEnabled={speakerEnabled}
               onSpeakerToggle={() => { const enabled = !speakerEnabled; voiceRef.current?.setSpeaker(enabled); setSpeakerEnabled(enabled); }}
               onEnd={endCall}
@@ -512,6 +517,7 @@ export function App() {
               </>}
               <small role="status">{voiceStatus}</small>
             </div>
+            {materialIds.length > 0 && <div className="material-selection">已选资料：{materialTitle}<button type="button" disabled={busy} onClick={() => { setMaterialIds([]); setMaterialTitle(''); setScene(''); }}>取消选择</button></div>}
             <div className="lab-composer">
           <label className="field field--grow">
             <span className="field-label">
@@ -972,7 +978,7 @@ function WorkspacePanel({ panel, onSelectBlock, selectedBlockId }: {
   onSelectBlock?: (panel: PanelState, block: PanelBlock) => void;
 }) {
   const modes = { conversation: '纯对话', attachment: '附件查看', editor: '共同编辑' };
-  const safeUrl = panel.attachment?.url?.startsWith('https://') ? panel.attachment.url : undefined;
+  const safeUrl = panel.attachment?.url && (panel.attachment.url.startsWith('https://') || /^\/api\/v1\/materials\/[0-9a-f-]{36}\/file$/.test(panel.attachment.url)) ? panel.attachment.url : undefined;
   return <article className="answer-card work-panel">
     <div className="answer-label">{modes[panel.mode]}</div>
     {panel.mode === 'conversation' && <div className="phone-empty"><strong>慢慢讲，我在听。</strong><p>今天想从哪里聊起？</p></div>}

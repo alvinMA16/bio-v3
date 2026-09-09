@@ -4,6 +4,11 @@ import { createReceipt, queueReceipt } from '../../lib/session-receipt';
 let voiceClient: MiniVoiceClient | null = null;
 import type { AgentEvent, PanelState } from '@bio/contracts';
 
+function localPanel(panel: PanelState): PanelState {
+  if (!panel.attachment?.url?.startsWith('/api/v1/')) return panel;
+  return { ...panel, attachment: { ...panel.attachment, url: getApp<IAppOption>().globalData.apiBaseUrl.replace(/\/api\/v1\/?$/, '') + panel.attachment.url } };
+}
+
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -18,6 +23,7 @@ interface ChatCompletionResponse {
 }
 
 Page({
+  materialIds: [] as string[],
   animationController: null as FoxAnimationController | null,
   callTimer: null as ReturnType<typeof setInterval> | null,
   callConnectedAt: 0,
@@ -32,6 +38,7 @@ Page({
     actorSrc: '/assets/animations/fox-clerk/blink.webp',
     actorWidth: 400, actorHeight: 300, actorLeft: 0, actorTop: 0,
     voiceActive: false, voiceStatus: '', voiceTranscript: '', audioPlaying: false,
+    materialTitle: '',
     input: '',
     sending: false,
     conversationId: '',
@@ -41,6 +48,10 @@ Page({
   },
 
   onLoad(options: Record<string, string | undefined> = {}): void {
+    if (options.materialId) {
+      this.materialIds = [options.materialId];
+      this.setData({ materialTitle: options.title || '这份资料', input: `我们聊聊《${options.title || '这份资料'}》吧。` });
+    }
     if (options.mode === 'call') this.setData({ callMode: true });
     if (this.data.callMode) {
       wx.setNavigationBarTitle({ title: '与令狸通话' });
@@ -86,7 +97,7 @@ Page({
         const selected = document?.blocks.find(block => block.id === this.data.selectedBlockId);
         return {
           ...(this.data.conversationId ? { conversationId: this.data.conversationId } : {}),
-          ...(document && selected ? { context: { workspace: { documentId: document.id, version: document.version, selectedBlockId: selected.id, excerpt: selected.text } } } : {}),
+          context: { materialIds: this.materialIds, ...(document && selected ? { workspace: { documentId: document.id, version: document.version, selectedBlockId: selected.id, excerpt: selected.text } } : {}) },
         };
       },
       event: event => {
@@ -108,7 +119,7 @@ Page({
         if (event.type === 'agent') {
           const item = event.event;
           this.setData({ conversationId: item.conversationId });
-          if (item.type === 'panel.state.updated') this.setData({ panel: item.panel, selectedBlockId: '' });
+          if (item.type === 'panel.state.updated') this.setData({ panel: localPanel(item.panel), selectedBlockId: '' });
           if (item.type === 'speech.delta' || item.type === 'speech.completed') {
             const existing = this.data.messages.find(message => message.id === item.messageId);
             const message: ChatMessage = { id: item.messageId, role: 'assistant', content: item.type === 'speech.completed' ? item.text : (existing?.content ?? '') + item.delta };
@@ -154,6 +165,10 @@ Page({
     this.setData({ selectedBlockId: String(event.currentTarget.dataset.id) });
   },
 
+  clearMaterial(): void {
+    this.materialIds = []; this.setData({ materialTitle: '' });
+  },
+
   sendMessage(): void {
     const message = this.data.input.trim();
     if (!message || this.data.sending || this.data.voiceActive) return;
@@ -179,9 +194,9 @@ Page({
     actorSrc: '/assets/animations/fox-clerk/blink.webp',
     actorWidth: 400, actorHeight: 300, actorLeft: 0, actorTop: 0,
         message,
-        ...(document && selected ? { context: { workspace: {
+        context: { materialIds: this.materialIds, ...(document && selected ? { workspace: {
           documentId: document.id, version: document.version, selectedBlockId: selected.id, excerpt: selected.text,
-        } } } : {}),
+        } } : {}) },
         conversationId: this.data.conversationId || undefined,
       },
       success: ({ data, statusCode }) => {
@@ -193,7 +208,7 @@ Page({
 
         let panel = this.data.panel;
         for (const event of data.events ?? []) {
-          if (event.type === 'panel.state.updated') panel = event.panel;
+          if (event.type === 'panel.state.updated') panel = localPanel(event.panel);
         }
         this.setData({
           panel,

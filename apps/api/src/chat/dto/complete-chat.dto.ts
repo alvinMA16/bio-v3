@@ -55,6 +55,9 @@ export class PanelAttachmentDto {
 }
 
 export class ContextSnapshotDto implements AgentContextSnapshot {
+  @IsOptional() @IsArray() @ArrayMaxSize(10) @IsUUID('4', { each: true })
+  materialIds?: string[];
+
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(10)

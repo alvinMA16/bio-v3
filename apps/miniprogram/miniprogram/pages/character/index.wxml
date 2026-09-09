@@ -39,7 +39,7 @@
     />
   </view>
   <image class="stage__layer stage__panel" src="{{innerPanelSrc}}" mode="scaleToFill" />
-  <view class="desk-home">
+  <view wx:if="{{!receiptVisible}}" class="desk-home">
     <button class="desk-entry desk-entry--folder" hover-class="desk-entry--pressed" bindtap="openFolder" aria-label="资料夹，查看你的资料">
       <image class="desk-entry__icon" src="/assets/desk/folder.png" mode="aspectFit" />
       <view class="desk-entry__name">资料夹</view>
@@ -56,37 +56,29 @@
   </view>
 </view>
 
-<view wx:if="{{receiptVisible && receipt}}" class="receipt-backdrop" catchtap="closeReceipt">
-  <view class="receipt-printer" catchtap="keepDrawerOpen">
-    <view class="receipt-printer__label">令狸 · 故事收集处</view>
-    <view class="receipt-printer__slot"></view>
-    <scroll-view scroll-y class="receipt-window">
-      <view class="receipt-paper">
-        <view class="receipt-paper__brand">一 通 聊 天 ， 一 张 留 念</view>
-        <view class="receipt-paper__title">本次聊天小票</view>
+<view wx:if="{{receiptVisible && receipt}}" class="receipt-printer">
+  <view class="receipt-slot"><view class="receipt-slot__mouth"></view><view class="receipt-slot__light"></view></view>
+  <view class="receipt-feed">
+    <view class="receipt-paper">
+      <scroll-view scroll-y class="receipt-scroll">
+        <view class="receipt-paper__brand">令 狸 的 故 事 收 集 处</view>
+        <view class="receipt-paper__title">聊天留念</view>
         <view class="receipt-paper__date">{{receipt.date}} · {{receipt.timeRange}}</view>
         <view class="receipt-paper__rule"></view>
         <view class="receipt-paper__row"><text>相伴时长</text><text>{{receipt.duration}}</text></view>
-        <view class="receipt-paper__row"><text>你的分享</text><text>{{receipt.shares}} 次</text></view>
-        <view class="receipt-paper__row"><text>令狸的回应</text><text>{{receipt.replies}} 次</text></view>
+        <view class="receipt-paper__row"><text>你说了</text><text>{{receipt.shares}} 次</text></view>
+        <view class="receipt-paper__row"><text>令狸回应</text><text>{{receipt.replies}} 次</text></view>
         <view class="receipt-paper__rule"></view>
-        <view class="receipt-paper__caption">{{receipt.status === 'ready' ? '这次，我们聊到' : '留下一句你的话'}}</view>
-        <view wx:if="{{receipt.topics.length}}" class="receipt-paper__topics">
-          <text wx:for="{{receipt.topics}}" wx:key="*this" class="receipt-paper__topic">{{item}}</text>
-        </view>
+        <view wx:if="{{receipt.topics.length}}" class="receipt-paper__topics"><text wx:for="{{receipt.topics}}" wx:key="*this"># {{item}}</text></view>
         <view class="receipt-paper__summary" selectable>{{receipt.summary}}</view>
-        <view wx:if="{{receipt.status === 'pending'}}" class="receipt-paper__status">正在把聊天整理成一句话…</view>
-        <view wx:if="{{receipt.status === 'excerpt'}}" class="receipt-paper__status">概括暂未生成，先留存这句聊天摘录。</view>
+        <view wx:if="{{receipt.status !== 'ready'}}" class="receipt-paper__status">{{receipt.status === 'pending' ? '正在写下这次的小小回忆…' : receipt.status === 'excerpt' ? '先留住你说的这一句。' : '根据聊天整理'}}</view>
         <view class="receipt-paper__rule"></view>
-        <view class="receipt-paper__thanks">谢谢你，把这一段时光交给我。</view>
-        <view class="receipt-paper__footnote">{{receipt.status === 'ready' ? '根据聊天内容自动整理 · 仅供回顾' : '记录截至离开聊天时'}}
-        </view>
-        <view class="receipt-paper__mark">✦</view>
-      </view>
-    </scroll-view>
-    <button class="receipt-keep" bindtap="closeReceipt">收好这张小票</button>
-    <view class="receipt-hint">主界面可再次查看 · 本机保留最近一张</view>
+        <view class="receipt-paper__thanks">谢谢你，愿意说给我听。</view>
+        <view class="receipt-paper__memento"><view class="receipt-paper__barcode"></view><view class="receipt-paper__stamp">令狸 · 留念</view></view>
+      </scroll-view>
+    </view>
   </view>
+  <button class="receipt-keep" bindtap="closeReceipt">我知道了</button>
 </view>
 
 <view wx:if="{{activeDrawer}}" class="drawer-backdrop" bindtap="closeDrawer">

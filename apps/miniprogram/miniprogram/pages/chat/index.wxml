@@ -10,6 +10,7 @@
     </view>
   </view>
   <view wx:if="{{!callMode}}" class="chat-exit"><button bindtap="leaveChat">结束聊天 · 领取小票</button></view>
+  <view wx:if="{{materialTitle && !callMode}}" class="material-selection">已选资料：{{materialTitle}}<button size="mini" bindtap="clearMaterial" disabled="{{sending || voiceActive}}">取消选择</button></view>
   <scroll-view class="messages" scroll-y enhanced scroll-into-view="bottom-anchor">
     <view wx:if="{{callMode && panel.mode === 'conversation'}}" class="call-subtitle">{{callSubtitle || '我在这里，慢慢讲。'}}</view>
     <view wx:if="{{!callMode && messages.length === 0}}" class="empty">

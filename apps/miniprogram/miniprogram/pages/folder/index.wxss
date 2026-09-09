@@ -1,0 +1,21 @@
+page { background: #f5efe5; color: #594735; }
+.folder { padding: 44rpx 32rpx 80rpx; display: flex; flex-direction: column; gap: 24rpx; }
+.eyebrow { color: #96806a; font-size: 22rpx; letter-spacing: 4rpx; }
+.heading { font-size: 46rpx; font-weight: 600; }
+.intro { font-size: 28rpx; }
+button { margin: 0; font-size: 28rpx; background: #fffaf1; color: #594735; border-radius: 18rpx; }
+button::after { border: 1rpx solid #dfd2c0; }
+.primary { background: #97724d; color: white; }
+.hint { font-size: 23rpx; color: #94816e; line-height: 1.7; }
+.empty { text-align: center; padding: 90rpx 0; color: #94816e; font-size: 27rpx; }
+.item { display: flex; align-items: center; gap: 22rpx; padding: 22rpx; text-align: left; line-height: 1.5; }
+.icon { background: #ece0ce; width: 72rpx; height: 82rpx; text-align: center; line-height: 82rpx; border-radius: 8rpx; }
+.item-info { flex: 1; min-width: 0; }
+.item-title { word-break: break-all; }
+.preview { width: 100%; height: 380rpx; }
+.label { font-size: 26rpx; }
+input, textarea { box-sizing: border-box; background: #fffaf1; border: 1rpx solid #dfd2c0; border-radius: 12rpx; padding: 20rpx; width: 100%; }
+input { height: 84rpx; }
+textarea { height: 190rpx; }
+.text-preview { max-height: 360rpx; white-space: pre-wrap; font-size: 26rpx; line-height: 1.8; }
+.error, .delete { color: #a04c37; font-size: 26rpx; }

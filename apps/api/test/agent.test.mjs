@@ -1,3 +1,4 @@
+import { MaterialsService } from '../dist/materials/materials.service.js';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
@@ -93,7 +94,7 @@ before(async () => {
   });
   const module = await Test.createTestingModule({
     controllers: [AgentController, ChatController],
-    providers: [AgentService, AgentStorage, PiSessionFactory, ChatService, SessionSummaryService, { provide: ConfigService, useValue: config }],
+    providers: [MaterialsService, AgentService, AgentStorage, PiSessionFactory, ChatService, SessionSummaryService, { provide: ConfigService, useValue: config }],
   }).compile();
   app = module.createNestApplication(new FastifyAdapter(), { logger: false });
   app.setGlobalPrefix('api/v1');
@@ -231,7 +232,7 @@ test('deadline cancels the model request and persists the terminal state', async
 
 test('missing credentials fail with a trace ID instead of a successful response', async () => {
   const noKeyConfig = new ConfigService({ AGENT_DATA_DIR: root, DEEPSEEK_API_KEY: '' });
-  const noKeyService = new AgentService(new PiSessionFactory(noKeyConfig, storage), storage, noKeyConfig);
+  const noKeyService = new AgentService(new PiSessionFactory(noKeyConfig, storage, new MaterialsService(noKeyConfig)), storage, noKeyConfig);
   await assert.rejects(noKeyService.run({ message: 'hello' }), (error) => {
     const response = error.getResponse();
     assert.match(response.message, /DEEPSEEK_API_KEY/);
@@ -457,4 +458,21 @@ test('voice ASR enters real Agent tool loop and streams panel plus speech to TTS
   assert.ok(received.some(event => event.type === 'result' && event.result.usage.totalTokens > 0));
   assert.deepEqual(spoken, ['你好，我是令狸。']);
   voice.close();
+});
+
+test('material IDs load server originals and edits create immutable conversation snapshots', async () => {
+  const materials = new MaterialsService(config);
+  const item = await materials.upload('memory.txt', Buffer.from('MATERIAL_ORIGINAL_MARKER'));
+  const first = await service.run({ message: 'READ_PANEL', context: { materialIds: [item.id] } });
+  let saved = JSON.parse(await readFile(join(storage.conversationDirectory(first.conversationId), 'panel.json'), 'utf8'));
+  assert.equal(saved.attachments.length, 1);
+  assert.match(saved.attachments[0].text, /MATERIAL_ORIGINAL_MARKER/);
+  await materials.update(item.id, 'New title', 'NEW_DESCRIPTION_MARKER');
+  await service.run({ conversationId: first.conversationId, message: 'READ_PANEL', context: { materialIds: [item.id] } });
+  saved = JSON.parse(await readFile(join(storage.conversationDirectory(first.conversationId), 'panel.json'), 'utf8'));
+  assert.equal(saved.attachments.length, 2);
+  assert.notEqual(saved.attachments[0].id, saved.attachments[1].id);
+  assert.match(saved.attachments[1].text, /NEW_DESCRIPTION_MARKER/);
+  const invalid = await fetch(`${baseUrl}/api/v1/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: 'hello', context: { materialIds: ['../bad'] } }) });
+  assert.equal(invalid.status, 400);
 });

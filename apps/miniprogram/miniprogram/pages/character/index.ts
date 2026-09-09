@@ -77,7 +77,7 @@ Page({
   },
 
   openFolder(): void {
-    this.setData({ activeDrawer: 'folder' });
+    wx.navigateTo({ url: '/pages/folder/index' });
   },
 
   openManuscripts(): void {

@@ -1,0 +1,27 @@
+<view class="folder">
+  <view class="eyebrow">令狸 · 故事收集处</view>
+  <view class="heading">{{selected ? '一份留存的回忆' : '资料夹'}}</view>
+  <view wx:if="{{error}}" class="error">{{error}}<button size="mini" bindtap="refresh" disabled="{{busy}}">重新加载</button></view>
+  <block wx:if="{{selected}}">
+    <button bindtap="back" disabled="{{busy}}">← 全部资料</button>
+    <image wx:if="{{selected.kind === 'image'}}" class="preview" src="{{previewUrl}}" mode="aspectFit" bindtap="preview" />
+    <button bindtap="preview">查看原件</button>
+    <view class="label">标题</view><input value="{{title}}" maxlength="300" bindinput="titleInput" disabled="{{busy}}" />
+    <view class="label">补充说明</view><textarea value="{{description}}" maxlength="2000" bindinput="descriptionInput" disabled="{{busy}}" placeholder="照片里是谁？这份资料有什么故事？" />
+    <view wx:if="{{selected.statusMessage}}" class="hint">{{selected.statusMessage}}</view>
+    <scroll-view wx:if="{{selected.text}}" scroll-y class="text-preview"><text selectable>{{selected.text}}</text></scroll-view>
+    <button bindtap="save" disabled="{{busy || !title}}">保存修改</button>
+    <button class="primary" bindtap="chat" disabled="{{busy || title !== selected.title || description !== selected.description}}">聊聊这份资料</button>
+    <button class="delete" bindtap="remove" disabled="{{busy}}">删除资料</button>
+  </block>
+  <block wx:else>
+    <view class="intro">把照片、信件和生活片段留在这里。</view>
+    <button class="primary" bindtap="add" loading="{{busy}}" disabled="{{busy || loading}}">{{busy ? '正在上传并整理…' : '＋ 添加资料'}}</button>
+    <view class="hint">照片 / PDF / DOCX / TXT / MD · 每份最多 20 MB</view>
+    <view wx:if="{{loading}}" class="empty">正在打开资料夹…</view>
+    <view wx:elif="{{!items.length}}" class="empty">还没有资料，放进第一份回忆吧。</view>
+    <button wx:for="{{items}}" wx:key="id" class="item" data-id="{{item.id}}" bindtap="select" disabled="{{busy}}">
+      <view class="icon">{{item.kind === 'image' ? '图' : '文'}}</view><view class="item-info"><view class="item-title">{{item.title}}</view><view class="hint">{{item.status === 'ready' ? '已整理' : '待补充说明'}}</view></view><text>›</text>
+    </button>
+  </block>
+</view>

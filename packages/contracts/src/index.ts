@@ -54,7 +54,13 @@ export interface PanelState {
   lastChange?: { documentId: string; fromVersion: number; toVersion: number; before: PanelBlock[]; after: PanelBlock[] };
 }
 
+export interface Material extends PanelAttachment {
+  filename: string; description: string; mimeType: string; size: number; createdAt: string;
+  url: string; text: string; status: 'ready' | 'needs-description'; statusMessage: string;
+}
+
 export interface AgentContextSnapshot {
+  materialIds?: string[];
   attachments?: PanelAttachment[];
   /** Requested mode only; actual mode and guidance follow the server's displayed content. */
   scene?: AgentScene;

@@ -1,4 +1,6 @@
 import 'reflect-metadata';
+import multipart from '@fastify/multipart';
+import { MAX_FILE_SIZE } from './materials/materials.service.js';
 
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -15,6 +17,7 @@ async function bootstrap(): Promise<void> {
     new FastifyAdapter({ logger: true }),
   );
 
+  await app.register(multipart, { limits: { fileSize: MAX_FILE_SIZE, files: 1, fields: 0, parts: 1 } });
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true }),
