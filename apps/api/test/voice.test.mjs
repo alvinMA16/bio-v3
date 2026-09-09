@@ -20,7 +20,7 @@ function fixture({ run, synthesize, text = '修改第二段' } = {}) {
     if (run) return run(input, emit, signal);
     emit({ type: 'speech.delta', messageId: 'before', delta: '我来改。' });
     emit({ type: 'speech.completed', messageId: 'before', text: '我来改。' });
-    emit({ type: 'tool.started', name: 'update_panel_content', toolCallId: 't' });
+    emit({ type: 'tool.started', name: 'update_content', toolCallId: 't' });
     emit({ type: 'panel.state.updated', panel: { mode: 'editor', revision: 1 } });
     emit({ type: 'speech.delta', messageId: 'after', delta: '改好了。' });
     emit({ type: 'speech.completed', messageId: 'after', text: '改好了。' });

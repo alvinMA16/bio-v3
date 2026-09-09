@@ -46,7 +46,7 @@ export class PanelWorkspace {
 
   state(): PanelState { return structuredClone(this.value.panel); }
 
-  /** Bounded model context. Full content is available through get_panel_state. */
+  /** Bounded model context. Full content is available through get_content. */
   context() {
     const panel = this.value.panel;
     let remaining = 6000;
@@ -93,7 +93,7 @@ export class PanelWorkspace {
       panel.attachment = attachment;
     } else if (mode === 'editor') {
       const document = next.documents.find(item => item.id === targetId);
-      if (!document) throw new Error('草稿不存在；先通过 update_panel_content 创建草稿');
+      if (!document) throw new Error('草稿不存在；先通过 update_content 创建草稿');
       panel.document = document;
     } else if (targetId) throw new Error('纯对话模式不接受目标 ID');
     next.panel = panel;

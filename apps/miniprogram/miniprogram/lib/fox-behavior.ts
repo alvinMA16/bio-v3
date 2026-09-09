@@ -1,6 +1,6 @@
 /** Shared policy; contains no rendering, network, or model calls. */
 export interface FoxActivity {
-  phase: 'idle' | 'listening' | 'processing' | 'writing';
+  phase: 'idle' | 'listening' | 'processing' | 'writing' | 'reading';
   notebook: boolean;
   speech: 'silent' | 'text' | 'audio';
   reducedMotion: boolean;
@@ -19,6 +19,13 @@ export interface FoxBehavior {
   playback: 'still' | 'speech' | 'writing' | 'ambient';
 }
 
+/** Carry the notebook from thinking into the spoken reply, even after the run ends. */
+export function continueFoxActivity(activity: FoxActivity, previous: FoxActivity): FoxActivity {
+  return { ...activity, notebook: activity.notebook
+    || activity.phase === 'processing' || activity.phase === 'writing'
+    || (activity.phase !== 'listening' && activity.speech !== 'silent' && previous.notebook) };
+}
+
 export function chooseFoxBehavior(activity: FoxActivity): FoxBehavior {
   const resting = activity.notebook ? 'notebookTalk' : 'blink';
   if (activity.reducedMotion) return { action: resting, playback: 'still' };
@@ -27,6 +34,6 @@ export function chooseFoxBehavior(activity: FoxActivity): FoxBehavior {
   if (activity.speech !== 'silent') return {
     action: activity.notebook ? 'notebookTalk' : 'talk', playback: 'speech',
   };
-  if (activity.phase === 'writing') return { action: 'note', playback: 'writing' };
+  if (activity.phase === 'writing' || activity.phase === 'processing') return { action: 'note', playback: 'writing' };
   return { action: resting, playback: 'ambient' };
 }

@@ -22,15 +22,15 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
           blockIds: panel.document.blocks.map(item => item.id),
         },
         attachmentId: panel.attachment?.id,
-        note: '面板状态已在本地会话保存，已生成更新事件；未确认客户端渲染，未发布文章或修改附件原件。',
+        note: '内容展示状态已在本地会话保存，已生成更新事件；未确认客户端渲染，未发布文章或修改附件原件。',
       }) }],
       details: { revision: panel.revision },
     };
   };
   return [
     defineTool({
-      name: 'set_panel_mode', label: '切换面板模式',
-      description: '切换纯对话、附件查看或共同编辑模式，同时打开已有附件或草稿。conversation 不需要 targetId；其余模式必须引用已有 ID。关闭面板不会删除草稿。',
+      name: 'show_content', label: '展示内容',
+      description: '切换纯对话、附件查看或共同编辑模式，同时打开已有附件或草稿。conversation 不需要 targetId；其余模式必须引用已有 ID。回到对话内容不会删除草稿，也不会结束通话。',
       parameters: Type.Object({
         mode: Type.Union([Type.Literal('conversation'), Type.Literal('attachment'), Type.Literal('editor')]),
         targetId: Type.Optional(id),
@@ -41,7 +41,7 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
       },
     }),
     defineTool({
-      name: 'update_panel_content', label: '更新面板正文',
+      name: 'update_content', label: '更新内容',
       description: '创建或按段落更新本地草稿，并直接打开编辑模式。新建时 expectedVersion=0 且提供 title；修改已有文档必须使用当前版本。operations 按顺序原子应用。insert 不填 afterId 时追加到末尾；replace 保留段落 ID。格式通过 block.kind 指定，paragraph/heading/quote 使用纯文本，list 每行一项，code 为代码原文。不能修改附件原件。',
       parameters: Type.Object({
         documentId: id,
@@ -58,8 +58,8 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
       },
     }),
     defineTool({
-      name: 'get_panel_state', label: '读取面板状态',
-      description: '按需读取最新面板模式、可用附件和草稿。指定 documentId 可读取该草稿全文，再指定 blockId 只读取一段；指定 attachmentId 读取附件完整文本或地址。已有上下文足够时不必重复读取。图片地址只用于展示，不代表你已看懂图片。',
+      name: 'get_content', label: '读取内容',
+      description: '按需读取当前内容展示模式、可用附件和草稿。指定 documentId 可读取该草稿全文，再指定 blockId 只读取一段；指定 attachmentId 读取附件完整文本或地址。已有上下文足够时不必重复读取。图片地址只用于展示，不代表你已看懂图片。',
       parameters: Type.Object({ documentId: Type.Optional(id), blockId: Type.Optional(id), attachmentId: Type.Optional(id) }),
       execute: async (_id, params, signal) => {
         signal?.throwIfAborted();

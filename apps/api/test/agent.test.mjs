@@ -30,7 +30,7 @@ function sendCompletion(response, { text = '你好，我是令狸。', tool, mod
   })}\n\n`);
   chunk({ role: 'assistant' });
   if (tool) chunk({ tool_calls: [{ index: 0, id: 'call_panel', type: 'function', function: {
-    name: typeof tool === 'object' ? tool.name : 'update_panel_content', arguments: JSON.stringify(typeof tool === 'object' ? tool.arguments : { documentId: 'draft', expectedVersion: 0, title: '文章草稿', operations: [{ action: 'insert', block: { id: 'p1', kind: 'paragraph', text: '这是正文。' } }] }),
+    name: typeof tool === 'object' ? tool.name : 'update_content', arguments: JSON.stringify(typeof tool === 'object' ? tool.arguments : { documentId: 'draft', expectedVersion: 0, title: '文章草稿', operations: [{ action: 'insert', block: { id: 'p1', kind: 'paragraph', text: '这是正文。' } }] }),
   } }] });
   else chunk({ content: text });
   chunk({}, tool ? 'tool_calls' : 'stop');
@@ -62,11 +62,11 @@ before(async () => {
     sendCompletion(response, {
       model: payload.model,
       tool: lastText === 'SHOW_PANEL' ? true
-        : lastText === 'OPEN_ATTACHMENT' ? { name: 'set_panel_mode', arguments: { mode: 'attachment', targetId: 'photo1' } }
-        : lastText === 'CLOSE_PANEL' ? { name: 'set_panel_mode', arguments: { mode: 'conversation' } }
-        : lastText === 'OPEN_DRAFT' ? { name: 'set_panel_mode', arguments: { mode: 'editor', targetId: 'draft' } }
-        : lastText === 'EDIT_DRAFT' ? { name: 'update_panel_content', arguments: { documentId: 'draft', expectedVersion: 1, operations: [{ action: 'replace', targetId: 'p1', block: { id: 'p1', kind: 'paragraph', text: '这是修改后的正文。' } }] } }
-        : lastText === 'READ_PANEL' ? { name: 'get_panel_state', arguments: {} } : false,
+        : lastText === 'OPEN_ATTACHMENT' ? { name: 'show_content', arguments: { mode: 'attachment', targetId: 'photo1' } }
+        : lastText === 'CLOSE_PANEL' ? { name: 'show_content', arguments: { mode: 'conversation' } }
+        : lastText === 'OPEN_DRAFT' ? { name: 'show_content', arguments: { mode: 'editor', targetId: 'draft' } }
+        : lastText === 'EDIT_DRAFT' ? { name: 'update_content', arguments: { documentId: 'draft', expectedVersion: 1, operations: [{ action: 'replace', targetId: 'p1', block: { id: 'p1', kind: 'paragraph', text: '这是修改后的正文。' } }] } }
+        : lastText === 'READ_PANEL' ? { name: 'get_content', arguments: {} } : false,
       text: payload.tools?.length ? '你好，我是令狸。' : 'COMPACTED_MEMORY_MARKER',
     });
   });
@@ -114,7 +114,7 @@ test('existing endpoint uses Pi, persists history and isolates conversations', a
   assert.equal(result.usage.promptTokens, 12);
   assert.equal(result.usage.promptCacheHitTokens, 2);
   const request = requests.at(-1);
-  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['set_panel_mode', 'update_panel_content', 'get_panel_state']);
+  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['show_content', 'update_content', 'get_content']);
   assert.deepEqual(request.thinking, { type: 'disabled' });
   assert.ok(JSON.stringify(request.messages).includes('TEST_PERSONA'));
   assert.ok(!JSON.stringify(request.messages).includes('Compound Codex'));

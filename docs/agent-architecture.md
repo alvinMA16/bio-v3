@@ -8,7 +8,7 @@
   → AgentService（运行 ID、并发保护、取消、超时、事件与用量）
   → PiSessionFactory（模型、人物设定、会话恢复、压缩、工具白名单）
   → Pi Coding Agent SDK（模型调用和工具循环）
-  → 产品工具（set_panel_mode / update_panel_content / get_panel_state）
+  → 产品工具（show_content / update_content / get_content）
 ```
 
 前端依赖 `@bio/contracts`，不依赖 Pi 事件类型。API 使用 ESM / NodeNext，与 Pi 的 ESM 发布包兼容。
@@ -83,9 +83,9 @@ Pi 历史（含已有压缩摘要、近期原文与完整工具调用/结果）
 
 面板有三个独立于对话场景的模式：`conversation`（不打开正文或附件）、`attachment`（查看原件）、`editor`（共同编辑草稿）。切回纯对话保留已有附件和草稿。
 
-- `set_panel_mode(mode, targetId?)`：切换模式并打开已登记对象；禁止编造附件 ID。
-- `update_panel_content(documentId, expectedVersion, title?, operations)`：创建草稿或按段落插入、替换、删除，成功后自动进入 editor。新建版本为 0，保存后递增。操作批次在副本上校验后原子替换本地文件，版本冲突或任一操作失败均不部分保存。
-- `get_panel_state(documentId?, blockId?, attachmentId?)`：默认获取有界状态；按 ID 读取完整草稿、单段或附件文本。不能把附件和草稿选择器混用。
+- `show_content(mode, targetId?)`：切换模式并打开已登记对象；禁止编造附件 ID。
+- `update_content(documentId, expectedVersion, title?, operations)`：创建草稿或按段落插入、替换、删除，成功后自动进入 editor。新建版本为 0，保存后递增。操作批次在副本上校验后原子替换本地文件，版本冲突或任一操作失败均不部分保存。
+- `get_content(documentId?, blockId?, attachmentId?)`：默认获取有界状态；按 ID 读取完整草稿、单段或附件文本。不能把附件和草稿选择器混用。
 
 草稿使用带稳定 ID 的结构化块：paragraph、heading、list（每行一项）、quote、code。前端按块类型渲染，不执行正文 HTML。工具结果只返回模式、版本、对象 ID 等简短确认；完整 UI 数据通过 `panel.state.updated` 事件发送。初始恢复也发送一次状态事件，错误或取消前已经保存的更新不会回滚。客户端是否完成渲染尚无确认协议，不能把更新事件当作渲染确认。
 
@@ -133,6 +133,6 @@ Pi 历史（含已有压缩摘要、近期原文与完整工具调用/结果）
 
 宿主通过 `setActivity` 提交完整状态：`phase`（idle/listening/processing/writing）、`notebook`、`speech`（silent/text/audio）和 `reducedMotion`。倾听立即打断工作和口型；语音优先于写作，Agent 结束不意味着音频结束。Web 的 `fox-activity.ts` 负责将 Agent 工具、文本和面板状态转成该输入。将来音频接入后，传 `audioPlaying` 会替代文本流驱动口型；`userSpeaking` 用于打断。Web 语音适配已接入播放状态，小程序角色页仅提供状态入口，未连接聊天流。
 
-首次挂载挥手一次；普通等待随机间隔 18～35 秒眨眼。编辑场景使用持本姿态等待和说话；没有持本眨眼素材时保持静止。写作持续 450 毫秒后开始记笔记，每段动作结束持本停顿 1.8 秒；较短操作不闪动。当前写作仅根据 `update_panel_content` 工具执行状态判断，不猜测模型尚未发出的工具意图。`acknowledge()` 是可选倾听回应，要求持本、未说话，并有 20 秒冷却，不自动绑定每轮消息或工具成功。隐藏页面暂停计时，恢复后采用最新状态；销毁清除计时器。减少动态效果模式使用静止姿态。
+首次挂载挥手一次；普通等待随机间隔 18～35 秒眨眼。编辑场景使用持本姿态等待和说话；没有持本眨眼素材时保持静止。写作持续 450 毫秒后开始记笔记，每段动作结束持本停顿 1.8 秒；较短操作不闪动。用户说完后的思考、合成等待和 `update_content` 执行期间均使用记笔记；连接中、倾听和 `get_content` 读取期间不写字。持本姿态从思考延续到实际语音回复。`acknowledge()` 是可选倾听回应，要求持本、未说话，并有 20 秒冷却，不自动绑定每轮消息或工具成功。隐藏页面暂停计时，恢复后采用最新状态；销毁清除计时器。减少动态效果模式使用静止姿态。
 
 实时语音已新增独立编排层，ASR 最终文本进入完整 Agent 工具循环，普通回复流送入 TTS；详情见 [实时语音设计](realtime-voice.md)。Web 调试页在语音模式下由实际播放驱动口型，小程序聊天页已有语音入口。

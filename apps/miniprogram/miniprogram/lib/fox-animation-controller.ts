@@ -1,4 +1,4 @@
-import { chooseFoxBehavior, DEFAULT_FOX_ACTIVITY, FOX_TIMING, type FoxActivity, type FoxBehavior } from './fox-behavior';
+import { chooseFoxBehavior, continueFoxActivity, DEFAULT_FOX_ACTIVITY, FOX_TIMING, type FoxActivity, type FoxBehavior } from './fox-behavior';
 
 export const FOX_ACTION_ORDER = ['blink', 'talk', 'wave', 'note', 'nod', 'notebookTalk'] as const;
 
@@ -109,6 +109,7 @@ export class FoxAnimationController {
   startAutoCycle(): void { this.startWelcomeSequence(); }
 
   setActivity(activity: FoxActivity): void {
+    activity = continueFoxActivity(activity, this.activity);
     const changed = Object.keys(activity).some(key => activity[key as keyof FoxActivity] !== this.activity[key as keyof FoxActivity]);
     const previous = this.behavior;
     this.activity = { ...activity };

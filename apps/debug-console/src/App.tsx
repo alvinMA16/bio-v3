@@ -1,3 +1,4 @@
+import { FeltMicrophone } from './felt-microphone';
 import { BrowserVoice } from './voice/browser-voice';
 import type { VoiceRequest, VoiceServerMessage } from '@bio/contracts';
 import { foxActivityOf } from './fox-activity';
@@ -102,8 +103,15 @@ export function App() {
   const [pendingMessage, setPendingMessage] = useState('');
   const [running, setRunning] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [callOpen, setCallOpen] = useState(false);
+  const [callStartedAt, setCallStartedAt] = useState<number | null>(null);
+  const [speakerEnabled, setSpeakerEnabled] = useState(true);
+  const [micEnabled, setMicEnabled] = useState(false);
+  const [micListening, setMicListening] = useState(false);
+  const [micLevel, setMicLevel] = useState(0);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState('');
+  const [voiceState, setVoiceState] = useState<Extract<VoiceServerMessage, { type: 'state' }>['state']>('connecting');
   const [spokenSubtitle, setSpokenSubtitle] = useState('');
   const voiceRef = useRef<BrowserVoice | null>(null);
   const voiceTurn = useRef<{ record: RunRecord; saved: boolean } | null>(null);
@@ -200,6 +208,7 @@ export function App() {
     const record = turn.record;
     const timings = record.voiceTimings!;
     if (event.type === 'state') {
+      setVoiceState(event.state);
       const labels = { connecting: '正在连接语音识别', listening: '正在听你说', finalizing: '正在确认识别结果', agent: 'Agent 正在处理', synthesizing: '正在合成语音' };
       setVoiceStatus(labels[event.state]);
       if (event.state === 'finalizing') timings.inputEnded = event.elapsedMs;
@@ -222,15 +231,18 @@ export function App() {
     if (event.type === 'audio') timings.firstAudio ??= event.elapsedMs;
     if (event.type === 'result') { record.response = event.result; timings.agentDone = event.elapsedMs; }
     if (event.type === 'done') { timings.synthesisDone = event.elapsedMs; setVoiceStatus('等待播放结束'); saveVoiceTurn(); }
-    if (event.type === 'cancelled') saveVoiceTurn('语音已打断');
+    if (event.type === 'cancelled') { setVoiceState('connecting'); saveVoiceTurn('语音已打断'); }
     if (event.type === 'error') { setVoiceStatus(event.message); saveVoiceTurn(event.message); }
   }
 
   function startVoice(): void {
     if (busy) return;
+    setCallOpen(true); setSpeakerEnabled(true); setCallStartedAt(null);
+    setVoiceState('connecting');
     voiceTurn.current = null;
-    setVoiceEnabled(true); setVoiceStatus('正在申请麦克风权限');
+    setMicEnabled(true); setVoiceEnabled(true); setVoiceStatus('正在申请麦克风权限');
     const client = new BrowserVoice({
+      connected: () => setCallStartedAt(Date.now()),
       request: () => ({ ...voiceContext.current }),
       start: (id, request) => {
         startedRef.current = performance.now(); followThread.current = true;
@@ -239,6 +251,10 @@ export function App() {
         setLive(currentLive); setPendingMessage('正在听你说…'); setRunning(true); setElapsedMs(0);
       },
       event: receiveVoice,
+      microphone: enabled => { setMicEnabled(enabled); if (!enabled) setVoiceStatus(value => value === '正在听你说' ? '麦克风已关' : value); },
+      microphoneError: setVoiceStatus,
+      inputLevel: setMicLevel,
+      listening: setMicListening,
       playback: (playing, text) => {
         setAudioPlaying(playing);
         if (text) setSpokenSubtitle(text);
@@ -251,7 +267,7 @@ export function App() {
         }
       },
       error: error => { setVoiceStatus(error); saveVoiceTurn(error); },
-      ended: () => { saveVoiceTurn('语音会话已结束'); setVoiceEnabled(false); setAudioPlaying(false); setSpokenSubtitle(''); voiceRef.current = null; },
+      ended: () => { saveVoiceTurn('语音会话已结束'); setCallStartedAt(null); setVoiceEnabled(false); setMicEnabled(false); setAudioPlaying(false); setSpokenSubtitle(''); voiceRef.current = null; },
     });
     voiceRef.current = client; void client.start();
   }
@@ -434,7 +450,20 @@ export function App() {
         <div className="lab-main" ref={resultRef}>
           <section className="lab-preview-column">
             <header className="lab-section-heading"><h1>用户界面预览</h1><span>手机 · 实时状态</span></header>
-            <PhonePreview subtitle={subtitle} running={running} activity={foxActivityOf({ running, live, panel: shownPanel, ...(voiceEnabled ? { audioPlaying, userSpeaking: voiceStatus === '正在听你说' } : {}) })}>
+            <PhonePreview subtitle={subtitle} running={running} activity={foxActivityOf({ running, live, panel: shownPanel, ...(callOpen ? { audioPlaying, ...(voiceEnabled ? { voiceState } : {}), userSpeaking: micEnabled && micListening } : {}) })}
+              callOpen={callOpen} callStartedAt={callStartedAt} status={voiceStatus} mode={shownPanel?.mode ?? 'conversation'}
+              startDisabled={busy} onStart={startVoice} speakerEnabled={speakerEnabled}
+              onSpeakerToggle={() => { const enabled = !speakerEnabled; voiceRef.current?.setSpeaker(enabled); setSpeakerEnabled(enabled); }}
+              onEnd={() => { voiceRef.current?.close(); setCallOpen(false); }}
+              microphone={<FeltMicrophone enabled={micEnabled} listening={micEnabled && micListening} level={micLevel}
+                replying={audioPlaying || (running && voiceStatus !== '正在听你说' && voiceStatus !== '正在申请麦克风权限' && voiceStatus !== '正在连接语音识别')}
+                disabled={!voiceEnabled && running} onToggle={() => {
+                  if (!voiceRef.current) startVoice();
+                  else {
+                    if (!micEnabled) setVoiceStatus('正在准备麦克风');
+                    void voiceRef.current.setMicrophone(!micEnabled);
+                  }
+                }} />}>
               {shownPanel ? <WorkspacePanel panel={shownPanel} selectedBlockId={selectedBlockId}
                 {...(!busy ? { onSelectBlock: selectBlock } : {})} />
                 : <div className="phone-empty"><strong>今天想聊点什么？</strong><p>我在这里，陪你慢慢讲。</p></div>}
@@ -444,14 +473,14 @@ export function App() {
           <section className="lab-conversation-column">
             <header className="lab-section-heading"><h2>对话历史与输入</h2><span role="status">{voiceEnabled ? voiceStatus : running ? live.status : selectedRun?.error ? '本轮已中断' : selectedRun ? '本轮完成' : '等待输入'}{running && ` · ${formatDuration(elapsedMs)}`}</span></header>
             <div className="lab-thread" ref={threadRef} onScroll={() => { const element = threadRef.current; if (element) followThread.current = element.scrollHeight - element.scrollTop - element.clientHeight < 70; }}>
-              {!turns.length && !running && <div className="lab-thread-empty">从右下方开始对话，左侧会同步呈现令狸和面板的变化。</div>}
+              {!turns.length && !running && <div className="lab-thread-empty">从右下方开始对话，左侧会同步呈现令狸和内容的变化。</div>}
               {turns.map(run => <ConversationTurn key={run.id} request={run.request.message} live={run.live} fallback={run.response?.message.content} error={run.error} />)}
               {running && <ConversationTurn request={pendingMessage} live={live} running />}
             </div>
             {selectedBlockId && <div className="lab-selection">已选中 {selectedBlockId} · 版本 {documentVersion}<button type="button" disabled={busy} onClick={() => { setSelectedBlockId(''); setDocumentId(''); setExcerpt(''); }}>取消选区</button></div>}
             <div className="voice-controls">
               {!voiceEnabled ? <button type="button" disabled={running} onClick={startVoice}>开始语音对话</button> : <>
-                <button type="button" onClick={() => voiceRef.current?.finish()} disabled={voiceStatus !== '正在听你说'}>说完了</button>
+                <button type="button" onClick={() => voiceRef.current?.finish()} disabled={!micEnabled || voiceStatus !== '正在听你说'}>说完了</button>
                 <button type="button" onClick={() => voiceRef.current?.interrupt()} disabled={voiceStatus === '正在听你说'}>打断并说话</button>
                 <button type="button" onClick={() => voiceRef.current?.close()}>结束语音</button>
               </>}
@@ -951,7 +980,7 @@ function ConversationTurn({ request, live, fallback, error, running = false }: {
   request: string; live?: LiveRun | undefined; fallback?: string | undefined; error?: string | undefined; running?: boolean;
 }) {
   const messages = live?.messages.length ? live.messages : fallback ? [{ id: 'final', text: fallback, completed: true }] : [];
-  const actions = live?.steps.filter(step => step.label.startsWith('面板：') || step.failed) ?? [];
+  const actions = live?.steps.filter(step => step.label.startsWith('内容：') || step.label.startsWith('面板：') || step.failed) ?? [];
   return <section className="conversation-turn">
     <article className="conversation-bubble conversation-bubble--user"><small>你</small><p>{request}</p></article>
     {messages.map(message => <article className="conversation-bubble" key={message.id}><small>令狸</small><p>{message.text}</p>{!message.completed && <span className="live-writing">{running ? '正在回复…' : '回复未完成'}</span>}</article>)}
@@ -966,6 +995,6 @@ function RunTimeline({ live }: { live: LiveRun | undefined }) {
     <h3>变化记录 <small>从本轮开始计时</small></h3>
     {live?.steps.length ? <ol>{live.steps.map(step => <li key={step.sequence} className={step.failed ? 'live-step--failed' : ''}>
       <time>{formatDuration(step.elapsedMs)}</time><span>{step.label}</span>
-    </li>)}</ol> : <p className="live-placeholder">运行后可查看工具与面板事件。</p>}
+    </li>)}</ol> : <p className="live-placeholder">运行后可查看工具与内容展示事件。</p>}
   </section>;
 }

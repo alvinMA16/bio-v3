@@ -13,7 +13,9 @@ export function emptyLiveRun(): LiveRun {
 }
 
 const toolLabels: Record<string, string> = {
-  set_panel_mode: '切换面板', update_panel_content: '更新正文', get_panel_state: '读取面板',
+  // Old persisted traces remain readable; only the new names are exposed to the model.
+  set_panel_mode: '展示内容', update_panel_content: '更新正文', get_panel_state: '读取内容',
+  show_content: '展示内容', update_content: '更新正文', get_content: '读取内容',
 };
 
 export function applyLiveEvent(previous: LiveRun, event: AgentEvent, elapsedMs: number): LiveRun {
@@ -45,9 +47,9 @@ export function applyLiveEvent(previous: LiveRun, event: AgentEvent, elapsedMs: 
       break;
     case 'panel.state.updated':
       panel = event.panel;
-      label = panel.mode === 'conversation' ? '面板：纯对话'
-        : panel.mode === 'attachment' ? `面板：查看 ${panel.attachment?.title ?? '附件'}`
-        : `面板：${panel.document?.title ?? '草稿'} · 版本 ${panel.document?.version ?? 0}`;
+      label = panel.mode === 'conversation' ? '内容：纯对话'
+        : panel.mode === 'attachment' ? `内容：查看 ${panel.attachment?.title ?? '附件'}`
+        : `内容：${panel.document?.title ?? '草稿'} · 版本 ${panel.document?.version ?? 0}`;
       break;
     case 'context.compacting': label = '正在整理对话上下文'; break;
     case 'context.compacted': label = '对话上下文已整理'; break;

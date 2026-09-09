@@ -60,7 +60,7 @@ test('audio keeps talking after agent becomes idle, and interruption stops its l
   controller.setActivity(activity({ phase: 'idle', speech: 'audio' }));
   assert.equal(last().frame, frame);
   for (let i = 0; i < 20; i++) t.mock.timers.tick(170);
-  assert.equal(last().action.id, 'talk');
+  assert.equal(last().action.id, 'notebookTalk');
   controller.setActivity(activity({ phase: 'listening', speech: 'audio' }));
   assert.equal(last().action.id, 'blink');
   assert.equal(last().frame, 0);
@@ -90,4 +90,35 @@ test('acknowledgment requires notebook listening and has a cooldown', t => {
   for (let i = 0; i < 13; i++) t.mock.timers.tick(200);
   controller.acknowledge();
   assert.equal(last().action.id, 'notebookTalk');
+});
+
+
+test('thinking writes with pauses, transitions to notebook speech, and stops on interruption or end', t => {
+  const { controller, last } = setup(t);
+  controller.setActivity(activity({ phase: 'processing' }));
+  t.mock.timers.tick(450);
+  assert.equal(last().action.id, 'note');
+  controller.setActivity(activity({ phase: 'processing', speech: 'audio' }));
+  assert.equal(last().action.id, 'notebookTalk');
+  t.mock.timers.tick(170);
+  assert.ok(last().frame > 0);
+  controller.setActivity(activity({ phase: 'idle', speech: 'audio' }));
+  assert.equal(last().action.id, 'notebookTalk');
+  controller.setActivity(activity({ phase: 'listening', speech: 'audio' }));
+  assert.equal(last().action.id, 'blink');
+  assert.equal(last().frame, 0);
+  controller.setActivity(activity({ phase: 'processing' }));
+  t.mock.timers.tick(450);
+  controller.setActivity(activity({ phase: 'idle' }));
+  t.mock.timers.tick(3000);
+  assert.equal(last().action.id, 'blink');
+  assert.equal(last().frame, 0);
+});
+
+test('reading does not introduce a dedicated action or write notes', t => {
+  const { controller, last } = setup(t);
+  controller.setActivity(activity({ phase: 'reading' }));
+  t.mock.timers.tick(3000);
+  assert.equal(last().action.id, 'blink');
+  assert.equal(last().frame, 0);
 });

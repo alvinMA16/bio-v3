@@ -43,7 +43,7 @@ export class PiSessionFactory {
     const { session } = await createAgentSession({
       cwd, agentDir: cwd, modelRuntime, model, thinkingLevel: 'off',
       settingsManager, resourceLoader, sessionManager,
-      tools: ['set_panel_mode', 'update_panel_content', 'get_panel_state'], customTools: createPresentationTools(workspace, emit),
+      tools: ['show_content', 'update_content', 'get_content'], customTools: createPresentationTools(workspace, emit),
     });
     return session;
   }
