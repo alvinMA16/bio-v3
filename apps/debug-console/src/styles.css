@@ -415,3 +415,17 @@ body { min-width: 320px; }
 .phone-content-panel--document .answer-label,.phone-content-panel--document small,.phone-content-panel--document h3 small { color: #626975; }
 .phone-content-panel--document h3 { font-family: inherit; }
 .phone-content-panel--document a { color: #245caf; }
+
+.phone-desk { position: absolute; z-index: 4; inset: 51% 5.9% 3%; color: #625442; }
+.phone-desk-entry { position: absolute; width: 39%; border: 0; background: transparent; color: inherit; padding: 0 0 5px; cursor: pointer; font: inherit; }
+.phone-desk-entry img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; }
+.phone-desk-entry span { display: block; text-align: center; font-size: 12px; letter-spacing: 1px; font-weight: 500; }
+.phone-desk-entry--folder { top: 3%; left: 0; }.phone-desk-entry--folder img { transform: rotate(-9deg); }
+.phone-desk-entry--call { top: 24%; right: 0; width: 47%; }.phone-desk-entry--call img { transform: rotate(5deg); }.phone-desk-entry--call span { font-weight: 600; }
+.phone-desk-entry--manuscripts { bottom: 1%; left: 6.6%; width: 37.5%; }.phone-desk-entry--manuscripts img { transform: rotate(-7deg); }
+.phone-desk-entry:active { transform: translateY(2px) scale(.96); }.phone-desk-entry:disabled { opacity: .5; cursor: wait; }
+.phone-desk-entry:focus-visible { outline: 2px solid #79866b; border-radius: 12px; }
+.phone-desk-backdrop { position: absolute; inset: 0; z-index: 6; background: #30291f66; display: flex; align-items: end; }
+.phone-desk-drawer { width: 100%; padding: 20px; border-radius: 20px 20px 0 0; background: #f7f2e8; color: #514a3e; }
+.phone-desk-drawer h2 { font-size: 20px; }.phone-desk-drawer p { font-size: 12px; }
+.phone-desk-drawer button { float: right; border: 0; background: transparent; font-size: 24px; cursor: pointer; color: inherit; }

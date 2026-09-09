@@ -20,6 +20,7 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
   const speaking = speech !== 'silent' && phase !== 'listening';
   const [manifest, setManifest] = useState<Manifest>();
   const [assetError, setAssetError] = useState(false);
+  const [drawer, setDrawer] = useState<'folder' | 'manuscripts' | null>(null);
   const [callSeconds, setCallSeconds] = useState(0);
   useEffect(() => {
     if (callStartedAt === null || !callOpen) { setCallSeconds(0); return; }
@@ -85,13 +86,19 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
     <div className={`phone-screen ${callOpen ? 'phone-screen--call' : ''}`} style={{ aspectRatio: '320/692' }}>
       {!callOpen ? <>
         {artwork}
-        <section className="phone-welcome">
-          <span className="phone-eyebrow">和令狸待一会儿</span>
-          <h2>今天想聊什么？</h2>
-          <p>说说你的想法，<br />我们一起慢慢理清。</p>
-          <button type="button" className="phone-start" disabled={startDisabled} onClick={onStart}>开始对话 <span aria-hidden="true">↗</span></button>
-          <small>{status || '点击后开启麦克风'}</small>
+        <section className="phone-desk" aria-label="令狸的书桌">
+          <button type="button" className="phone-desk-entry phone-desk-entry--folder" onClick={() => setDrawer('folder')}><img src="/desk/folder.png" alt="" /><span>资料夹</span></button>
+          <button type="button" className="phone-desk-entry phone-desk-entry--call" disabled={startDisabled} onClick={onStart}><img src="/desk/phone.png" alt="" /><span>呼叫令狸</span></button>
+          <button type="button" className="phone-desk-entry phone-desk-entry--manuscripts" onClick={() => setDrawer('manuscripts')}><img src="/desk/manuscripts.png" alt="" /><span>文稿集</span></button>
         </section>
+        {drawer && <div className="phone-desk-backdrop" onClick={() => setDrawer(null)}>
+          <section className="phone-desk-drawer" role="dialog" aria-modal="true" aria-label={drawer === 'folder' ? '资料夹' : '文稿集'} onClick={event => event.stopPropagation()} onKeyDown={event => { if (event.key === 'Escape') setDrawer(null); }}>
+            <button type="button" autoFocus aria-label="关闭" onClick={() => setDrawer(null)}>×</button>
+            <h2>{drawer === 'folder' ? '资料夹' : '文稿集'}</h2>
+            <p>{drawer === 'folder' ? '资料收纳功能正在准备中' : '文稿收录功能正在准备中'}</p>
+          </section>
+        </div>}
+
       </> : <>
         <header className="phone-call-header">
           <div><h2>令狸</h2><p className="phone-call-duration" aria-label="通话时长">{callStartedAt === null ? '未连接' : callDuration}</p></div>

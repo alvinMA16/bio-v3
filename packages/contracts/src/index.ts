@@ -1,5 +1,10 @@
 export type ChatRole = 'user' | 'assistant' | 'system';
 
+export interface SessionSummary {
+  summary: string;
+  topics: string[];
+}
+
 export interface ChatMessage {
   id: string;
   role: ChatRole;

@@ -1,10 +1,23 @@
-<view class="page">
+<view class="page {{callMode ? 'page--call' : ''}}">
+  <view wx:if="{{callMode}}" class="call-header">
+    <view><view class="call-name">令狸</view><view class="call-duration">{{callDuration}}</view></view>
+    <view class="call-video" aria-label="令狸的对话画面">
+      <view class="call-scene">
+        <image class="call-layer" src="/assets/animations/fox-clerk/environment.webp" mode="scaleToFill" />
+        <image class="call-actor" src="{{actorSrc}}" mode="scaleToFill" style="width: {{actorWidth}}%; height: {{actorHeight}}%; left: {{actorLeft}}%; top: {{actorTop}}%;" />
+        <image class="call-layer" src="/assets/animations/fox-clerk/inner-panel.webp" mode="scaleToFill" />
+      </view>
+    </view>
+  </view>
+  <view wx:if="{{!callMode}}" class="chat-exit"><button bindtap="leaveChat">结束聊天 · 领取小票</button></view>
   <scroll-view class="messages" scroll-y enhanced scroll-into-view="bottom-anchor">
-    <view wx:if="{{messages.length === 0}}" class="empty">
+    <view wx:if="{{callMode && panel.mode === 'conversation'}}" class="call-subtitle">{{callSubtitle || '我在这里，慢慢讲。'}}</view>
+    <view wx:if="{{!callMode && messages.length === 0}}" class="empty">
       <view class="empty__title">今天想聊点什么？</view>
       <view class="empty__hint">我可以陪你分析、整理和执行任务。</view>
     </view>
     <view
+      wx:if="{{!callMode}}"
       wx:for="{{messages}}"
       wx:key="id"
       class="message message--{{item.role}}"
@@ -29,7 +42,17 @@
     <view id="bottom-anchor"></view>
   </scroll-view>
 
-  <view class="voice-controls">
+  <view wx:if="{{callMode}}" class="call-controls">
+    <view class="call-status">{{voiceStatus || '正在连接'}}{{audioPlaying ? ' · 正在播放' : ''}}</view>
+    <view wx:if="{{voiceTranscript}}" class="call-transcript">{{voiceTranscript}}</view>
+    <view class="call-buttons">
+      <button wx:if="{{!voiceActive}}" bindtap="startVoice">重新连接</button>
+      <button wx:else bindtap="finishVoice" disabled="{{voiceStatus !== '正在听你说'}}">说完了</button>
+      <button class="call-end" bindtap="leaveChat">结束通话</button>
+      <button bindtap="interruptVoice" disabled="{{!voiceActive || voiceStatus === '正在听你说'}}">打断</button>
+    </view>
+  </view>
+  <view wx:else class="voice-controls">
     <button wx:if="{{!voiceActive}}" bindtap="startVoice" disabled="{{sending || voiceActive}}">开始语音对话</button>
     <block wx:else>
       <text>{{voiceStatus}} {{audioPlaying ? '· 正在播放' : ''}}</text>
@@ -41,7 +64,7 @@
       </view>
     </block>
   </view>
-  <view class="composer">
+  <view wx:if="{{!callMode}}" class="composer">
     <textarea
       class="composer__input"
       value="{{input}}"

@@ -6,6 +6,9 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+.chat-exit { padding: 12rpx 32rpx; text-align: right; }
+.chat-exit button { display: inline-block; padding: 0 22rpx; line-height: 64rpx; font-size: 23rpx; color: #72644f; background: #f0e9da; border-radius: 32rpx; }
+
 .messages {
   box-sizing: border-box;
   flex: 1;
@@ -112,3 +115,22 @@
 .voice-controls { padding: 16rpx 24rpx; display: flex; flex-direction: column; gap: 12rpx; font-size: 24rpx; }
 .voice-buttons { display: flex; gap: 8rpx; }
 .voice-buttons button { font-size: 24rpx; padding: 0 12rpx; }
+
+.page--call { background: #1c1f24; color: #f4f5f7; height: 100%; min-height: 100vh; }
+.call-header { display: flex; justify-content: space-between; align-items: center; padding: 32rpx 40rpx 24rpx; }
+.call-name { font-size: 48rpx; }
+.call-duration { margin-top: 16rpx; font-size: 25rpx; color: #a9afb9; }
+.call-video { position: relative; width: 210rpx; height: 260rpx; border-radius: 28rpx; overflow: hidden; background: #d8c5a8; }
+.call-scene { position: absolute; width: 350rpx; height: 757rpx; left: -70rpx; top: -145rpx; }
+.call-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+.call-actor { position: absolute; max-width: none; }
+.page--call .messages { padding: 28rpx 40rpx; }
+.call-subtitle { font-size: 38rpx; line-height: 1.85; white-space: pre-wrap; overflow-wrap: anywhere; }
+.page--call .work-panel { margin: 0; background: #f7f8fa; color: #242830; }
+.call-controls { padding: 16rpx 30rpx 40rpx; }
+.call-status, .call-transcript { text-align: center; font-size: 24rpx; line-height: 1.6; color: #a9afb9; margin-bottom: 20rpx; }
+.call-transcript { max-height: 140rpx; overflow: auto; }
+.call-buttons { display: flex; justify-content: center; gap: 22rpx; }
+.call-buttons button { margin: 0; padding: 0 26rpx; border-radius: 48rpx; background: #363c45; color: #f4f5f7; font-size: 25rpx; line-height: 88rpx; }
+.call-buttons button[disabled] { color: #717984; background: #292e35; }
+.call-buttons .call-end { background: #e5484d; color: #fff; }

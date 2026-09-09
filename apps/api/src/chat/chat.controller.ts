@@ -3,10 +3,17 @@ import type { ChatCompletionResponse } from '@bio/contracts';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ChatService } from './chat.service.js';
 import { CompleteChatDto } from './dto/complete-chat.dto.js';
+import { SessionSummaryDto } from './dto/session-summary.dto.js';
+import { SessionSummaryService } from './session-summary.service.js';
 
 @Controller('chat')
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(private readonly chatService: ChatService, private readonly summaries: SessionSummaryService) {}
+
+  @Post('session-summary')
+  summarize(@Body() body: SessionSummaryDto) {
+    return this.summaries.summarize(body);
+  }
 
   @Post('completions')
   async complete(@Body() body: CompleteChatDto, @Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply): Promise<ChatCompletionResponse> {
