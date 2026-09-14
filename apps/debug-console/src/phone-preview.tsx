@@ -15,9 +15,9 @@ interface Manifest {
   animations: Animation[];
 }
 
-export function PhonePreview({ children, subtitle, activity, running, microphone, callOpen, callStartedAt, status, mode, startDisabled, onStart, speakerEnabled, onSpeakerToggle, onEnd, receipt, receiptVisible, onReceiptClose, onReceiptOpen, onMaterialChat }: {
+export function PhonePreview({ children, subtitle, activity, running, microphone, callOpen, callStartedAt, status, mode, startDisabled, onStart, speakerEnabled, onSpeakerToggle, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
   onMaterialChat: (item: Material) => void;
-  receipt: SessionReceipt | null; receiptVisible: boolean; onReceiptClose: () => void; onReceiptOpen: () => void;
+  receipt: SessionReceipt | null; receiptVisible: boolean; onReceiptClose: () => void;
   children: ReactNode; subtitle: string; activity: FoxActivity; running: boolean; microphone?: ReactNode;
   callOpen: boolean; callStartedAt: number | null; status: string; mode: 'conversation' | 'attachment' | 'editor';
   startDisabled: boolean; onStart: () => void; speakerEnabled: boolean; onSpeakerToggle: () => void; onEnd: () => void;
@@ -93,10 +93,9 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
       {!callOpen ? <>
         {artwork}
         <section className={`phone-desk ${receiptVisible ? 'phone-desk--printing' : ''}`} inert={receiptVisible} aria-label="令狸的书桌">
-          <button type="button" className="phone-desk-entry phone-desk-entry--folder" onClick={() => setDrawer('folder')}><img src="/desk/folder.png" alt="" /><span>资料夹</span></button>
-          <button type="button" className="phone-desk-entry phone-desk-entry--call" disabled={startDisabled} onClick={onStart}><img src="/desk/phone.png" alt="" /><span>呼叫令狸</span></button>
-          <button type="button" className="phone-desk-entry phone-desk-entry--manuscripts" onClick={() => setDrawer('manuscripts')}><img src="/desk/manuscripts.png" alt="" /><span>文稿集</span></button>
-          {receipt && <button type="button" className="phone-last-receipt" onClick={onReceiptOpen}>上次聊天小票</button>}
+          <button type="button" className="phone-desk-entry phone-desk-entry--folder" aria-label="资料夹" onClick={() => setDrawer('folder')}><img src="/desk/folder.png" alt="" /></button>
+          <button type="button" className="phone-desk-entry phone-desk-entry--call" aria-label="呼叫令狸" disabled={startDisabled} onClick={onStart}><img src="/desk/phone.png" alt="" /></button>
+          <button type="button" className="phone-desk-entry phone-desk-entry--manuscripts" aria-label="文稿集" onClick={() => setDrawer('manuscripts')}><span className="phone-manuscript-art"><img src="/desk/manuscripts.png" alt="" /><img className="phone-manuscript-label" src="/desk/manuscripts-label.png" alt="" /></span></button>
         </section>
         {drawer && <div className="phone-desk-backdrop" onClick={() => setDrawer(null)}>
           <section className="phone-desk-drawer" role="dialog" aria-modal="true" aria-label={drawer === 'folder' ? '资料夹' : '文稿集'} onClick={event => event.stopPropagation()} onKeyDown={event => { if (event.key === 'Escape') setDrawer(null); }}>

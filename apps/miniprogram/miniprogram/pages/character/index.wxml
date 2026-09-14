@@ -42,17 +42,16 @@
   <view wx:if="{{!receiptVisible}}" class="desk-home">
     <button class="desk-entry desk-entry--folder" hover-class="desk-entry--pressed" bindtap="openFolder" aria-label="资料夹，查看你的资料">
       <image class="desk-entry__icon" src="/assets/desk/folder.png" mode="aspectFit" />
-      <view class="desk-entry__name">资料夹</view>
     </button>
     <button class="desk-entry desk-entry--call" hover-class="desk-entry--pressed" bindtap="callLingli" aria-label="呼叫令狸，开始聊天">
       <image class="desk-entry__icon" src="/assets/desk/phone.png" mode="aspectFit" />
-      <view class="desk-entry__name">呼叫令狸</view>
     </button>
     <button class="desk-entry desk-entry--manuscripts" hover-class="desk-entry--pressed" bindtap="openManuscripts" aria-label="文稿集，查看整理好的文稿">
-      <image class="desk-entry__icon" src="/assets/desk/manuscripts.png" mode="aspectFit" />
-      <view class="desk-entry__name">文稿集</view>
+      <view class="manuscript-art">
+        <image class="desk-entry__icon" src="/assets/desk/manuscripts.png" mode="aspectFit" />
+        <image class="manuscript-label" src="/assets/desk/manuscripts-label.png" mode="scaleToFill" />
+      </view>
     </button>
-    <button wx:if="{{receipt}}" class="last-receipt" bindtap="openReceipt">上次聊天小票</button>
   </view>
 </view>
 

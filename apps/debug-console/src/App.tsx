@@ -480,7 +480,7 @@ export function App() {
               startDisabled={busy} onStart={startVoice} speakerEnabled={speakerEnabled}
               onSpeakerToggle={() => { const enabled = !speakerEnabled; voiceRef.current?.setSpeaker(enabled); setSpeakerEnabled(enabled); }}
               onEnd={endCall}
-              receipt={receipt} receiptVisible={receiptVisible} onReceiptClose={() => setReceiptVisible(false)} onReceiptOpen={() => setReceiptVisible(true)}
+              receipt={receipt} receiptVisible={receiptVisible} onReceiptClose={() => setReceiptVisible(false)}
               microphone={<FeltMicrophone enabled={micEnabled} listening={micEnabled && micListening} level={micLevel}
                 replying={audioPlaying || (running && voiceStatus !== '正在听你说' && voiceStatus !== '正在申请麦克风权限' && voiceStatus !== '正在连接语音识别')}
                 disabled={!voiceEnabled && running} onToggle={() => {
