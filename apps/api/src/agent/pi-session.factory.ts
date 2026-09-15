@@ -2,6 +2,7 @@ import { MaterialsService } from '../materials/materials.service.js';
 import { MemoryService } from '../memory/memory.service.js';
 import { createMemoryTools } from '../memory/memory-tools.js';
 import { MEMORY_RULES, type MemoryScope } from '../memory/memory-types.js';
+import { CALL_HISTORY_RULES } from '../memory/call-history.js';
 import { Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DefaultResourceLoader, SessionManager, SettingsManager, createAgentSession } from '@earendil-works/pi-coding-agent';
@@ -45,7 +46,7 @@ export class PiSessionFactory {
     const resourceLoader = new DefaultResourceLoader({
       cwd, agentDir: cwd, settingsManager,
       noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
-      systemPromptOverride: () => buildSystemPrompt(persona) + (memoryContext ? `\n${MEMORY_RULES}\n${memoryContext}` : ''),
+      systemPromptOverride: () => buildSystemPrompt(persona) + (memoryContext ? `\n${MEMORY_RULES}\n${CALL_HISTORY_RULES}\n${memoryContext}` : ''),
       extensionFactories: [createContextExtension(() => buildRuntimeContext(context, workspace.context()))],
     });
     await resourceLoader.reload();

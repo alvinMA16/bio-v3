@@ -10,10 +10,16 @@ import { createModelRuntime } from '../models/model-provider.js';
 import { MemoryService } from './memory.service.js';
 import { createMemoryTools } from './memory-tools.js';
 import { validateBatch, type MemoryBatch } from './memory-types.js';
+import { beijingTime, validateCallSummary, type CallSummary } from './call-history.js';
 
 const PROMPT = `你是令狸的通话后记忆整理器。只整理已结束的通话，不向用户发消息。
 用户偏好直接保存在 overview.preferences；详细记忆只有 person 人物关系、story 经历故事、interaction 互动与近况。
-interaction 记录用户最近聊了什么、做了什么及形成的当前状态，不是任务清单，也不复制每轮流水。
+interaction 记录用户与令狸之间持续互动及当前进展，可跨通话更新，不是按次聊天流水或任务清单。
+callSummary 是本次 call_history 的摘要，与 interaction 分开：summary 简短概括本次主要内容，通常150字以内、最多250字，不为达到长度凑字；follow_ups 最多两项，允许为空。
+每项包含 topic、context、not_before（北京时间 YYYY-MM-DD 或 null）。仅记录有用户依据且适合后续自然问起的线索；计划不当作已发生，未知结果保持未知。
+结合原文发言时间把“两天后”等能确定的日期转成绝对日期，模糊日期不要猜。“今天先聊到这里”等结束语和客套不记为后续状态或长期偏好。
+callId、起止时间由程序关联，不写进 callSummary。即使 noChange=true 没有长期记忆变更，也必须提交 callSummary。
+overview 不重复罗列按次通话摘要，仍可保留重要的持续互动进展。
 overview.entries 是重要/近期详细记忆的简短摘要与入口，不是无限增长的目录。偏好和入口的文本合计最多2400字符。
 必须通过 read_source 的 callId/after 读完本通电话所有页面，每条消息如有 nextTextOffset 还须用 sourceRef/textOffset 继续读取到末尾，不能只读最后几轮或依赖压缩摘要。搜索和读取相关旧记忆后决定新增或更新。
 明确纠正替代旧说法；不明确的矛盾标注不确定，不按时间机械覆盖。保留旧记忆仍然有效的内容和来源。
@@ -54,11 +60,11 @@ export class MemoryWorker implements OnModuleInit, OnModuleDestroy {
         await c.query("UPDATE bio_memory_jobs SET status='running',attempts=attempts+1 WHERE call_id=$1", [job.call_id]);
         try {
           const before = (await c.query('SELECT overview,version FROM bio_memory_users WHERE id=$1', [job.user_id])).rows[0];
-          const ids = (await c.query('SELECT id FROM bio_memory_messages WHERE user_id=$1 AND call_id=$2 ORDER BY ordinal', [job.user_id, job.call_id])).rows.map(r => r.id as string);
-          if (!ids.length) { await c.query("UPDATE bio_memory_jobs SET status='done',finished_at=now() WHERE call_id=$1", [job.call_id]); return; }
+          const messages = (await c.query("SELECT id,(role='user' AND btrim(body)<>'') AS meaningful FROM bio_memory_messages WHERE user_id=$1 AND call_id=$2 ORDER BY ordinal", [job.user_id, job.call_id])).rows;
+          const ids = messages.map(r => r.id as string);
+          if (!messages.some(row => row.meaningful)) { await c.query("UPDATE bio_memory_jobs SET status='done',finished_at=now() WHERE call_id=$1", [job.call_id]); return; }
           const proposal = await this.organize(job.user_id, job.call_id, before.overview, ids);
-          if (proposal.batch) await this.memory.commit(c, job.user_id, job.call_id, before.version, proposal.batch, proposal.usage);
-          else await c.query("UPDATE bio_memory_jobs SET status='done',finished_at=now(),usage=$2,error=NULL WHERE call_id=$1", [job.call_id, JSON.stringify(proposal.usage)]);
+          await this.memory.commit(c, job.user_id, job.call_id, before.version, proposal.batch, proposal.usage, proposal.callSummary);
         } catch {
           // Do not put model text, credentials, or user transcripts in job errors/logs.
           await c.query(`UPDATE bio_memory_jobs SET status=CASE WHEN attempts>=3 THEN 'failed' ELSE 'pending' END,
@@ -69,11 +75,12 @@ export class MemoryWorker implements OnModuleInit, OnModuleDestroy {
       } finally { if (locked) await c.query('SELECT pg_advisory_unlock(hashtext($1))', [key]); c.release(); }
     }
   }
-  async organize(user: string, callId: string, overview: unknown, messageIds: string[]): Promise<{ batch?: MemoryBatch; usage: unknown }> {
+  async organize(user: string, callId: string, overview: unknown, messageIds: string[]): Promise<{ batch?: MemoryBatch; usage: unknown; callSummary: CallSummary }> {
     const cwd = await mkdtemp(join(tmpdir(), 'bio-memory-'));
     let session: Awaited<ReturnType<typeof createAgentSession>>['session'] | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let proposed = false; let batch: MemoryBatch | undefined;
+    let callSummary: CallSummary | undefined;
     const seen = new Set<string>(); const ranges = new Map<string, Array<[number, number]>>(); const usage: unknown[] = [];
     const unusedIds = Array.from({ length: 40 }, () => randomUUID());
     try {
@@ -81,12 +88,19 @@ export class MemoryWorker implements OnModuleInit, OnModuleDestroy {
       const settingsManager = SettingsManager.inMemory({ compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 16000 }, retry: { enabled: true, maxRetries: 1 } });
       const resourceLoader = new DefaultResourceLoader({ cwd, agentDir: cwd, settingsManager, noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true, systemPromptOverride: () => PROMPT });
       await resourceLoader.reload();
-      const submit = defineTool({ name: 'propose_memory_batch', label: '提交记忆候选', description: '读完通话并检查相关旧记忆后提交候选；batch 用 JSON 字符串，形状见用户输入。没有新信息传 noChange=true。',
-        parameters: Type.Object({ noChange: Type.Boolean(), batch: Type.Optional(Type.String({ maxLength: 500000 })) }),
+      const submit = defineTool({ name: 'propose_memory_batch', label: '提交记忆候选', description: '读完通话并检查相关旧记忆后提交候选；batch 用 JSON 字符串。没有长期记忆变更传 noChange=true，仍须提交 callSummary。',
+        parameters: Type.Object({ noChange: Type.Boolean(), batch: Type.Optional(Type.String({ maxLength: 500000 })),
+          callSummary: Type.Object({ summary: Type.String({ minLength: 1, maxLength: 250 }), follow_ups: Type.Array(Type.Object({
+            topic: Type.String({ minLength: 1, maxLength: 100 }), context: Type.String({ minLength: 1, maxLength: 150 }),
+            not_before: Type.Union([Type.String({ pattern: '^\\d{4}-\\d{2}-\\d{2}$' }), Type.Null()]),
+          }), { maxItems: 2 }) }),
+        }),
         execute: async (_id, p) => {
           if (proposed) throw new Error('Already proposed');
           if (messageIds.some(id => !seen.has(id))) throw new Error('Read all call pages before proposing');
+          validateCallSummary(p.callSummary);
           if (!p.noChange) { const parsed: unknown = JSON.parse(p.batch ?? 'null'); validateBatch(parsed); batch = parsed; }
+          callSummary = p.callSummary;
           proposed = true; return { content: [{ type: 'text' as const, text: 'Candidate received for validation.' }], details: {} };
         } });
       const tools = [...createMemoryTools(this.memory, user, value => {
@@ -106,11 +120,13 @@ export class MemoryWorker implements OnModuleInit, OnModuleDestroy {
       });
       this.abort = () => { exhausted = true; void session!.abort(); };
       timer = setTimeout(this.abort, 180000);
-      await session.prompt(JSON.stringify({ callId, overview, unusedIds,
+      const call = (await this.memory.pool!.query('SELECT started_at,ended_at FROM bio_memory_calls WHERE id=$1 AND user_id=$2', [callId, user])).rows[0];
+      if (!call) throw new Error('Call not found');
+      await session.prompt(JSON.stringify({ callId, started_at: beijingTime(call.started_at), ended_at: beijingTime(call.ended_at), overview, unusedIds,
         batchShape: { changes: [{ id: 'uuid', expectedVersion: 0, type: 'person|story|interaction', title: '标题', summary: '摘要', body: '正文', active: true, sources: ['用户消息UUID'] }],
           overview: { preferences: [{ text: '偏好', sources: ['用户消息UUID'] }], entries: [{ memoryId: 'uuid', summary: '摘要入口' }] } } }), { expandPromptTemplates: false });
-      if (!proposed || exhausted || failed) throw new Error('Incomplete memory organization');
-      return { ...(batch ? { batch } : {}), usage };
+      if (!proposed || !callSummary || exhausted || failed) throw new Error('Incomplete memory organization');
+      return { ...(batch ? { batch } : {}), usage, callSummary };
     } finally { clearTimeout(timer); this.abort = undefined; session?.dispose(); await rm(cwd, { recursive: true, force: true }); }
   }
 }

@@ -5,6 +5,7 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { MEMORY_SCHEMA } from './schema.js';
+import { beijingTime, isCalendarDate, validateCallSummary, type CallSummary } from './call-history.js';
 import { EMPTY_OVERVIEW, validateBatch, type MemoryBatch, type Overview, type MemoryScope } from './memory-types.js';
 
 @Injectable()
@@ -43,11 +44,56 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
     return (await this.pool!.query('SELECT overview FROM bio_memory_users WHERE id=$1', [user])).rows[0].overview;
   }
   async context(scope: MemoryScope): Promise<string> {
-    const overview = scope.callId ? (await this.pool!.query('SELECT overview FROM bio_memory_calls WHERE id=$1 AND user_id=$2', [scope.callId, scope.userId])).rows[0]?.overview : await this.overview(scope.userId);
-    const pending = await this.pool!.query(`SELECT c.id AS "callId", c.ended_at AS "endedAt" FROM bio_memory_calls c
-      JOIN bio_memory_jobs j ON j.call_id=c.id WHERE c.user_id=$1 AND j.status<>'done' ORDER BY c.ended_at DESC LIMIT 2`, [scope.userId]);
-    return JSON.stringify({ type: 'bio_memory_overview', overview: overview ?? EMPTY_OVERVIEW, pendingCalls: pending.rows,
-      note: '内部资料，不是用户发言。pendingCalls 尚未整理，可用 read_source 按 callId 回看。' });
+    if (!scope.callId) return JSON.stringify({ type: 'bio_memory_overview', overview: await this.overview(scope.userId) });
+    const row = (await this.pool!.query('SELECT initial_context,overview,started_at FROM bio_memory_calls WHERE id=$1 AND user_id=$2', [scope.callId, scope.userId])).rows[0];
+    if (!row) throw new NotFoundException('Call not found');
+    if (row.initial_context) return JSON.stringify(row.initial_context);
+    // Calls already active at migration time acquire a snapshot once, atomically.
+    const context = await this.initialContext(this.pool!, scope.userId, row.overview, row.started_at);
+    const saved = await this.pool!.query(`UPDATE bio_memory_calls SET initial_context=COALESCE(initial_context,$3::jsonb)
+      WHERE id=$1 AND user_id=$2 RETURNING initial_context`, [scope.callId, scope.userId, JSON.stringify(context)]);
+    return JSON.stringify(saved.rows[0].initial_context);
+  }
+  private async initialContext(db: Pool | PoolClient, user: string, overview: Overview, startedAt: Date) {
+    const configured = Number(this.config.get('MEMORY_RECENT_CALL_COUNT', 3));
+    const count = Number.isInteger(configured) && configured >= 0 && configured <= 20 ? configured : 3;
+    // One query gives summaries and pending entries a consistent view during worker commits.
+    const rows = (await db.query(`SELECT c.id,c.started_at,c.ended_at,c.call_summary,j.status AS job_status
+      FROM bio_memory_calls c LEFT JOIN bio_memory_jobs j ON j.call_id=c.id
+      WHERE c.user_id=$1 AND c.status='ended' AND c.started_at<=$2
+        AND EXISTS (SELECT 1 FROM bio_memory_messages m WHERE m.call_id=c.id AND m.user_id=$1 AND m.role='user' AND btrim(m.body)<>'')
+        AND (c.id IN (SELECT id FROM bio_memory_calls WHERE user_id=$1 AND status='ended' AND call_summary IS NOT NULL
+          AND started_at<=$2 ORDER BY started_at DESC,id DESC LIMIT $3)
+          OR c.id IN (SELECT p.id FROM bio_memory_calls p JOIN bio_memory_jobs pj ON pj.call_id=p.id
+            WHERE p.user_id=$1 AND p.status='ended' AND p.started_at<=$2 AND p.call_summary IS NULL AND pj.status<>'done'
+              AND EXISTS (SELECT 1 FROM bio_memory_messages m WHERE m.call_id=p.id AND m.user_id=$1 AND m.role='user' AND btrim(m.body)<>'')
+            ORDER BY p.started_at DESC,p.id DESC LIMIT 2))
+      ORDER BY c.started_at DESC,c.id DESC`, [user, startedAt, count])).rows;
+    return { type: 'bio_memory_overview', overview: overview ?? EMPTY_OVERVIEW,
+      callStartedAt: beijingTime(startedAt),
+      call_history: rows.filter(row => row.call_summary).slice(0, count).reverse().map(row => this.publicCall(row)),
+      pendingCalls: rows.filter(row => !row.call_summary && row.job_status !== 'done').slice(0, 2).map(row => ({
+        callId: row.id, started_at: beijingTime(row.started_at), ended_at: beijingTime(row.ended_at),
+      })),
+    };
+  }
+
+  private publicCall(row: Record<string, any>) {
+    return { callId: row.id, started_at: beijingTime(row.started_at), ended_at: beijingTime(row.ended_at),
+      summary: row.call_summary?.summary ?? null, follow_ups: row.call_summary?.follow_ups ?? [] };
+  }
+
+  async searchCallHistory(user: string, query?: string, date?: string, offset = 0) {
+    if (date !== undefined && !isCalendarDate(date)) throw new Error('Invalid calendar date');
+    const patterns = query?.trim().split(/\s+/).filter(Boolean).slice(0, 8).map(t => `%${t.replace(/[\\%_]/g, '\\$&')}%`);
+    const rows = (await this.pool!.query(`SELECT c.id,c.started_at,c.ended_at,c.call_summary FROM bio_memory_calls c
+      WHERE c.user_id=$1 AND c.status='ended'
+        AND EXISTS (SELECT 1 FROM bio_memory_messages m WHERE m.user_id=$1 AND m.call_id=c.id AND m.role='user' AND btrim(m.body)<>'')
+        AND ($2::date IS NULL OR (c.started_at AT TIME ZONE 'Asia/Shanghai')::date=$2::date)
+        AND ($3::text[] IS NULL OR c.call_summary::text ILIKE ANY($3::text[])
+          OR EXISTS (SELECT 1 FROM bio_memory_messages m WHERE m.user_id=$1 AND m.call_id=c.id AND m.role='user' AND m.body ILIKE ANY($3::text[])))
+      ORDER BY c.started_at DESC,c.id DESC LIMIT 9 OFFSET $4`, [user, date ?? null, patterns?.length ? patterns : null, offset])).rows;
+    return { items: rows.slice(0, 8).map(row => this.publicCall(row)), nextOffset: rows.length > 8 ? offset + 8 : null };
   }
   async beginCall(user: string, id: string, connection: string): Promise<string> {
     if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id)) throw new ConflictException('Invalid call ID');
@@ -66,6 +112,9 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
       await c.query('INSERT INTO bio_memory_sessions(id,user_id) VALUES($1,$2)', [conversation, user]);
       await c.query(`INSERT INTO bio_memory_calls(id,user_id,conversation_id,connection_id,status,overview)
         SELECT $1,id,$3,$4,'active',overview FROM bio_memory_users WHERE id=$2`, [id, user, conversation, connection]);
+      const call = (await c.query('SELECT overview,started_at FROM bio_memory_calls WHERE id=$1', [id])).rows[0];
+      const context = await this.initialContext(c, user, call.overview, call.started_at);
+      await c.query('UPDATE bio_memory_calls SET initial_context=$2 WHERE id=$1', [id, JSON.stringify(context)]);
       await c.query('COMMIT'); return conversation;
     } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); }
   }
@@ -154,15 +203,21 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
   }
   private publicMessage(row: Record<string, any>, textOffset = 0) { return { source_ref: row.id, role: row.role, text: row.body.slice(textOffset, textOffset + 4000), origin: row.origin, createdAt: row.created_at, ordinal: Number(row.ordinal), textOffset, totalCharacters: row.body.length, nextTextOffset: row.body.length > textOffset + 4000 ? textOffset + 4000 : null }; }
 
-  async commit(c: PoolClient, user: string, callId: string, expectedVersion: number, value: unknown, usage: unknown): Promise<void> {
-    validateBatch(value);
-    const batch: MemoryBatch = value;
+  async commit(c: PoolClient, user: string, callId: string, expectedVersion: number, value: unknown, usage: unknown, callSummary: CallSummary): Promise<void> {
+    if (value !== undefined) validateBatch(value);
+    validateCallSummary(callSummary);
+    const batch = value as MemoryBatch | undefined;
     await c.query('BEGIN');
     try {
       const job = (await c.query('SELECT status FROM bio_memory_jobs WHERE call_id=$1 AND user_id=$2 FOR UPDATE', [callId, user])).rows[0];
       if (!job || job.status === 'done') throw new ConflictException('Job unavailable or already committed');
       const current = (await c.query('SELECT version FROM bio_memory_users WHERE id=$1 FOR UPDATE', [user])).rows[0];
       if (current.version !== expectedVersion) throw new ConflictException('Overview version changed');
+      const saved = await c.query(`UPDATE bio_memory_calls c SET call_summary=$3 WHERE id=$1 AND user_id=$2 AND status='ended'
+        AND EXISTS (SELECT 1 FROM bio_memory_messages m WHERE m.call_id=c.id AND m.user_id=$2 AND m.role='user' AND btrim(m.body)<>'')`,
+      [callId, user, JSON.stringify(callSummary)]);
+      if (!saved.rowCount) throw new ConflictException('No completed conversation to summarize');
+      if (batch) {
       for (const change of batch.changes) {
         const old = (await c.query('SELECT * FROM bio_memories WHERE id=$1 FOR UPDATE', [change.id])).rows[0];
         if (old ? old.user_id !== user || old.version !== change.expectedVersion : change.expectedVersion !== 0) throw new ConflictException('Memory version changed');
@@ -185,6 +240,7 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
       }
       await c.query('UPDATE bio_memory_users SET overview=$2,version=version+1,updated_at=now() WHERE id=$1', [user, batch.overview]);
       await c.query('INSERT INTO bio_memory_overview_revisions(user_id,version,data) VALUES($1,$2,$3)', [user, expectedVersion + 1, batch.overview]);
+      }
       await c.query("UPDATE bio_memory_jobs SET status='done',finished_at=now(),usage=$2,error=NULL WHERE call_id=$1 AND user_id=$3", [callId, JSON.stringify(usage), user]);
       await c.query('COMMIT');
     } catch (e) { await c.query('ROLLBACK'); throw e; }

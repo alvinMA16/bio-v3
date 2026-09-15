@@ -7,6 +7,11 @@ const offset = Type.Optional(Type.Integer({ minimum: 0, maximum: 100000000 }));
 export function createMemoryTools(memory: MemoryService, user: string, onSource?: (value: any) => void) {
   const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }], details: {} });
   return [
+    defineTool({ name: 'search_call_history', label: '查找通话历史',
+      description: '查找当前用户已结束的通话，返回时间、简短摘要和用于 read_source 的 callId。date 按北京时间 YYYY-MM-DD 匹配通话开始日期，query 可选关键词；均省略时按最近排序。摘要为 null 表示尚无摘要，仍可读取原文。nextOffset 非空时继续翻页。内部 ID 不对用户展示。',
+      parameters: Type.Object({ query: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })), date: Type.Optional(Type.String({ pattern: '^\\d{4}-\\d{2}-\\d{2}$' })), offset }),
+      execute: async (_id, p, signal) => { signal?.throwIfAborted(); return result(await memory.searchCallHistory(user, p.query, p.date, p.offset)); },
+    }),
     defineTool({ name: 'search_memory', label: '查找记忆',
       description: '按人物、事件、主题查找当前用户的详细记忆，返回简短摘要和内部读取 ID；空结果不代表从未讲过。概要足够时不用调用。中文可尝试更短的人名或关键词。',
       parameters: Type.Object({ query: Type.String({ minLength: 1, maxLength: 200 }), type: Type.Optional(Type.Union(['person', 'story', 'interaction'].map(value => Type.Literal(value)))), offset }),

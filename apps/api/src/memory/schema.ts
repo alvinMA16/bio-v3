@@ -1,4 +1,4 @@
-/** Version 1, additive and idempotent. Applied under a PostgreSQL advisory lock. */
+/** Additive, idempotent migrations applied under a PostgreSQL advisory lock. */
 export const MEMORY_SCHEMA = `
 CREATE TABLE IF NOT EXISTS bio_memory_users (
  id text PRIMARY KEY, overview jsonb NOT NULL DEFAULT '{"preferences":[],"entries":[]}',
@@ -49,4 +49,8 @@ CREATE TABLE IF NOT EXISTS bio_memory_jobs (
  error text, usage jsonb, created_at timestamptz NOT NULL DEFAULT now(), finished_at timestamptz
 );
 CREATE TABLE IF NOT EXISTS bio_memory_runs (id uuid PRIMARY KEY, user_id text NOT NULL REFERENCES bio_memory_users(id));
+ALTER TABLE bio_memory_calls ADD COLUMN IF NOT EXISTS call_summary jsonb;
+ALTER TABLE bio_memory_calls ADD COLUMN IF NOT EXISTS initial_context jsonb;
+CREATE INDEX IF NOT EXISTS bio_memory_calls_history ON bio_memory_calls(user_id, started_at DESC, id)
+ WHERE status='ended' AND call_summary IS NOT NULL;
 `;

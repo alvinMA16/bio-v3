@@ -15,6 +15,22 @@ import { createMemoryTools } from '../dist/memory/memory-tools.js';
 import { PiSessionFactory } from '../dist/agent/pi-session.factory.js';
 import { AgentStorage } from '../dist/agent/agent-storage.js';
 import { AgentService } from '../dist/agent/agent.service.js';
+import { validateCallSummary, beijingTime } from '../dist/memory/call-history.js';
+
+const callSummary = { summary: '用户聊了父亲送站的经历，希望整理时保留口语。', follow_ups: [] };
+
+test('call summaries reject fabricated metadata, unbounded text and invalid dates', () => {
+  validateCallSummary(callSummary);
+  validateCallSummary({ summary: '短通话', follow_ups: [{ topic: '回老家', context: '计划，未确认成行', not_before: '2026-09-17' }] });
+  assert.throws(() => validateCallSummary({ ...callSummary, callId: 'invented' }));
+  assert.throws(() => validateCallSummary({ ...callSummary, summary: '字'.repeat(251) }));
+  assert.throws(() => validateCallSummary({ ...callSummary, summary: '  ' }));
+  for (const date of ['2026-02-30', '两天后', '2026-13-01']) {
+    assert.throws(() => validateCallSummary({ ...callSummary, follow_ups: [{ topic: '计划', context: '未知', not_before: date }] }));
+  }
+  assert.throws(() => validateCallSummary({ ...callSummary, follow_ups: Array.from({ length: 3 }, () => ({ topic: '计划', context: '未知', not_before: null })) }));
+  assert.equal(beijingTime('2026-09-16T17:00:00Z'), '2026-09-17T01:00:00.000+08:00');
+});
 
 test('memory has exactly three detailed types; preferences live in a bounded overview', () => {
   const id = randomUUID();
@@ -70,11 +86,12 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
     await t.test('atomic commit rejects hallucinated sources and invalid overview without partial writes', async () => {
       const c = await memory.pool.connect();
       try {
-        await assert.rejects(memory.commit(c, user, call, 0, { ...batch, overview: { ...batch.overview, entries: [{ memoryId: randomUUID(), summary: '不存在' }] } }, {}));
+        await assert.rejects(memory.commit(c, user, call, 0, { ...batch, overview: { ...batch.overview, entries: [{ memoryId: randomUUID(), summary: '不存在' }] } }, {}, callSummary));
+        assert.equal((await memory.pool.query('SELECT call_summary FROM bio_memory_calls WHERE id=$1', [call])).rows[0].call_summary, null);
         assert.equal((await memory.search(user, '父亲')).items.length, 0);
-        await assert.rejects(memory.commit(c, user, call, 0, { ...batch, changes: [{ ...batch.changes[0], sources: [randomUUID()] }] }, {}));
-        await memory.commit(c, user, call, 0, batch, {});
-        await assert.rejects(memory.commit(c, user, call, 0, batch, {}));
+        await assert.rejects(memory.commit(c, user, call, 0, { ...batch, changes: [{ ...batch.changes[0], sources: [randomUUID()] }] }, {}, callSummary));
+        await memory.commit(c, user, call, 0, batch, {}, callSummary);
+        await assert.rejects(memory.commit(c, user, call, 0, batch, {}, callSummary));
       } finally { c.release(); }
     });
     await t.test('Chinese retrieval and original-source reads are bounded to the owner', async () => {
@@ -87,7 +104,7 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
       assert.equal((await memory.read(user, memId)).sources[0].source_ref, message);
       assert.match((await memory.source(user, message)).messages[0].text, /一九九八/);
       const tools = createMemoryTools(memory, user);
-      assert.deepEqual(tools.map(t => t.name), ['search_memory', 'read_memory', 'read_source']);
+      assert.deepEqual(tools.map(t => t.name), ['search_call_history', 'search_memory', 'read_memory', 'read_source']);
       assert.equal(tools.some(t => /write|update/.test(t.name)), false);
     });
     await t.test('correction creates a new revision and leaves the original source available', async () => {
@@ -97,7 +114,7 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
       await memory.disconnectCall(user, correctionCall, 'correction', true);
       const updated = structuredClone(batch); updated.changes[0].expectedVersion = 1;
       updated.changes[0].summary = '1999年父亲送站'; updated.changes[0].body = '用户明确纠正为1999年。'; updated.changes[0].sources.push(corrected);
-      const c = await memory.pool.connect(); try { await memory.commit(c, user, correctionCall, 1, updated, {}); } finally { c.release(); }
+      const c = await memory.pool.connect(); try { await memory.commit(c, user, correctionCall, 1, updated, {}, { summary: '用户纠正父亲送站年份为1999年。', follow_ups: [] }); } finally { c.release(); }
       assert.equal((await memory.read(user, memId)).version, 2);
       assert.match((await memory.read(user, memId)).body, /1999/);
       assert.equal((await memory.pool.query('SELECT * FROM bio_memory_revisions WHERE memory_id=$1', [memId])).rowCount, 2);
@@ -120,13 +137,14 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
       let raw = ''; for await (const chunk of req) raw += chunk; const input = JSON.parse(raw); requests.push(input);
       const toolMessages = input.messages.filter(m => m.role === 'tool');
       let tool; let text = '我记得你喜欢保留口语。';
-      if (mode === 'worker') {
+      if (mode === 'worker' || mode === 'noChange') {
         const initial = input.messages.find(m => m.role === 'user');
         const task = JSON.parse(typeof initial.content === 'string' ? initial.content : initial.content[0].text);
         if (!toolMessages.length) tool = { name: 'read_source', args: { callId: task.callId } };
         else if (toolMessages.length === 1) {
           const newSource = JSON.parse(toolMessages[0].content).messages.find(m => m.role === 'user').source_ref;
-          tool = { name: 'propose_memory_batch', args: { noChange: false, batch: JSON.stringify({ changes: [{ id: task.unusedIds[0], expectedVersion: 0, type: 'interaction', title: '最近聊到父亲', summary: '聊了父亲', body: '本次用户聊到父亲。', active: true, sources: [newSource] }], overview: task.overview }) } };
+          tool = { name: 'propose_memory_batch', args: { noChange: false, callSummary, batch: JSON.stringify({ changes: [{ id: task.unusedIds[0], expectedVersion: 0, type: 'interaction', title: '最近聊到父亲', summary: '聊了父亲', body: '本次用户聊到父亲。', active: true, sources: [newSource] }], overview: task.overview }) } };
+          if (mode === 'noChange') tool.args = { noChange: true, callSummary };
         } else text = '候选已提交。';
       } else if (!toolMessages.length) tool = { name: 'read_memory', args: { memoryId: memId } };
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
@@ -155,10 +173,84 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
       await worker.tick();
       const job = (await memory.pool.query('SELECT * FROM bio_memory_jobs WHERE call_id=$1', [`agent-${prefix}`])).rows[0];
       assert.equal(job.status, 'done');
+      assert.deepEqual((await memory.pool.query('SELECT call_summary FROM bio_memory_calls WHERE id=$1', [`agent-${prefix}`])).rows[0].call_summary, callSummary);
       assert.equal((await memory.search(user, '最近聊到父亲', 'interaction')).items.length, 1);
       assert.ok(requests.length >= 3);
       await worker.tick();
       assert.equal((await memory.search(user, '最近聊到父亲', 'interaction')).items.length, 1);
+    });
+    await t.test('noChange still produces history; pending snapshots survive completion and reconnect', async () => {
+      mode = 'noChange';
+      const pending = `pending-${prefix}`; const conv = await memory.beginCall(user, pending, 'pending');
+      await memory.archive({ userId: user, callId: pending }, conv, randomUUID(), randomUUID(), 'user', '今天就聊到这里吧。');
+      await memory.disconnectCall(user, pending, 'pending', true);
+      const next = `next-${prefix}`; const nextConv = await memory.beginCall(user, next, 'next');
+      const nextScope = { userId: user, callId: next };
+      const before = await memory.context(nextScope);
+      assert.ok(JSON.parse(before).pendingCalls.some(item => item.callId === pending));
+      const overviewBefore = await memory.overview(user);
+      await new MemoryWorker(memory, config).tick();
+      assert.deepEqual(await memory.overview(user), overviewBefore);
+      assert.deepEqual((await memory.pool.query('SELECT call_summary FROM bio_memory_calls WHERE id=$1', [pending])).rows[0].call_summary, callSummary);
+      assert.equal(await memory.context(nextScope), before);
+      await memory.disconnectCall(user, next, 'next', false);
+      assert.equal(await memory.beginCall(user, next, 'resumed'), nextConv);
+      assert.equal(await memory.context(nextScope), before);
+      await assert.rejects(memory.context({ userId: other, callId: next }));
+      await memory.disconnectCall(user, next, 'resumed', true);
+      const emptyWorker = new MemoryWorker(memory, config);
+      emptyWorker.organize = async () => { throw new Error('Empty calls must not invoke a model'); };
+      await emptyWorker.tick();
+      assert.equal((await memory.pool.query('SELECT status FROM bio_memory_jobs WHERE call_id=$1', [next])).rows[0].status, 'done');
+      assert.equal((await memory.searchCallHistory(user)).items.some(item => item.callId === next), false);
+    });
+    await t.test('history uses call time, supports Beijing dates, paginates, and never exposes another owner', async () => {
+      const calls = [];
+      const version = (await memory.pool.query('SELECT version FROM bio_memory_users WHERE id=$1', [user])).rows[0].version;
+      for (let i = 0; i < 10; i++) {
+        const id = `history-${i}-${prefix}`; calls.push(id);
+        const conv = await memory.beginCall(user, id, id);
+        await memory.archive({ userId: user, callId: id }, conv, randomUUID(), randomUUID(), 'user', i === 8 ? '改期了，取消之前的计划。' : '计划回老家。');
+        await memory.disconnectCall(user, id, id, true);
+        await memory.pool.query('UPDATE bio_memory_calls SET started_at=$2,ended_at=$2::timestamptz+interval \'20 minutes\' WHERE id=$1', [id, `2026-01-${String(i + 1).padStart(2, '0')}T17:00:00Z`]);
+      }
+      // Complete in reverse order: retrieval must use call time, not completion time.
+      for (const id of [...calls].reverse()) {
+        const c = await memory.pool.connect();
+        try { await memory.commit(c, user, id, version, undefined, {}, callSummary); } finally { c.release(); }
+      }
+      const first = await memory.searchCallHistory(user, '计划');
+      assert.equal(first.items.length, 8); assert.equal(first.nextOffset, 8);
+      assert.deepEqual(first.items.map(item => item.callId), [...calls].reverse().slice(0, 8));
+      const second = await memory.searchCallHistory(user, '计划', undefined, first.nextOffset);
+      assert.equal(second.items.length, 2); assert.equal(second.nextOffset, null);
+      const dated = await memory.searchCallHistory(user, undefined, '2026-01-10');
+      assert.equal(dated.items[0].callId, calls[8]);
+      assert.match(dated.items[0].started_at, /^2026-01-10T01:00/);
+      assert.equal((await memory.searchCallHistory(other, '计划')).items.length, 0);
+      assert.equal((await memory.searchCallHistory(user, '%')).items.length, 0);
+      await assert.rejects(memory.searchCallHistory(user, undefined, '2026-02-30'));
+      const tool = createMemoryTools(memory, user).find(tool => tool.name === 'search_call_history');
+      const result = JSON.parse((await tool.execute('test', { date: '2026-01-10' })).content[0].text);
+      const source = await memory.source(user, undefined, result.items[0].callId);
+      assert.match(source.messages[0].text, /取消/);
+      assert.equal(JSON.stringify(result).includes(user), false);
+      await assert.rejects(memory.source(other, undefined, result.items[0].callId));
+
+      const recent = (await memory.searchCallHistory(user)).items.slice(0, 3).reverse();
+      const initialCall = `initial-${prefix}`;
+      await memory.beginCall(user, initialCall, 'initial');
+      const context = JSON.parse(await memory.context({ userId: user, callId: initialCall }));
+      assert.deepEqual(context.call_history, recent);
+      assert.match(context.callStartedAt, /\+08:00$/);
+      config.set('MEMORY_RECENT_CALL_COUNT', 1);
+      const one = `one-${prefix}`; await memory.beginCall(user, one, 'one');
+      assert.equal(JSON.parse(await memory.context({ userId: user, callId: one })).call_history.length, 1);
+      assert.equal(JSON.parse(await memory.context({ userId: user, callId: initialCall })).call_history.length, 3);
+      config.set('MEMORY_RECENT_CALL_COUNT', 0);
+      const zero = `zero-${prefix}`; await memory.beginCall(user, zero, 'zero');
+      assert.deepEqual(JSON.parse(await memory.context({ userId: user, callId: zero })).call_history, []);
+      config.set('MEMORY_RECENT_CALL_COUNT', 3);
     });
     await t.test('long source messages and call pages expose explicit continuation without losing text', async () => {
       const longCall = `long-${prefix}`; const conv = await memory.beginCall(user, longCall, 'long');
