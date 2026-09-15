@@ -1,3 +1,4 @@
+import { MemoryInspector } from './memory-inspector';
 import { collectReceiptMessage, createReceipt, readReceipt, saveReceipt, type CallMessages } from './session-receipt';
 import { FeltMicrophone } from './felt-microphone';
 import { BrowserVoice } from './voice/browser-voice';
@@ -317,7 +318,7 @@ export function App() {
     try {
       const response = await fetch('/api/v1/agent/runs/stream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(sessionStorage.getItem('bio-auth-token') ? { Authorization: `Bearer ${sessionStorage.getItem('bio-auth-token')}` } : {}) },
         body: JSON.stringify(request),
         signal: controller.signal,
       });
@@ -557,6 +558,7 @@ export function App() {
             </div>
           </section>
         </div>
+        <MemoryInspector busy={busy} onIdentityChange={startNewConversation} />
         <details className="lab-settings">
           <summary><span>配置与上下文</span><small>模型 · 人物设定 · 场景 · 附件</small></summary>
           <div className="lab-config-grid">

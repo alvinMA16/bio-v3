@@ -34,11 +34,12 @@ export class BrowserVoice {
   private drained = false;
   private nextTime = 0;
   private conversationId?: string;
+  private callId = crypto.randomUUID();
   private micEnabled = true;
   private micGeneration = 0;
   private turnActive = false;
   private submitted = false;
-  private onVisibility = () => { if (document.hidden) this.close(); };
+  private onVisibility = () => { if (document.hidden) this.close(false); };
   constructor(private callbacks: Callbacks) {}
 
   async start(): Promise<void> {
@@ -68,7 +69,8 @@ export class BrowserVoice {
       this.muted = this.context.createGain(); this.muted.gain.value = 0;
       this.source?.connect(this.capture); this.capture.connect(this.muted); this.muted.connect(this.context.destination);
       const url = new URL('/api/v1/voice', location.href); url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = this.socket = new WebSocket(url);
+      const authToken = typeof sessionStorage === 'undefined' ? '' : sessionStorage.getItem('bio-auth-token');
+      const ws = this.socket = new WebSocket(url, authToken ? ['bio-voice', `bio-auth.${authToken}`] : []);
       this.capture.port.onmessage = event => {
         if (this.closed || ws.readyState !== WebSocket.OPEN) return;
         if (event.data?.type === 'flushed') {
@@ -110,7 +112,7 @@ export class BrowserVoice {
     const request = this.callbacks.request();
     if (this.conversationId) request.conversationId = this.conversationId;
     this.callbacks.start(this.turnId, request);
-    this.send({ type: 'listen', turnId: this.turnId, request });
+    this.send({ type: 'listen', turnId: this.turnId, callId: this.callId, request });
   }
   finish(): void {
     if (!this.listening || this.finishing) return;
@@ -132,7 +134,7 @@ export class BrowserVoice {
     if (event.type === 'audio') this.enqueue(event);
     this.callbacks.event(event);
     if (event.type === 'done') { this.drained = true; this.afterDrain(); }
-    if (event.type === 'error') this.close();
+    if (event.type === 'error') this.close(false);
   }
   async setMicrophone(enabled: boolean): Promise<void> {
     if (this.closed || this.micEnabled === enabled) return;
@@ -218,9 +220,10 @@ export class BrowserVoice {
   private send(message: VoiceClientMessage): void {
     if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message));
   }
-  private fail(message: string): void { if (!this.closed) { this.callbacks.error(message); this.close(); } }
-  close(): void {
+  private fail(message: string): void { if (!this.closed) { this.callbacks.error(message); this.close(false); } }
+  close(hangup = true): void {
     if (this.closed) return;
+    if (hangup) this.send({ type: 'hangup', turnId: this.turnId || 'hangup' });
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.closed = true; ++this.micGeneration; this.callbacks.microphone?.(false); this.setListening(false); this.stopAudio();
     this.capture?.disconnect(); this.source?.disconnect(); this.muted?.disconnect();

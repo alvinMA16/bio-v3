@@ -1,3 +1,4 @@
+import { MemoryModule } from './memory/memory.module.js';
 import { VoiceModule } from './voice/voice.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -11,6 +12,7 @@ import { HealthController } from './health/health.controller.js';
       isGlobal: true,
       envFilePath: ['.env', '../../.env'],
     }),
+    MemoryModule,
     ChatModule,
     VoiceModule,
   ],

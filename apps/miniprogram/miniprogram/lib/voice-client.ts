@@ -44,6 +44,7 @@ export class MiniVoiceClient {
   private drained = false;
   private nextTime = 0;
   private conversationId = '';
+  private callId = `call-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   private queuedBytes = 0;
   constructor(private baseUrl: string, private callbacks: {
     request: () => VoiceRequest; event: (event: VoiceServerMessage) => void;
@@ -59,7 +60,7 @@ export class MiniVoiceClient {
       this.audio = wx.createWebAudioContext();
       void this.audio.resume();
       recorderHandlers = { frame: this.onFrame, stop: this.onStop, error: this.onRecorderError };
-      this.socket = wx.connectSocket({ url: `${this.baseUrl.replace(/^http/, 'ws')}/voice`, fail: () => this.fail('无法连接语音服务。') });
+      this.socket = wx.connectSocket({ header: wx.getStorageSync('bio-auth-token') ? { Authorization: `Bearer ${wx.getStorageSync('bio-auth-token')}` } : {}, url: `${this.baseUrl.replace(/^http/, 'ws')}/voice`, fail: () => this.fail('无法连接语音服务。') });
       this.socket.onOpen(() => this.listen());
       this.socket.onMessage(({ data }) => {
         try { this.receive(JSON.parse(String(data)) as VoiceServerMessage); }
@@ -75,7 +76,7 @@ export class MiniVoiceClient {
     this.turnId = `voice-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const request = this.callbacks.request();
     if (this.conversationId) request.conversationId = this.conversationId;
-    this.send({ type: 'listen', turnId: this.turnId, request });
+    this.send({ type: 'listen', turnId: this.turnId, callId: this.callId, request });
   }
   private onFrame = ({ frameBuffer }: { frameBuffer: ArrayBuffer }): void => {
     if (this.closed || !this.recording) return;
@@ -161,9 +162,10 @@ export class MiniVoiceClient {
   private send(message: VoiceClientMessage): void {
     this.socket?.send({ data: JSON.stringify(message), fail: () => this.fail('语音请求发送失败。') });
   }
-  private fail(message: string): void { if (!this.closed) { this.callbacks.error(message); this.close(); } }
-  close(): void {
+  private fail(message: string): void { if (!this.closed) { this.callbacks.error(message); this.close(false); } }
+  close(hangup = true): void {
     if (this.closed) return;
+    if (hangup) this.send({ type: 'hangup', turnId: this.turnId || 'hangup' });
     this.closed = true; this.wantRecording = false; this.recording = false; stopRecorder();
     if (recorderHandlers?.frame === this.onFrame) recorderHandlers = undefined;
     this.stopAudio(); void this.audio?.close(); this.socket?.close({}); this.callbacks.ended();

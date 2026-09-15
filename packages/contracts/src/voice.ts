@@ -2,9 +2,10 @@ import type { AgentEvent, ChatCompletionRequest, ChatCompletionResponse } from '
 
 export type VoiceRequest = Omit<ChatCompletionRequest, 'message'>;
 export type VoiceClientMessage =
-  | { type: 'listen'; turnId: string; request: VoiceRequest }
+  | { type: 'listen'; turnId: string; callId?: string; request: VoiceRequest }
   | { type: 'finish'; turnId: string }
-  | { type: 'cancel'; turnId: string };
+  | { type: 'cancel'; turnId: string }
+  | { type: 'hangup'; turnId: string };
 export type VoiceState = 'connecting' | 'listening' | 'finalizing' | 'agent' | 'synthesizing';
 export type VoiceServerMessage = { turnId: string; elapsedMs: number } & (
   | { type: 'state'; state: VoiceState }

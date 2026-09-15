@@ -109,3 +109,7 @@ API 集成测试使用真实 Pi SDK 和本地模拟 OpenAI 兼容服务，不需
 接口：`GET/POST /api/v1/materials`、`GET/PUT/DELETE /api/v1/materials/:id`、`GET /api/v1/materials/:id/file`。上传使用 multipart 的 `file` 字段；编辑提交 `title`、`description`。聊天请求通过 `context.materialIds`（最多 10 个 UUID）引用服务端资料。删除原件不会删除既有会话中的附件快照。
 
 PDF 和 Word 提取正文；图片校验后生成识别用缩略图，不覆盖原件。配置 `MATERIAL_VISION_BASE_URL`、`MATERIAL_VISION_API_KEY`、`MATERIAL_VISION_MODEL` 后，图片及无文字的扫描 PDF 可调用兼容 OpenAI 的视觉模型识别。扫描 PDF 最多识别前 8 页；正文最多保留 10 万字，并显示截取提示。未配置识别服务或服务失败时保存原件并提示补充说明；可以删除后重新上传以再次识别。PDF 内嵌图片、混合扫描页与 DOCX 内嵌图片不单独识别。加密、损坏或格式不符的文件拒绝上传。
+
+## 通话长期记忆
+
+已增加可选 PostgreSQL 记忆：Overview 默认加载用户偏好与摘要入口，人物、故事、互动与近况通过工具读取；挂断后后台统一整理，保留消息来源和历史版本。调试台可查看概要与任务状态。配置、身份边界、恢复机制和测试见 [记忆实现说明](docs/memory.md)。未配置 `MEMORY_DATABASE_URL` 时保持原有本地开发模式。

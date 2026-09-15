@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { ConfigService } from '@nestjs/config';
 import type { AgentTraceEntry } from '@bio/contracts';
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -19,9 +20,9 @@ export class AgentStorage {
     if (!UUID.test(id)) throw new BadRequestException('Expected a UUID v4');
   }
 
-  conversationDirectory(id: string): string {
+  conversationDirectory(id: string, user?: string): string {
     this.assertId(id);
-    const directory = join(this.root, 'conversations', id);
+    const directory = user ? join(this.root, 'users', createHash('sha256').update(user).digest('hex'), 'conversations', id) : join(this.root, 'conversations', id);
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     return directory;
   }

@@ -8,6 +8,22 @@ const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.Scri
 const { BrowserVoice } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const flush = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
 
+test('one phone call keeps its callId across turns and only explicit close sends hangup', async t => {
+  const f = environment(t); await f.client.start(); f.sockets[0].onopen();
+  f.client.interrupt();
+  const listens = f.messages.map(JSON.parse).filter(m => m.type === 'listen');
+  assert.equal(listens.length, 2); assert.equal(listens[0].callId, listens[1].callId);
+  assert.notEqual(listens[0].turnId, listens[1].turnId);
+  f.client.close(); f.client.close();
+  assert.equal(f.messages.map(JSON.parse).filter(m => m.type === 'hangup').length, 1);
+});
+
+test('transport failure leaves call completion to the server grace period', async t => {
+  const f = environment(t); await f.client.start(); f.sockets[0].onopen();
+  f.sockets[0].onerror();
+  assert.equal(f.messages.map(JSON.parse).filter(m => m.type === 'hangup').length, 0);
+});
+
 function environment(t, pendingMic, moduleError) {
   const sockets = [], nodes = [], messages = [], events = [], starts = [], playback = [], captures = [], levels = [], gains = [];
   let stopped = 0, ended = 0;

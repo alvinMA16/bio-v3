@@ -225,7 +225,7 @@ test('deadline cancels the model request and persists the terminal state', async
 });
 
 test('missing credentials fail with a trace ID instead of a successful response', async () => {
-  const noKeyConfig = new ConfigService({ AGENT_DATA_DIR: root, DEEPSEEK_API_KEY: '' });
+  const noKeyConfig = new ConfigService({ AGENT_DATA_DIR: root, MODEL_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: '' });
   const noKeyService = new AgentService(new PiSessionFactory(noKeyConfig, storage, new MaterialsService(noKeyConfig)), storage, noKeyConfig);
   await assert.rejects(noKeyService.run({ message: 'hello' }), (error) => {
     const response = error.getResponse();

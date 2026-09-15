@@ -6,6 +6,7 @@ import { once } from 'node:events';
 import { ConfigService } from '@nestjs/config';
 import { WebSocket } from 'ws';
 import { VoiceGateway } from '../dist/voice/voice.gateway.js';
+import { randomUUID } from 'node:crypto';
 
 test('voice WebSocket accepts PCM, validates context, and passes the recognized turn into Agent', async t => {
   const server = createServer();
@@ -46,4 +47,33 @@ test('voice WebSocket accepts PCM, validates context, and passes the recognized 
   const bad = new WebSocket(url); await once(bad, 'open');
   bad.send(JSON.stringify({ type: 'listen', turnId: 'bad', request: { context: { scene: 'invented' } } }));
   const [code] = await once(bad, 'close'); assert.equal(code, 1008); assert.equal(inputs.length, 1);
+});
+
+test('hangup waits for Agent cleanup and ends the server-owned call, not each turn', { timeout: 10000 }, async t => {
+  const server = createServer(); const conv = randomUUID(); const order = [];
+  let started, closed; const running = new Promise(resolve => { started = resolve; });
+  const ended = new Promise(resolve => { closed = resolve; });
+  const memory = {
+    identity(auth) { assert.equal(auth, 'Bearer test'); return 'alice'; },
+    async beginCall(user, call) { assert.equal(user, 'alice'); assert.equal(call, 'phone-one'); return conv; },
+    async disconnectCall(user, call, _connection, explicit) { order.push('ended'); closed({ user, call, explicit }); },
+  };
+  const gateway = new VoiceGateway({ httpAdapter: { getHttpServer: () => server } }, new ConfigService({
+    VOLCENGINE_ASR_APP_ID: 'fixture', VOLCENGINE_ASR_ACCESS_TOKEN: 'fixture', DOUBAO_TTS_APP_ID: 'fixture', DOUBAO_TTS_ACCESS_KEY: 'fixture',
+  }), { async run(input, _emit, signal, scope) {
+    assert.equal(input.conversationId, conv); assert.deepEqual(scope, { userId: 'alice', callId: 'phone-one' });
+    started(); await new Promise(resolve => signal.addEventListener('abort', resolve, { once: true }));
+    await new Promise(resolve => setTimeout(resolve, 20)); order.push('agent-saved'); throw new Error('cancelled');
+  } }, memory);
+  gateway.asr = { async open() { return { write() {}, close() {}, async finish() { return '继续讲'; } }; } };
+  gateway.tts = { async synthesize() {} }; gateway.onApplicationBootstrap();
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(async () => { gateway.onApplicationShutdown(); await new Promise(resolve => server.close(resolve)); });
+  const ws = new WebSocket(`ws://127.0.0.1:${server.address().port}/api/v1/voice`, { headers: { Authorization: 'Bearer test' } });
+  ws.on('message', raw => { const event = JSON.parse(raw.toString()); if (event.type === 'state' && event.state === 'listening') ws.send(JSON.stringify({ type: 'finish', turnId: 'one' })); });
+  await once(ws, 'open'); ws.send(JSON.stringify({ type: 'listen', turnId: 'one', callId: 'phone-one', request: { conversationId: randomUUID() } }));
+  await running; assert.deepEqual(order, []);
+  ws.send(JSON.stringify({ type: 'hangup', turnId: 'one' })); ws.close();
+  assert.deepEqual(await ended, { user: 'alice', call: 'phone-one', explicit: true });
+  assert.deepEqual(order, ['agent-saved', 'ended']);
 });

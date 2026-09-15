@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger, RequestTimeoutException, ServiceUnavailableException } from '@nestjs/common';
+import { ConflictException, Injectable, Optional, UnauthorizedException, Logger, RequestTimeoutException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AgentEvent, AgentEventPayload, ChatCompletionRequest, ChatCompletionResponse, ModelTokenUsage } from '@bio/contracts';
 import type { AgentSession, AgentSessionEvent } from '@earendil-works/pi-coding-agent';
@@ -6,6 +6,8 @@ import type { AssistantMessage, Usage } from '@earendil-works/pi-ai';
 import { randomUUID } from 'node:crypto';
 import { estimateModelCost } from '../chat/model-pricing.js';
 import { AgentStorage } from './agent-storage.js';
+import { MemoryService } from '../memory/memory.service.js';
+import type { MemoryScope } from '../memory/memory-types.js';
 import { PiSessionFactory } from './pi-session.factory.js';
 
 @Injectable()
@@ -13,9 +15,10 @@ export class AgentService {
   private readonly active = new Set<string>();
   private readonly logger = new Logger(AgentService.name);
 
-  constructor(private readonly factory: PiSessionFactory, private readonly storage: AgentStorage, private readonly config: ConfigService) {}
+  constructor(private readonly factory: PiSessionFactory, private readonly storage: AgentStorage, private readonly config: ConfigService, @Optional() private readonly memory?: MemoryService) {}
 
-  async run(input: ChatCompletionRequest, onEvent?: (event: AgentEvent) => void, signal?: AbortSignal): Promise<ChatCompletionResponse> {
+  async run(input: ChatCompletionRequest, onEvent?: (event: AgentEvent) => void, signal?: AbortSignal, scope?: MemoryScope): Promise<ChatCompletionResponse> {
+    if (this.memory?.enabled && !scope) throw new UnauthorizedException('User identity required');
     const conversationId = input.conversationId ?? randomUUID();
     this.storage.assertId(conversationId);
     if (this.active.has(conversationId)) throw new ConflictException('This conversation already has an active run');
@@ -25,6 +28,8 @@ export class AgentService {
     let sequence = 0;
     let messageId = randomUUID();
     let session: AgentSession | undefined;
+    let release: (() => Promise<void>) | undefined;
+    let archiveQueue = Promise.resolve();
     let unsubscribe: (() => void) | undefined;
     let lastAssistant: AssistantMessage | undefined;
     let eventError: unknown;
@@ -47,6 +52,10 @@ export class AgentService {
     };
     const emit = (payload: AgentEventPayload) => {
       const event = { ...payload, ...trace('product', payload.type, payload) } as AgentEvent;
+      if (scope && this.memory?.enabled && (payload.type === 'tool.completed' || payload.type === 'panel.state.updated')) {
+        const evidence = payload.type === 'panel.state.updated' ? { type: payload.type, mode: payload.panel.mode, document: payload.panel.document && { id: payload.panel.document.id, title: payload.panel.document.title, version: payload.panel.document.version } } : payload;
+        archiveQueue = archiveQueue.then(() => this.memory!.archive(scope, conversationId, runId, randomUUID(), 'tool', JSON.stringify(evidence))).catch(error => { eventError = error; abort(); });
+      }
       events.push(event);
       onEvent?.(event);
     };
@@ -57,10 +66,14 @@ export class AgentService {
     signal?.addEventListener('abort', abort, { once: true });
 
     try {
+      if (scope && this.memory?.enabled) {
+        release = await this.memory.acquireSession(scope.userId, conversationId, runId, this.storage.conversationDirectory(conversationId, scope.userId));
+        await this.memory.archive(scope, conversationId, runId, randomUUID(), 'user', input.message);
+      }
       emit({ type: 'run.started' });
       trace('input', 'request', input);
       if (signal?.aborted) throw new Error('Run cancelled');
-      session = await this.factory.create(conversationId, input.systemPrompt, emit, input.provider, input.context);
+      session = await this.factory.create(conversationId, input.systemPrompt, emit, input.provider, input.context, scope);
       if (signal?.aborted || timedOut) throw new Error('Run cancelled');
       unsubscribe = session.subscribe((event: AgentSessionEvent) => {
         try {
@@ -82,6 +95,10 @@ export class AgentService {
                 addUsage(event.message.usage);
                 const text = assistantText(event.message);
                 if (text && event.message.stopReason !== 'error' && event.message.stopReason !== 'aborted') {
+                  if (scope && this.memory?.enabled) {
+                    const savedId = messageId;
+                    archiveQueue = archiveQueue.then(() => this.memory!.archive(scope, conversationId, runId, savedId, 'assistant', text)).catch(error => { eventError = error; abort(); });
+                  }
                   emit({ type: 'speech.completed', messageId, text });
                 }
               }
@@ -106,9 +123,11 @@ export class AgentService {
         }
       });
       await session.prompt(input.message, { expandPromptTemplates: false });
+      await archiveQueue;
       if (eventError) throw eventError;
       if (signal?.aborted || timedOut || lastAssistant?.stopReason === 'aborted') throw new Error('Run cancelled');
       if (!lastAssistant || lastAssistant.stopReason === 'error') throw new Error('Model completion failed');
+      if (release) { const save = release; release = undefined; await save(); }
       emit({ type: 'run.completed' });
       const rate = Number(this.config.get('USD_TO_CNY_RATE', 6.7829));
       return {
@@ -132,7 +151,7 @@ export class AgentService {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
       unsubscribe?.();
-      try { session?.dispose(); }
+      try { await archiveQueue; session?.dispose(); await release?.(); }
       finally { this.active.delete(conversationId); }
     }
   }

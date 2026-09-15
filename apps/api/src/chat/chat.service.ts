@@ -7,13 +7,13 @@ import { AgentService } from '../agent/agent.service.js';
 export class ChatService {
   constructor(private readonly agent: AgentService) {}
 
-  complete(message: string, conversationId?: string, systemPrompt?: string, signal?: AbortSignal, provider?: ModelProvider, context?: AgentContextSnapshot): Promise<ChatCompletionResponse> {
+  complete(message: string, conversationId?: string, systemPrompt?: string, signal?: AbortSignal, provider?: ModelProvider, context?: AgentContextSnapshot, user?: string): Promise<ChatCompletionResponse> {
     return this.agent.run({
       message,
       ...(context ? { context } : {}),
       ...(provider ? { provider } : {}),
       ...(conversationId ? { conversationId } : {}),
       ...(systemPrompt !== undefined ? { systemPrompt } : {}),
-    }, undefined, signal);
+    }, undefined, signal, user ? { userId: user } : undefined);
   }
 }

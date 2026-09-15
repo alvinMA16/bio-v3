@@ -138,7 +138,7 @@ Page({
   finishVoice(): void { voiceClient?.finish(); },
   interruptVoice(): void { voiceClient?.interrupt(); },
   stopVoice(): void { voiceClient?.close(); },
-  onHide(): void { this.pauseTimer(); voiceClient?.close(); this.stopCallTimer(); this.animationController?.suspend(); },
+  onHide(): void { this.pauseTimer(); voiceClient?.close(false); this.stopCallTimer(); this.animationController?.suspend(); },
   onUnload(): void {
     this.pauseTimer();
     this.unloaded = true;
@@ -188,7 +188,7 @@ Page({
     this.requestTask = wx.request<ChatCompletionResponse>({
       url: `${getApp<IAppOption>().globalData.apiBaseUrl}/chat/completions`,
       method: 'POST',
-      header: { 'content-type': 'application/json' },
+      header: { 'content-type': 'application/json', ...(wx.getStorageSync('bio-auth-token') ? { Authorization: `Bearer ${wx.getStorageSync('bio-auth-token')}` } : {}) },
       data: {
     callMode: false, callDuration: '未连接', callSubtitle: '',
     actorSrc: '/assets/animations/fox-clerk/blink.webp',

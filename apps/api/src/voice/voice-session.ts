@@ -73,6 +73,8 @@ export class VoiceSession {
   }
   close(): void { this.closed = true; ++this.generation; this.cancel(); }
 
+  async settled(): Promise<void> { await this.lastTask.catch(() => undefined); }
+
   private async complete(turn: Turn): Promise<void> {
     let stage: 'asr' | 'agent' | 'tts' = 'asr';
     let ttsQueue = Promise.resolve();
