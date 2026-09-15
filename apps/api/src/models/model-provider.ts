@@ -9,11 +9,12 @@ import { getModelPrice } from '../chat/model-pricing.js';
 const providers = {
   deepseek: { prefix: 'DEEPSEEK', baseUrl: 'https://api.deepseek.com', model: 'deepseek-v4-flash', contextWindow: 131072, thinkingFormat: 'deepseek' },
   qwen: { prefix: 'QWEN', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen3.8-flash', contextWindow: 1000000, thinkingFormat: 'qwen' },
+  gemini: { prefix: 'GEMINI', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash', contextWindow: 1048576, thinkingFormat: undefined },
   'openai-compatible': { prefix: 'LLM', baseUrl: '', model: '', contextWindow: 131072, thinkingFormat: undefined },
 } as const;
 
 export async function createModelRuntime(config: ConfigService, cwd: string, requested?: ModelProvider) {
-  const selected = requested ?? config.get<string>('MODEL_PROVIDER', 'deepseek');
+  const selected = requested ?? config.get<string>('MODEL_PROVIDER', 'gemini');
   if (!Object.hasOwn(providers, selected)) throw new ServiceUnavailableException('Unknown MODEL_PROVIDER');
   const profile = providers[selected as ModelProvider];
   const apiKey = config.get<string>(`${profile.prefix}_API_KEY`)?.trim();
@@ -26,12 +27,12 @@ export async function createModelRuntime(config: ConfigService, cwd: string, req
   // Isolate credentials and model discovery from the developer's global config.
   const modelRuntime = await ModelRuntime.create({ authPath: join(cwd, 'auth.json'), modelsPath: null, allowModelNetwork: false });
   modelRuntime.registerProvider(providerId, {
-    api: 'openai-completions', baseUrl,
+    api: selected === 'gemini' ? 'google-generative-ai' : 'openai-completions', baseUrl,
     models: [{
-      id: modelId, name: modelId, reasoning: !!profile.thinkingFormat, input: ['text'],
+      id: modelId, name: modelId, reasoning: selected === 'gemini' || !!profile.thinkingFormat, input: ['text'],
       contextWindow: profile.contextWindow, maxTokens: 8192,
       cost: { input: price?.cacheMissInput ?? 0, output: price?.output ?? 0, cacheRead: price?.cacheHitInput ?? 0, cacheWrite: 0 },
-      compat: { supportsDeveloperRole: false, supportsReasoningEffort: false, maxTokensField: 'max_tokens', thinkingFormat: profile.thinkingFormat },
+      ...(selected === 'gemini' ? {} : { compat: { supportsDeveloperRole: false, supportsReasoningEffort: false, maxTokensField: 'max_tokens' as const, thinkingFormat: profile.thinkingFormat } }),
     }],
   });
   await modelRuntime.setRuntimeApiKey(providerId, apiKey);

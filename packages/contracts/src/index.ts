@@ -9,7 +9,7 @@ export interface ChatMessage {
   createdAt: string;
 }
 
-export type ModelProvider = 'deepseek' | 'qwen' | 'openai-compatible';
+export type ModelProvider = 'deepseek' | 'qwen' | 'gemini' | 'openai-compatible';
 
 export type AgentScene = 'conversation' | 'attachment_conversation' | 'revision';
 

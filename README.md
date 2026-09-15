@@ -89,6 +89,7 @@ API 集成测试使用真实 Pi SDK 和本地模拟 OpenAI 兼容服务，不需
 
 - `.env` 设置 `MODEL_PROVIDER=qwen` 并填写 `QWEN_API_KEY`，使用 `qwen3.8-flash`。
 - `MODEL_PROVIDER=deepseek` 使用原有 `DEEPSEEK_*` 配置。
+- `MODEL_PROVIDER=gemini` 配合 `GEMINI_API_KEY` 使用 Gemini 原生 API，默认模型为 `gemini-3.8-flash`；可通过 `GEMINI_MODEL` 指定其他支持文本和工具调用的型号。`GEMINI_BASE_URL` 默认是 `https://generativelanguage.googleapis.com/v1beta`，可配置兼容原生协议的网关地址（包含 API 版本路径）。服务端需要能访问该地址；密钥只配置在服务端。调试台也可单独选择 Gemini。
 - `MODEL_PROVIDER=openai-compatible` 配合 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL` 接入其他兼容服务。
 - HTTP 请求可添加 `provider` 覆盖服务端默认值；省略时每次使用服务端默认配置。配置变更后重启 API。
 

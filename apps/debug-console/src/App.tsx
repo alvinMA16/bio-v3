@@ -566,6 +566,7 @@ export function App() {
               {([
                 { value: 'qwen', label: '千问', detail: 'Qwen 3.8 Flash' },
                 { value: 'deepseek', label: 'DeepSeek', detail: 'V4 Flash' },
+                { value: 'gemini', label: 'Gemini', detail: 'Google 原生 API' },
                 { value: '', label: '默认模型', detail: '使用服务端配置' },
                 { value: 'openai-compatible', label: '自定义模型', detail: 'OpenAI 兼容服务' },
               ] as const).map((option) => (

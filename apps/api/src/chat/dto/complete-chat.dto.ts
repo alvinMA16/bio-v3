@@ -82,7 +82,7 @@ export class CompleteChatDto {
   context?: ContextSnapshotDto;
 
   @IsOptional()
-  @IsIn(['deepseek', 'qwen', 'openai-compatible'])
+  @IsIn(['deepseek', 'qwen', 'gemini', 'openai-compatible'])
   provider?: ModelProvider;
 
   @IsString()
