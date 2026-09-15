@@ -417,16 +417,23 @@ body { min-width: 320px; }
 .phone-content-panel--document a { color: #245caf; }
 
 .phone-desk { position: absolute; z-index: 4; inset: 51% 5.9% 3%; color: #625442; }
-.phone-desk-entry { position: absolute; width: 43%; border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer; font: inherit; transition: transform 180ms ease; }
-.phone-desk-entry img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; filter: drop-shadow(1px 2px 1.5px #66543e24); }
-.phone-desk-entry--folder { top: 17%; left: -2%; width: 45%; }
-.phone-desk-entry--folder img { transform: rotate(-10deg); }
-.phone-desk-entry--call { bottom: 4%; left: 40%; width: 50%; }
-.phone-desk-entry--call img { transform: rotate(-6deg); }
-.phone-desk-entry--manuscripts { top: -3%; right: -4%; width: 50%; }
-.phone-manuscript-art { display: block; position: relative; transform: rotate(8deg); }
+.phone-desk-entry { position: absolute; isolation: isolate; width: 43%; border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer; font: inherit; transition: transform 180ms ease; }
+/* Contact shadows sit beneath each object's footprint, rather than outlining it. */
+.phone-desk-entry::before { content: ''; position: absolute; z-index: -1; pointer-events: none; background: radial-gradient(ellipse, #47392250 0%, #51412d24 42%, transparent 72%); }
+.phone-desk-entry img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; filter: drop-shadow(.35cqw .65cqw .4cqw #51412d38) drop-shadow(1.1cqw 1.8cqw 1.2cqw #51412d24); }
+.phone-desk-entry--folder { top: 18%; left: -1%; width: 46%; }
+.phone-desk-entry--folder::before { left: 10%; top: 74%; width: 82%; height: 22%; transform: rotate(-7deg); }
+.phone-desk-entry--folder img { transform: rotate(-7deg) scaleY(.96); }
+.phone-desk-entry--call { bottom: 6%; left: 39%; width: 51%; }
+.phone-desk-entry--call::before { left: 12%; top: 38%; width: 82%; height: 46%; transform: rotate(24deg); opacity: .65; }
+.phone-desk-entry--call img { transform: rotate(-3deg) scaleY(.94); }
+.phone-desk-entry--manuscripts { top: 0; right: -2%; width: 48%; }
+.phone-desk-entry--manuscripts::before { left: 22%; top: 19%; width: 61%; height: 72%; transform: rotate(6deg); opacity: .65; }
+.phone-manuscript-art { display: block; position: relative; transform: rotate(6deg) scaleY(.94); }
 .phone-desk-entry img.phone-manuscript-label { position: absolute; left: 24.5%; top: 20%; width: 53%; height: 26%; aspect-ratio: auto; object-fit: fill; filter: none; pointer-events: none; }
-.phone-desk-entry:active { transform: scale(.98); }.phone-desk-entry:disabled { opacity: .5; cursor: wait; }
+.phone-desk-entry:active { transform: translateY(.5cqw) scale(.99); }.phone-desk-entry:disabled { opacity: .5; cursor: wait; }
+.phone-desk-entry:active::before { opacity: .5; }
+@media (prefers-reduced-motion: reduce) { .phone-desk-entry { transition: none; } }
 .phone-desk-entry:focus-visible { outline: 2px solid #79866b; border-radius: 12px; }
 .phone-desk-backdrop { position: absolute; inset: 0; z-index: 6; background: #30291f66; display: flex; align-items: end; }
 .phone-desk-drawer { width: 100%; padding: 20px; border-radius: 20px 20px 0 0; background: #f7f2e8; color: #514a3e; }
