@@ -2,7 +2,7 @@ import type { AgentEvent, ChatCompletionRequest, ChatCompletionResponse, VoiceRe
 import type { AsrProvider, AsrStream, TtsProvider } from './providers.js';
 import { SpokenSegments } from './spoken-segments.js';
 
-type Runner = (input: ChatCompletionRequest, emit: (event: AgentEvent) => void, signal: AbortSignal) => Promise<ChatCompletionResponse>;
+type Runner = (input: ChatCompletionRequest, emit: (event: AgentEvent) => void, signal: AbortSignal, trigger?: 'call_opening') => Promise<ChatCompletionResponse>;
 type Payload = VoiceServerMessage extends infer M ? M extends VoiceServerMessage ? Omit<M, 'turnId' | 'elapsedMs'> : never : never;
 interface Turn {
   id: string; request: VoiceRequest; abort: AbortController; started: number;
@@ -19,9 +19,9 @@ export class VoiceSession {
   constructor(private asr: AsrProvider, private tts: TtsProvider, private run: Runner,
     private send: (event: VoiceServerMessage) => void, private endpointMs = 2500) {}
 
-  async listen(id: string, request: VoiceRequest): Promise<void> {
+  async listen(id: string, request: VoiceRequest, opening = false): Promise<void> {
     const generation = ++this.generation;
-    this.cancel();
+    this.cancel(undefined, 'superseded');
     // Agent abort is asynchronous; release the conversation lock before reusing it.
     await this.lastTask.catch(() => undefined);
     if (this.closed || generation !== this.generation) return;
@@ -29,6 +29,11 @@ export class VoiceSession {
       task: Promise.resolve(), state: 'connecting', audioBytes: 0 };
     this.current = turn;
     this.state(turn, 'connecting');
+    if (opening) {
+      turn.task = this.complete(turn, true);
+      this.lastTask = turn.task;
+      return;
+    }
     turn.deadline = setTimeout(() => this.fail(turn, 'asr', '录音超过两分钟，请分段讲述。'), 120_000);
     try {
       const stream = await this.asr.open(result => {
@@ -64,27 +69,30 @@ export class VoiceSession {
     this.lastTask = turn.task;
   }
 
-  cancel(id?: string): void {
+  cancel(id?: string, reason = 'user_interrupt'): void {
     const turn = this.current;
     if (!turn || (id && turn.id !== id)) return;
-    this.emit(turn, { type: 'cancelled' });
-    this.cleanup(turn);
+    this.emit(turn, { type: 'cancelled', reason });
+    this.cleanup(turn, reason);
     this.current = undefined;
   }
-  close(): void { this.closed = true; ++this.generation; this.cancel(); }
+  close(reason = 'connection_closed'): void { this.closed = true; ++this.generation; this.cancel(undefined, reason); }
 
   async settled(): Promise<void> { await this.lastTask.catch(() => undefined); }
 
-  private async complete(turn: Turn): Promise<void> {
-    let stage: 'asr' | 'agent' | 'tts' = 'asr';
+  private async complete(turn: Turn, opening = false): Promise<void> {
+    let stage: 'asr' | 'agent' | 'tts' = opening ? 'agent' : 'asr';
     let ttsQueue = Promise.resolve();
     let ttsError: unknown;
     try {
-      const text = (await turn.asr!.finish()).trim();
-      turn.asr!.close();
-      if (!this.isCurrent(turn)) return;
-      if (!text) throw new Error('Empty transcription');
-      this.emit(turn, { type: 'transcript', text });
+      let text = '';
+      if (!opening) {
+        text = (await turn.asr!.finish()).trim();
+        turn.asr!.close();
+        if (!this.isCurrent(turn)) return;
+        if (!text) throw new Error('Empty transcription');
+        this.emit(turn, { type: 'transcript', text });
+      }
       stage = 'agent'; this.state(turn, 'agent');
       const segments = new SpokenSegments();
       let segmentId = 0;
@@ -107,7 +115,7 @@ export class VoiceSession {
             if (this.isCurrent(turn)) this.emit(turn, { type: 'segment.end', segmentId: index });
           }).catch(error => { ttsError = error; });
         }
-      }, turn.abort.signal);
+      }, turn.abort.signal, opening ? 'call_opening' : undefined);
       if (!this.isCurrent(turn)) return;
       this.emit(turn, { type: 'result', result });
       stage = 'tts'; this.state(turn, 'synthesizing');
@@ -130,11 +138,11 @@ export class VoiceSession {
   private state(turn: Turn, state: VoiceState): void { turn.state = state; this.emit(turn, { type: 'state', state }); }
   private fail(turn: Turn, stage: 'asr' | 'agent' | 'tts', message: string): void {
     if (!this.isCurrent(turn)) return;
-    this.emit(turn, { type: 'error', stage, message }); this.cleanup(turn);
+    this.emit(turn, { type: 'error', stage, message }); this.cleanup(turn, `${stage}_error`);
     if (this.current === turn) this.current = undefined;
   }
-  private cleanup(turn: Turn): void {
+  private cleanup(turn: Turn, reason = 'completed'): void {
     clearTimeout(turn.endpoint); clearTimeout(turn.deadline);
-    turn.abort.abort(); turn.asr?.close();
+    turn.abort.abort(reason); turn.asr?.close();
   }
 }

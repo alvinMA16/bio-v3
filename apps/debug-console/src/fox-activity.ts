@@ -16,8 +16,9 @@ export function foxActivityOf({ running, live, panel, audioPlaying, userSpeaking
     && ['finalizing', 'agent', 'synthesizing'].includes(voiceState));
   const message = live.messages.at(-1);
   return {
-    phase: userSpeaking || awaitingInput ? 'listening' : processing ? writing ? 'writing' : reading ? 'reading' : 'processing' : 'idle',
-    notebook: panel?.mode === 'editor' || writing,
+    phase: userSpeaking ? 'listening' : awaitingInput ? 'waiting'
+      : processing ? audioPlaying !== undefined ? 'processing' : writing ? 'writing' : reading ? 'reading' : 'processing' : 'idle',
+    notebook: audioPlaying !== undefined || panel?.mode === 'editor' || writing,
     speech: audioPlaying !== undefined ? audioPlaying ? 'audio' : 'silent'
       : running && message && !message.completed ? 'text' : 'silent',
     reducedMotion: false,

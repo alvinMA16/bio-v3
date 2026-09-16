@@ -46,7 +46,9 @@ export class PiSessionFactory {
     const resourceLoader = new DefaultResourceLoader({
       cwd, agentDir: cwd, settingsManager,
       noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
-      systemPromptOverride: () => buildSystemPrompt(persona) + (memoryContext ? `\n${MEMORY_RULES}\n${CALL_HISTORY_RULES}\n${memoryContext}` : ''),
+      systemPromptOverride: () => buildSystemPrompt(persona)
+        + `\n当前能力：内容工具可用；长期记忆${memoryContext ? '已启用，依据下方概要与只读工具检索' : '未启用，没有跨通话检索工具；可以使用本通可见消息，但不能声称保存或记得上一通内容'}。`
+        + (memoryContext ? `\n${MEMORY_RULES}\n${CALL_HISTORY_RULES}\n${memoryContext}` : ''),
       extensionFactories: [createContextExtension(() => buildRuntimeContext(context, workspace.context()))],
     });
     await resourceLoader.reload();

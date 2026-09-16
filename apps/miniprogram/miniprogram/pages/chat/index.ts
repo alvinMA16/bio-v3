@@ -32,12 +32,14 @@ Page({
   activeMs: 0,
   receiptQueued: false,
   unloaded: false,
+  userSpeaking: false,
+  callListening: false,
   requestTask: null as WechatMiniprogram.RequestTask | null,
   data: {
     callMode: false, callDuration: '未连接', callSubtitle: '',
     actorSrc: '/assets/animations/fox-clerk/blink.webp',
     actorWidth: 400, actorHeight: 300, actorLeft: 0, actorTop: 0,
-    voiceActive: false, voiceStatus: '', voiceTranscript: '', audioPlaying: false,
+    voiceActive: false, voiceStatus: '', voiceTranscript: '', audioPlaying: false, agentWorking: false,
     materialTitle: '',
     input: '',
     sending: false,
@@ -91,6 +93,9 @@ Page({
   startVoice(): void {
     if (this.data.sending || this.data.voiceActive) return;
     this.setData({ voiceActive: true, voiceStatus: '正在连接语音', voiceTranscript: '' });
+    this.userSpeaking = false;
+    this.callListening = true;
+    this.updateCallAnimation();
     voiceClient = new MiniVoiceClient(getApp<IAppOption>().globalData.apiBaseUrl, {
       request: () => {
         const document = this.data.panel.document;
@@ -103,7 +108,8 @@ Page({
       event: event => {
         if (this.unloaded) return;
         if (event.type === 'state') {
-          this.animationController?.setActivity({ phase: event.state === 'listening' ? 'listening' : 'processing', notebook: false, reducedMotion: false, speech: 'silent' });
+          this.callListening = event.state === 'listening' || event.state === 'connecting';
+          this.updateCallAnimation();
           if (event.state === 'listening' && !this.callConnectedAt) {
             this.callConnectedAt = Date.now();
             this.setData({ callDuration: '00:00' });
@@ -118,6 +124,8 @@ Page({
         if (event.type === 'transcript') this.setData({ voiceTranscript: '', messages: [...this.data.messages, { id: event.turnId, role: 'user', content: event.text }] });
         if (event.type === 'agent') {
           const item = event.event;
+          if (item.type === 'run.started') this.setData({ agentWorking: true });
+          if (['run.completed', 'run.cancelled', 'run.failed'].includes(item.type)) this.setData({ agentWorking: false });
           this.setData({ conversationId: item.conversationId });
           if (item.type === 'panel.state.updated') this.setData({ panel: localPanel(item.panel), selectedBlockId: '' });
           if (item.type === 'speech.delta' || item.type === 'speech.completed') {
@@ -129,16 +137,23 @@ Page({
         }
         if (event.type === 'error') { this.setData({ voiceStatus: event.message }); this.showRequestError(event.message); }
       },
-      playback: playing => { if (!this.unloaded) { this.setData({ audioPlaying: playing }); this.animationController?.setActivity({ phase: 'idle', notebook: false, reducedMotion: false, speech: playing ? 'audio' : 'silent' }); } },
+      speaking: speaking => { if (!this.unloaded) { this.userSpeaking = speaking; this.updateCallAnimation(); } },
+      playback: playing => { if (!this.unloaded) { this.setData({ audioPlaying: playing }); this.updateCallAnimation(); } },
       error: message => { if (!this.unloaded) { this.setData({ voiceStatus: message }); this.showRequestError(message); } },
-      ended: () => { this.stopCallTimer(); this.animationController?.setActivity({ phase: 'idle', notebook: false, reducedMotion: false, speech: 'silent' }); if (!this.unloaded) this.setData({ voiceActive: false, audioPlaying: false, callDuration: '已断开' }); voiceClient = null; },
+      ended: () => { this.stopCallTimer(); this.animationController?.setActivity({ phase: 'idle', notebook: false, reducedMotion: false, speech: 'silent' }); if (!this.unloaded) this.setData({ voiceActive: false, audioPlaying: false, agentWorking: false, callDuration: '已断开' }); voiceClient = null; },
     });
     voiceClient.start();
+  },
+  updateCallAnimation(): void {
+    this.animationController?.setActivity({
+      phase: this.userSpeaking ? 'listening' : this.callListening ? 'waiting' : 'processing',
+      notebook: true, reducedMotion: false, speech: this.data.audioPlaying ? 'audio' : 'silent',
+    });
   },
   finishVoice(): void { voiceClient?.finish(); },
   interruptVoice(): void { voiceClient?.interrupt(); },
   stopVoice(): void { voiceClient?.close(); },
-  onHide(): void { this.pauseTimer(); voiceClient?.close(false); this.stopCallTimer(); this.animationController?.suspend(); },
+  onHide(): void { this.pauseTimer(); voiceClient?.close(false, 'page_hidden'); this.stopCallTimer(); this.animationController?.suspend(); },
   onUnload(): void {
     this.pauseTimer();
     this.unloaded = true;
@@ -190,9 +205,6 @@ Page({
       method: 'POST',
       header: { 'content-type': 'application/json', ...(wx.getStorageSync('bio-auth-token') ? { Authorization: `Bearer ${wx.getStorageSync('bio-auth-token')}` } : {}) },
       data: {
-    callMode: false, callDuration: '未连接', callSubtitle: '',
-    actorSrc: '/assets/animations/fox-clerk/blink.webp',
-    actorWidth: 400, actorHeight: 300, actorLeft: 0, actorTop: 0,
         message,
         context: { materialIds: this.materialIds, ...(document && selected ? { workspace: {
           documentId: document.id, version: document.version, selectedBlockId: selected.id, excerpt: selected.text,

@@ -93,6 +93,7 @@ export class FoxAnimationController {
   private behavior: FoxBehavior = chooseFoxBehavior(this.activity);
   private welcomed = false;
   private lastAcknowledged = -Infinity;
+  private strokes = 0;
   private listener: StateListener;
 
   constructor(listener: StateListener) { this.listener = listener; }
@@ -124,7 +125,7 @@ export class FoxAnimationController {
   /** Optional deliberate listening acknowledgment; never inferred from tool success. */
   acknowledge(): void {
     if (this.activity.reducedMotion || this.activity.speech !== 'silent'
-      || !['idle', 'listening'].includes(this.activity.phase)
+      || !['idle', 'waiting', 'listening', 'processing'].includes(this.activity.phase)
       || !this.activity.notebook || Date.now() - this.lastAcknowledged < FOX_TIMING.acknowledgeCooldown) return;
     this.lastAcknowledged = Date.now();
     this.startOneShot('nod', 'action');
@@ -142,9 +143,13 @@ export class FoxAnimationController {
   }
   destroy(): void { this.playing = false; this.stopTimer(); }
   private get clip(): FoxAnimationClip { return FOX_ANIMATION_CLIPS[this.actionId]; }
+  // Notebook sheets have empty-handed bookends. Keep them out of every runtime loop.
+  private get firstFrame(): number { return ['note', 'nod', 'notebookTalk'].includes(this.actionId) ? 1 : 0; }
+  private get endFrame(): number { return this.clip.frameCount - (this.firstFrame === 1 ? 1 : 0); }
 
   private startOneShot(action: FoxActionId, phase: FoxAnimationPhase): void {
-    this.stopTimer(); this.actionId = action; this.frame = 0;
+    this.stopTimer(); this.actionId = action; this.frame = this.firstFrame;
+    if (action === 'note' && this.behavior.playback === 'writing') { this.frame = 4; this.strokes = 0; }
     this.phase = phase; this.playing = true; this.emit();
     this.schedule(() => this.advance(), 1000 / this.clip.fps);
   }
@@ -153,6 +158,7 @@ export class FoxAnimationController {
     this.stopTimer();
     this.phase = 'idle'; this.frame = 0;
     this.actionId = this.behavior.playback === 'writing' ? 'notebookTalk' : this.behavior.action;
+    this.frame = this.firstFrame;
     this.emit();
     if (this.behavior.playback === 'speech') {
       this.phase = 'action';
@@ -163,22 +169,28 @@ export class FoxAnimationController {
   }
 
   private advance(): void {
+    if (this.actionId === 'note' && this.behavior.playback === 'writing') {
+      this.strokes++;
+      if (this.strokes >= 8 && Date.now() - this.lastAcknowledged >= FOX_TIMING.acknowledgeCooldown) {
+        this.lastAcknowledged = Date.now(); this.startOneShot('nod', 'action'); return;
+      }
+      this.frame = this.frame === 4 ? 1 : 4;
+      this.emit();
+      this.schedule(() => this.advance(), this.strokes % 8 === 0 ? FOX_TIMING.writingPause : 360);
+      return;
+    }
     this.frame += 1;
-    if (this.frame < this.clip.frameCount) {
+    if (this.frame < this.endFrame) {
       this.emit(); this.schedule(() => this.advance(), 1000 / this.clip.fps); return;
     }
     if (this.behavior.playback === 'speech' && this.actionId === this.behavior.action) {
-      this.frame = 0; this.emit(); this.schedule(() => this.advance(), 1000 / this.clip.fps);
-    } else if (this.behavior.playback === 'writing' && this.actionId === 'note') {
-      this.actionId = 'notebookTalk'; this.frame = 0; this.phase = 'idle'; this.emit();
-      this.schedule(() => this.startOneShot('note', 'action'), FOX_TIMING.writingPause);
+      this.frame = this.firstFrame; this.emit(); this.schedule(() => this.advance(), 1000 / this.clip.fps);
     } else this.applyBehavior();
   }
 
   private scheduleAmbient(): void {
-    // Keep the notebook visible; no matching notebook-blink clip exists yet.
-    if (this.behavior.playback !== 'ambient' || this.activity.notebook) return;
-    this.schedule(() => this.startOneShot('blink', 'action'),
+    if (this.behavior.playback !== 'ambient') return;
+    this.schedule(() => this.startOneShot(this.activity.notebook ? 'nod' : 'blink', 'action'),
       FOX_TIMING.blinkMin + Math.random() * (FOX_TIMING.blinkMax - FOX_TIMING.blinkMin));
   }
   private schedule(callback: () => void, delay: number): void {

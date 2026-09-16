@@ -4,6 +4,18 @@ import { SpokenSegments } from '../dist/voice/spoken-segments.js';
 import { VoiceSession } from '../dist/voice/voice-session.js';
 
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+
+test('cancellation preserves its source for the Agent and the client', async () => {
+  let signal;
+  const f = fixture({ run: async (_input, _emit, incoming) => { signal = incoming; return new Promise(resolve => incoming.addEventListener('abort', () => resolve(response), { once: true })); } });
+  await f.session.listen('cancel-source', {});
+  f.session.finish('cancel-source');
+  await flush();
+  f.session.close('page_hidden');
+  await f.session.settled();
+  assert.equal(signal.reason, 'page_hidden');
+  assert.equal(f.events.find(event => event.type === 'cancelled').reason, 'page_hidden');
+});
 const response = { conversationId: 'conversation', message: { content: '好了。' } };
 function fixture({ run, synthesize, text = '修改第二段' } = {}) {
   const events = [], spoken = [], inputs = [], asrCallbacks = [];
@@ -15,9 +27,9 @@ function fixture({ run, synthesize, text = '修改第二段' } = {}) {
     if (synthesize) return synthesize(text, signal, audio);
     audio(new Uint8Array([0, 0, 1, 0]));
   } };
-  const runner = async (input, emit, signal) => {
+  const runner = async (input, emit, signal, trigger) => {
     inputs.push(input);
-    if (run) return run(input, emit, signal);
+    if (run) return run(input, emit, signal, trigger);
     emit({ type: 'speech.delta', messageId: 'before', delta: '我来改。' });
     emit({ type: 'speech.completed', messageId: 'before', text: '我来改。' });
     emit({ type: 'tool.started', name: 'update_content', toolCallId: 't' });
@@ -53,6 +65,37 @@ test('voice invokes Agent with context, forwards panel events, and speaks all ut
   assert.deepEqual(f.spoken, ['我来改。', '改好了。']);
   assert.ok(f.events.some(event => event.type === 'agent' && event.event.type === 'panel.state.updated'));
   assert.deepEqual(f.events.filter(event => event.type === 'audio').map(event => event.segmentId), [1, 2]);
+  f.session.close();
+});
+
+test('opening speaks without ASR or a fabricated user transcript', async () => {
+  const f = fixture({ run: async (input, emit, _signal, trigger) => {
+    assert.equal(trigger, 'call_opening'); assert.equal(input.message, '');
+    emit({ type: 'speech.completed', messageId: 'hello', text: '喂，我在呢。' });
+    return response;
+  } });
+  await f.session.listen('opening', {}, true);
+  assert.equal((await f.done).type, 'done');
+  assert.equal(f.asrCallbacks.length, 0);
+  assert.equal(f.events.some(event => event.type === 'transcript'), false);
+  assert.deepEqual(f.spoken, ['喂，我在呢。']);
+  await f.session.listen('user', {});
+  assert.equal(f.asrCallbacks.length, 1);
+  f.session.close();
+});
+
+test('interrupting an opening waits for cleanup and ignores its late audio', async () => {
+  let lateAudio;
+  const f = fixture({ synthesize: (_text, signal, audio) => new Promise(resolve => {
+    lateAudio = audio; signal.addEventListener('abort', resolve, { once: true });
+  }) });
+  await f.session.listen('opening', {}, true); await flush();
+  assert.ok(lateAudio);
+  await f.session.listen('user', {});
+  const count = f.events.length;
+  lateAudio(new Uint8Array([0, 0])); await flush();
+  assert.equal(f.events.length, count);
+  assert.equal(f.asrCallbacks.length, 1);
   f.session.close();
 });
 

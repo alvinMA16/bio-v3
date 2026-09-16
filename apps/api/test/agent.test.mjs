@@ -156,6 +156,11 @@ test('real SDK tool loop emits panel events and counts all model calls', async (
   assert.equal(result.usage.totalTokens, 51);
   assert.ok(requests.at(-1).messages.some((message) => message.role === 'tool'));
   assert.ok(storage.readTrace(result.runId).some((entry) => entry.type === 'tool_execution_end'));
+  const list = await (await fetch(`${baseUrl}/api/v1/agent/manuscripts`)).json();
+  assert.ok(list.some(item => item.conversationId === result.conversationId && item.id === 'draft'));
+  const saved = await (await fetch(`${baseUrl}/api/v1/agent/manuscripts/${result.conversationId}/draft`)).json();
+  assert.equal(saved.blocks[0].text, '这是正文。');
+  assert.equal((await fetch(`${baseUrl}/api/v1/agent/manuscripts/${randomUUID()}/draft`)).status, 404);
 });
 
 test('stream endpoint delivers product events and final compatible response', async () => {

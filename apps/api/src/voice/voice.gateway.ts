@@ -50,11 +50,12 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
     const connection = randomUUID();
     let callId: string | undefined;
     let conversationId: string | undefined;
+    let initialized = false;
     let ended = false;
     let closing = false;
     let queue = Promise.resolve();
     const delay = Number(this.config.get('VOICE_ENDPOINT_MS', 2500));
-    const session = new VoiceSession(this.asr, this.tts, (input, emit, signal) => this.agent.run({ ...input, ...(conversationId ? { conversationId } : {}) }, emit, signal, user ? { userId: user, ...(callId ? { callId } : {}) } : undefined), event => {
+    const session = new VoiceSession(this.asr, this.tts, (input, emit, signal, trigger) => this.agent.run({ ...input, ...(conversationId ? { conversationId } : {}) }, emit, signal, user ? { userId: user, ...(callId ? { callId } : {}) } : undefined, trigger), event => {
       if (ws.readyState !== WebSocket.OPEN) return;
       if (ws.bufferedAmount > 2 * 1024 * 1024) { ws.close(1013, 'Slow connection'); return; }
       ws.send(JSON.stringify(event));
@@ -69,7 +70,7 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
       queue = queue.then(async () => {
         try {
           const message = JSON.parse(raw.toString()) as VoiceClientMessage;
-          if (closing && message?.type !== 'hangup') return;
+          if (closing && message?.type !== 'hangup' && message?.type !== 'disconnect') return;
           if (!message || typeof message.turnId !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(message.turnId)) throw new Error('Invalid turn');
           if (message.type === 'listen') {
             if (validating) throw new Error('Concurrent initialization');
@@ -84,18 +85,29 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
                 callId = id;
               }
               if (user && message.callId && message.callId !== callId) throw new Error('Cannot switch call');
-              void session.listen(message.turnId, input).catch(() => ws.close(1011, 'Voice session failed'));
+              let opening = false;
+              if (!initialized) {
+                opening = user && callId ? await this.memory!.claimCallOpening(user, callId, connection) : true;
+                conversationId ??= randomUUID();
+                initialized = true;
+              }
+              void session.listen(message.turnId, input, opening).catch(() => ws.close(1011, 'Voice session failed'));
             } finally { validating = false; }
           } else if (message.type === 'finish') session.finish(message.turnId);
           else if (message.type === 'cancel') session.cancel(message.turnId);
-          else if (message.type === 'hangup') { ended = true; session.close(); ws.close(1000, 'Call ended'); }
+          else if (message.type === 'hangup') { ended = true; session.close('user_hangup'); ws.close(1000, 'Call ended'); }
+          else if (message.type === 'disconnect' && ['page_hidden', 'client_error'].includes(message.reason)) {
+            session.close(message.reason); ws.close(1000, message.reason);
+          }
           else throw new Error('Invalid message');
         } catch { ws.close(1008, 'Invalid voice request'); }
       }).catch(() => ws.close(1011, 'Voice request failed'));
     });
-    ws.on('error', () => session.close());
-    ws.on('close', () => {
-      closing = true; clearInterval(idle); clearInterval(heartbeat); session.close();
+    ws.on('error', () => session.close('transport_error'));
+    ws.on('close', (_code, rawReason) => {
+      const reason = rawReason.toString();
+      closing = true; clearInterval(idle); clearInterval(heartbeat);
+      session.close(['page_hidden', 'client_error', 'user_hangup'].includes(reason) ? reason : 'connection_closed');
       void queue.then(async () => {
         await session.settled();
         if (user && callId) await this.memory!.disconnectCall(user, callId, connection, ended);

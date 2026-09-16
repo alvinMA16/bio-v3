@@ -44,19 +44,20 @@ Notebook actions (`note` and `nod`, 13 frames at 5 fps) share generated
 full-canvas keyframes:
 
 - `notebook-hold.png`: open sage notebook and wooden pencil, eyes forward.
-- `notebook-write-full.png`: complete adjacent writing pose, with the pencil
-  tip already hidden behind the upright notebook in the source image.
+- `notebook-write-active.png`: adjacent writing pose with a more visible pencil
+  angle change; the pencil tip stays behind the upright notebook page.
 - `notebook-nod.png`: head lowered in a friendly nod, holding the same notebook.
 
 Writing uses the complete actor/board region from each source keyframe. Do not
 paste a moving hand or foreground notebook into the writing frames: mismatched
-hand textures and positions caused visible jitter. The two whole poses dwell
-for 0.6–0.8 seconds instead of alternating every 0.2 seconds. Only the shared
+hand textures and positions caused visible jitter. Runtime writing alternates
+the two poses every 360 ms and occasionally pauses or nods. Only the shared
 outer silhouette is extracted for the existing scene layers. The notebook
 occludes the tip in the source itself; the visible page edges are not writing
 surfaces. The experimental `*-v2.png` and `notebook-write-occluded.png` sources
 are not used. The approved nod and speech assembly remains unchanged.
-Both one-shot actions end in the existing neutral frame. Select them in the
+The sheets retain neutral bookends for compatibility, but the shared runtime
+controller excludes them, including during notebook speech. Select actions in the
 debug console's animation lab, or call `playCharacterAction('note')` /
 `playCharacterAction('nod')` on the character page.
 

@@ -1,5 +1,6 @@
 import type { VoiceClientMessage, VoiceRequest, VoiceServerMessage } from '@bio/contracts';
 import workletUrl from './pcm-worklet.js?url&no-inline';
+import { FoxSpeechSignal } from '../../../miniprogram/miniprogram/lib/fox-speech-signal';
 
 type Callbacks = {
   request: () => VoiceRequest;
@@ -12,6 +13,7 @@ type Callbacks = {
   microphone?: (enabled: boolean) => void;
   inputLevel?: (level: number) => void;
   listening?: (active: boolean) => void;
+  speaking?: (active: boolean) => void;
   microphoneError?: (message: string) => void;
 };
 
@@ -30,6 +32,7 @@ export class BrowserVoice {
   private turnId = '';
   private closed = false;
   private listening = false;
+  private speechSignal = new FoxSpeechSignal(value => this.callbacks.speaking?.(value));
   private finishing = false;
   private drained = false;
   private nextTime = 0;
@@ -39,7 +42,7 @@ export class BrowserVoice {
   private micGeneration = 0;
   private turnActive = false;
   private submitted = false;
-  private onVisibility = () => { if (document.hidden) this.close(false); };
+  private onVisibility = () => { if (document.hidden) { this.callbacks.error('页面进入后台，通话已暂停；已写入的文稿会保留。'); this.close(false, 'page_hidden'); } };
   constructor(private callbacks: Callbacks) {}
 
   async start(): Promise<void> {
@@ -84,6 +87,7 @@ export class BrowserVoice {
         let energy = 0;
         for (const sample of samples) energy += (sample / 32768) ** 2;
         const rms = samples.length ? Math.sqrt(energy / samples.length) : 0;
+        this.speechSignal.update(rms, samples.length / 16);
         this.callbacks.inputLevel?.(rms < 0.008 ? 0 : Math.min(4, Math.ceil(rms * 24)));
         ws.send(event.data as ArrayBuffer);
       };
@@ -127,6 +131,7 @@ export class BrowserVoice {
   }
   private receive(event: VoiceServerMessage): void {
     if (this.closed || event.turnId !== this.turnId) return;
+    if (event.type === 'asr' && this.listening) this.speechSignal.recognize(event.text);
     if (event.type === 'state') this.setListening(this.micEnabled && event.state === 'listening');
     if (event.type === 'transcript' || event.type === 'audio' || event.type === 'agent') this.submitted = true;
     if (event.type === 'agent') this.conversationId = event.event.conversationId;
@@ -170,7 +175,7 @@ export class BrowserVoice {
   }
   private setListening(value: boolean): void {
     if (this.listening === value) return;
-    if (!value) { this.finishing = false; this.callbacks.inputLevel?.(0); }
+    if (!value) { this.finishing = false; this.callbacks.inputLevel?.(0); this.speechSignal.reset(); }
     this.callbacks.listening?.(value);
     this.listening = value; this.capture?.port.postMessage(value ? 'start' : 'stop');
   }
@@ -221,15 +226,16 @@ export class BrowserVoice {
     if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message));
   }
   private fail(message: string): void { if (!this.closed) { this.callbacks.error(message); this.close(false); } }
-  close(hangup = true): void {
+  close(hangup = true, reason: 'page_hidden' | 'client_error' = 'client_error'): void {
     if (this.closed) return;
     if (hangup) this.send({ type: 'hangup', turnId: this.turnId || 'hangup' });
+    else this.send({ type: 'disconnect', turnId: this.turnId || 'disconnect', reason });
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.closed = true; ++this.micGeneration; this.callbacks.microphone?.(false); this.setListening(false); this.stopAudio();
     this.capture?.disconnect(); this.source?.disconnect(); this.muted?.disconnect();
     this.output?.disconnect();
     this.stream?.getTracks().forEach(track => track.stop());
-    this.socket?.close(); void this.context?.close().catch(() => undefined);
+    this.socket?.close(1000, hangup ? 'user_hangup' : reason); void this.context?.close().catch(() => undefined);
     this.callbacks.ended();
   }
 }

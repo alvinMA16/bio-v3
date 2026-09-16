@@ -501,5 +501,11 @@ body { min-width: 320px; }
 
 .receipt-preview .phone-preview { width: 320px; max-width: 100%; }
 
-.receipt-actions { width: 100%; flex-shrink: 0; height: 12cqw; display: flex; align-items: flex-end; justify-content: center; }
+.receipt-actions { box-sizing: content-box; width: 100%; flex-shrink: 0; height: 12cqw; padding-bottom: 3cqw; display: flex; align-items: flex-end; justify-content: center; }
 .receipt-fallback__paper::after { content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 2cqw; background: linear-gradient(135deg, #f5f5f2 25%, transparent 25%) -2cqw 0, linear-gradient(225deg, #f5f5f2 25%, transparent 25%) -2cqw 0; background-size: 4cqw 4cqw; }
+.phone-desk-drawer:has(.manuscript-folder) { max-height: 82%; overflow-y: auto; text-align: left; }
+.manuscript-folder { display: grid; gap: 12px; font-size: 14px; }
+.manuscript-folder button { position: static; width: 100%; height: auto; border-radius: 8px; padding: 12px; text-align: left; }
+.manuscript-folder small { display: block; margin-top: 6px; color: #796349; font-size: 11px; }
+.manuscript-folder article { overflow-wrap: anywhere; line-height: 1.7; }
+.document-progress { font-size: 12px; color: #796349; padding: 8px; background: #f5efe5; border-radius: 6px; }

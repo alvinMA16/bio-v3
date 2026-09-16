@@ -121,6 +121,14 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
   async touchCall(user: string, id: string, connection: string): Promise<void> {
     await this.pool!.query("UPDATE bio_memory_calls SET touched_at=now() WHERE user_id=$1 AND id=$2 AND connection_id=$3 AND status='active'", [user, id, connection]);
   }
+  /** Claim once before generation. Interrupted greetings are not replayed on reconnect. */
+  async claimCallOpening(user: string, id: string, connection: string): Promise<boolean> {
+    const result = await this.pool!.query(`UPDATE bio_memory_calls c SET opening_claimed=true
+      WHERE id=$1 AND user_id=$2 AND connection_id=$3 AND status='active' AND NOT opening_claimed
+        AND NOT EXISTS (SELECT 1 FROM bio_memory_messages m WHERE m.call_id=c.id AND m.user_id=$2)
+      RETURNING id`, [id, user, connection]);
+    return !!result.rowCount;
+  }
   async disconnectCall(user: string, id: string, connection: string, ended: boolean): Promise<void> {
     const grace = ended ? 0 : Math.max(1, Number(this.config.get('MEMORY_RECONNECT_SECONDS', 60)) || 60);
     await this.pool!.query(`UPDATE bio_memory_calls SET status='disconnected',end_after=now()+$4*interval '1 second'
@@ -171,6 +179,14 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
   }
   async assertRun(user: string, id: string): Promise<void> {
     if (!(await this.pool!.query('SELECT 1 FROM bio_memory_runs WHERE user_id=$1 AND id=$2', [user, id])).rowCount) throw new NotFoundException('Run not found');
+  }
+  async manuscripts(user: string, conversationId?: string) {
+    const rows = (await this.pool!.query(`SELECT id,snapshot->>'panel.json' AS panel FROM bio_memory_sessions
+      WHERE user_id=$1 AND ($2::uuid IS NULL OR id=$2::uuid) AND snapshot ? 'panel.json'`, [user, conversationId ?? null])).rows;
+    return rows.flatMap(row => {
+      const value = JSON.parse(row.panel);
+      return (value.documents ?? []).map((document: import('@bio/contracts').PanelDocument) => ({ conversationId: row.id as string, document }));
+    });
   }
   async search(user: string, query: string, type?: string, offset = 0) {
     const tokens = query.trim().split(/\s+/).slice(0, 8).filter(Boolean);

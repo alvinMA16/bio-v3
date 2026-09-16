@@ -97,7 +97,7 @@ Page({
   },
 
   openManuscripts(): void {
-    this.setData({ activeDrawer: 'manuscripts' });
+    wx.navigateTo({ url: '/pages/manuscripts/index' });
   },
 
   closeDrawer(): void {

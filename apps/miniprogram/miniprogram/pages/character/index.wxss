@@ -63,4 +63,4 @@
   .desk-home { top: 50%; bottom: calc(24rpx + env(safe-area-inset-bottom)); }
 }
 
-.receipt-actions { width: 100%; flex-shrink: 0; height: 90rpx; display: flex; align-items: flex-end; justify-content: center; }
+.receipt-actions { box-sizing: content-box; width: 100%; flex-shrink: 0; height: 90rpx; padding-bottom: 22rpx; display: flex; align-items: flex-end; justify-content: center; }

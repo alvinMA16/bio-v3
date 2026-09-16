@@ -121,7 +121,7 @@ export type AgentEventPayload =
   | { type: 'context.compacted' }
   | { type: 'run.completed' }
   | { type: 'run.failed'; message: string }
-  | { type: 'run.cancelled' };
+  | { type: 'run.cancelled'; reason?: string };
 
 export type AgentEvent = AgentEventPayload & {
   runId: string;

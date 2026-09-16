@@ -233,7 +233,7 @@ def main() -> None:
     # Writing uses complete generated actor/board keyframes, never hand patches
     # or a separately pasted notebook. Occlusion belongs to the source image.
     note_hold_actor = actor_frame(normalized_image("notebook-hold.png", size), "neutral")
-    writing_actor = actor_frame(normalized_image("notebook-write-full.png", size), "neutral")
+    writing_actor = actor_frame(normalized_image("notebook-write-active.png", size), "neutral")
     nod_actor = actor_frame(nodding, "neutral")
     notebook_quiet = actor_frame(keep_only_mouth(poses["talk-quiet"], hold), "neutral")
     notebook_open = actor_frame(keep_only_mouth(poses["talk-a"], hold), "neutral")
@@ -289,7 +289,7 @@ def main() -> None:
         ], "notebookTalk"),
     ]
     manifest = {
-        "version": 11,
+        "version": 12,
         "character": "fox-clerk",
         "style": "needle-felt stop-motion",
         "frameMode": "three-layer",

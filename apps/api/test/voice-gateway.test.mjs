@@ -13,8 +13,8 @@ test('voice WebSocket accepts PCM, validates context, and passes the recognized 
   const inputs = [], audio = [];
   const gateway = new VoiceGateway({ httpAdapter: { getHttpServer: () => server } }, new ConfigService({
     VOLCENGINE_ASR_APP_ID: 'fixture', VOLCENGINE_ASR_ACCESS_TOKEN: 'fixture', DOUBAO_TTS_APP_ID: 'fixture', DOUBAO_TTS_ACCESS_KEY: 'fixture',
-  }), { async run(input, emit) {
-    inputs.push(input);
+  }), { async run(input, emit, _signal, _scope, trigger) {
+    inputs.push({ ...input, trigger });
     emit({ type: 'speech.completed', messageId: 'reply', text: '你好。', conversationId: 'test' });
     return { conversationId: 'test', message: { content: '你好。' } };
   } });
@@ -32,21 +32,28 @@ test('voice WebSocket accepts PCM, validates context, and passes the recognized 
     ws.on('message', raw => {
       const event = JSON.parse(raw.toString()); events.push(event);
       if (event.type === 'state' && event.state === 'listening') {
-        ws.send(Buffer.from([0, 0, 1, 0])); ws.send(JSON.stringify({ type: 'finish', turnId: 'one' }));
+        ws.send(Buffer.from([0, 0, 1, 0])); ws.send(JSON.stringify({ type: 'finish', turnId: 'two' }));
       }
-      if (event.type === 'done') resolve();
+      if (event.type === 'done' && event.turnId === 'one') {
+        assert.equal(audio.length, 0);
+        ws.send(JSON.stringify({ type: 'listen', turnId: 'two', request: { context: { scene: 'revision' }, provider: 'qwen' } }));
+      } else if (event.type === 'done') resolve();
     });
   });
   await once(ws, 'open');
   ws.send(JSON.stringify({ type: 'listen', turnId: 'one', request: { context: { scene: 'revision' }, provider: 'qwen' } }));
   await done;
   assert.equal(audio.length, 1);
-  assert.equal(inputs[0].message, '讲个故事'); assert.equal(inputs[0].context.scene, 'revision');
+  assert.equal(inputs[0].trigger, 'call_opening');
+  assert.equal(inputs[1].message, '讲个故事'); assert.equal(inputs[1].context.scene, 'revision');
+  assert.equal(inputs[1].trigger, undefined);
+  assert.equal(inputs[0].conversationId, inputs[1].conversationId);
+  assert.equal(events.filter(event => event.turnId === 'one' && event.type === 'transcript').length, 0);
   assert.ok(events.some(event => event.type === 'audio'));
   ws.close(); await once(ws, 'close');
   const bad = new WebSocket(url); await once(bad, 'open');
   bad.send(JSON.stringify({ type: 'listen', turnId: 'bad', request: { context: { scene: 'invented' } } }));
-  const [code] = await once(bad, 'close'); assert.equal(code, 1008); assert.equal(inputs.length, 1);
+  const [code] = await once(bad, 'close'); assert.equal(code, 1008); assert.equal(inputs.length, 2);
 });
 
 test('hangup waits for Agent cleanup and ends the server-owned call, not each turn', { timeout: 10000 }, async t => {
@@ -56,6 +63,7 @@ test('hangup waits for Agent cleanup and ends the server-owned call, not each tu
   const memory = {
     identity(auth) { assert.equal(auth, 'Bearer test'); return 'alice'; },
     async beginCall(user, call) { assert.equal(user, 'alice'); assert.equal(call, 'phone-one'); return conv; },
+    async claimCallOpening() { return true; },
     async disconnectCall(user, call, _connection, explicit) { order.push('ended'); closed({ user, call, explicit }); },
   };
   const gateway = new VoiceGateway({ httpAdapter: { getHttpServer: () => server } }, new ConfigService({

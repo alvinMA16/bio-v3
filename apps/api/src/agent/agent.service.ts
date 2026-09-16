@@ -9,6 +9,15 @@ import { AgentStorage } from './agent-storage.js';
 import { MemoryService } from '../memory/memory.service.js';
 import type { MemoryScope } from '../memory/memory-types.js';
 import { PiSessionFactory } from './pi-session.factory.js';
+import { beijingTime } from '../memory/call-history.js';
+
+const CALL_OPENING_GUIDANCE = `服务端事件：一通新电话刚接通，用户尚未发言。请由令狸先开口，然后等待用户。
+默认一句，最多两句，通常不超过40个汉字。像熟人接电话一样自然，不长篇介绍、总结往事或连续提问。
+可以从接通时段和已提供的交谈间隔、近期话题中选择零到一个合适线索，不要求把所有信息都用上，也不固定使用同一种顺序开场。没有提供的信息不要猜。
+早上、下午、晚上可以自然问好，但不必每次问好或报时。深夜语气轻一点，不擅自判断用户失眠、孤独或难过，不说“怎么还没睡”，也不催睡。
+近期话题适合才轻轻接一句，最多一个问题；未确认的计划不当作已经发生。没有合适线索时，简单说“喂，我在呢。”也可以。
+不声称看到了用户、一直等着用户或主动联系了用户。不把历史结束语当成今天不愿聊天。
+这不是用户发言，不调用工具、不修改内容，内部时间和引用不念出来。`;
 
 @Injectable()
 export class AgentService {
@@ -17,7 +26,7 @@ export class AgentService {
 
   constructor(private readonly factory: PiSessionFactory, private readonly storage: AgentStorage, private readonly config: ConfigService, @Optional() private readonly memory?: MemoryService) {}
 
-  async run(input: ChatCompletionRequest, onEvent?: (event: AgentEvent) => void, signal?: AbortSignal, scope?: MemoryScope): Promise<ChatCompletionResponse> {
+  async run(input: ChatCompletionRequest, onEvent?: (event: AgentEvent) => void, signal?: AbortSignal, scope?: MemoryScope, trigger?: 'call_opening'): Promise<ChatCompletionResponse> {
     if (this.memory?.enabled && !scope) throw new UnauthorizedException('User identity required');
     const conversationId = input.conversationId ?? randomUUID();
     this.storage.assertId(conversationId);
@@ -68,7 +77,7 @@ export class AgentService {
     try {
       if (scope && this.memory?.enabled) {
         release = await this.memory.acquireSession(scope.userId, conversationId, runId, this.storage.conversationDirectory(conversationId, scope.userId));
-        await this.memory.archive(scope, conversationId, runId, randomUUID(), 'user', input.message);
+        if (trigger !== 'call_opening') await this.memory.archive(scope, conversationId, runId, randomUUID(), 'user', input.message);
       }
       emit({ type: 'run.started' });
       trace('input', 'request', input);
@@ -122,7 +131,11 @@ export class AgentService {
           abort();
         }
       });
-      await session.prompt(input.message, { expandPromptTemplates: false });
+      if (trigger === 'call_opening') {
+        await session.sendCustomMessage({ customType: 'bio_call_opening', display: false,
+          content: `${CALL_OPENING_GUIDANCE}\n本次接通时间（北京时间）：${beijingTime(new Date())}`,
+        }, { triggerTurn: true });
+      } else await session.prompt(input.message, { expandPromptTemplates: false });
       await archiveQueue;
       if (eventError) throw eventError;
       if (signal?.aborted || timedOut || lastAssistant?.stopReason === 'aborted') throw new Error('Run cancelled');
@@ -140,7 +153,8 @@ export class AgentService {
     } catch (error) {
       const cancelled = !eventError && (signal?.aborted || timedOut || lastAssistant?.stopReason === 'aborted');
       const message = timedOut ? 'Agent run timed out' : cancelled ? 'Agent run cancelled' : 'Agent run failed';
-      try { emit(cancelled ? { type: 'run.cancelled' } : { type: 'run.failed', message }); }
+      const reason = timedOut ? 'timeout' : typeof signal?.reason === 'string' ? signal.reason : 'unknown';
+      try { emit(cancelled ? { type: 'run.cancelled', reason } : { type: 'run.failed', message }); }
       catch { this.logger.error(`Unable to persist terminal event for run ${runId}`); }
       if (error instanceof ServiceUnavailableException) {
         throw new ServiceUnavailableException({ message: error.message, runId, conversationId });

@@ -1,4 +1,5 @@
 import type { VoiceClientMessage, VoiceRequest, VoiceServerMessage } from '@bio/contracts';
+import { FoxSpeechSignal } from './fox-speech-signal';
 
 let recorderInstance: WechatMiniprogram.RecorderManager | undefined;
 let recorderBusy = false;
@@ -39,6 +40,7 @@ export class MiniVoiceClient {
   private turnId = '';
   private closed = false;
   private recording = false;
+  private speechSignal = new FoxSpeechSignal(value => this.callbacks.speaking?.(value));
   private wantRecording = false;
   private finishing = false;
   private drained = false;
@@ -49,6 +51,7 @@ export class MiniVoiceClient {
   constructor(private baseUrl: string, private callbacks: {
     request: () => VoiceRequest; event: (event: VoiceServerMessage) => void;
     playback: (playing: boolean) => void; error: (message: string) => void; ended: () => void;
+    speaking?: (speaking: boolean) => void;
   }) {}
   start(): void {
     wx.authorize({ scope: 'scope.record', success: () => this.connect(), fail: () => this.fail('请允许麦克风权限后重试。') });
@@ -80,12 +83,17 @@ export class MiniVoiceClient {
   }
   private onFrame = ({ frameBuffer }: { frameBuffer: ArrayBuffer }): void => {
     if (this.closed || !this.recording) return;
+    const samples = new Int16Array(frameBuffer);
+    let energy = 0;
+    for (const sample of samples) energy += (sample / 32768) ** 2;
+    this.speechSignal.update(samples.length ? Math.sqrt(energy / samples.length) : 0, samples.length / 16);
     this.queuedBytes += frameBuffer.byteLength;
     if (this.queuedBytes > 128_000) { this.fail('音频上传拥塞。'); return; }
     this.socket?.send({ data: frameBuffer, fail: () => this.fail('音频上传失败。'), complete: () => { this.queuedBytes -= frameBuffer.byteLength; } });
   };
   private onStop = (expected: boolean): void => {
     this.recording = false;
+    this.speechSignal.reset();
     if (this.closed) return;
     if (this.finishing || (!expected && this.wantRecording)) { this.finishing = false; this.wantRecording = false; this.send({ type: 'finish', turnId: this.turnId }); }
   };
@@ -100,11 +108,13 @@ export class MiniVoiceClient {
   }
   private receive(event: VoiceServerMessage): void {
     if (this.closed || event.turnId !== this.turnId) return;
+    if (event.type === 'asr' && this.recording) this.speechSignal.recognize(event.text);
     if (event.type === 'state') {
       if (event.state === 'listening' && !this.recording) {
         this.wantRecording = true;
         void this.beginRecording().catch(() => this.fail('无法启动录音。'));
       } else if (event.state !== 'listening') {
+        this.speechSignal.reset();
         this.wantRecording = false; this.recording = false; stopRecorder();
       }
     }
@@ -163,11 +173,13 @@ export class MiniVoiceClient {
     this.socket?.send({ data: JSON.stringify(message), fail: () => this.fail('语音请求发送失败。') });
   }
   private fail(message: string): void { if (!this.closed) { this.callbacks.error(message); this.close(false); } }
-  close(hangup = true): void {
+  close(hangup = true, reason: 'page_hidden' | 'client_error' = 'client_error'): void {
     if (this.closed) return;
     if (hangup) this.send({ type: 'hangup', turnId: this.turnId || 'hangup' });
+    else this.send({ type: 'disconnect', turnId: this.turnId || 'disconnect', reason });
     this.closed = true; this.wantRecording = false; this.recording = false; stopRecorder();
+    this.speechSignal.reset();
     if (recorderHandlers?.frame === this.onFrame) recorderHandlers = undefined;
-    this.stopAudio(); void this.audio?.close(); this.socket?.close({}); this.callbacks.ended();
+    this.stopAudio(); void this.audio?.close(); this.socket?.close({ code: 1000, reason: hangup ? 'user_hangup' : reason }); this.callbacks.ended();
   }
 }

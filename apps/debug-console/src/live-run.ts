@@ -54,7 +54,7 @@ export function applyLiveEvent(previous: LiveRun, event: AgentEvent, elapsedMs: 
     case 'context.compacting': label = '正在整理对话上下文'; break;
     case 'context.compacted': label = '对话上下文已整理'; break;
     case 'run.completed': label = '本轮完成'; break;
-    case 'run.cancelled': label = '本轮已取消'; break;
+    case 'run.cancelled': label = `本轮已中断：${({ user_hangup: '通话已结束', user_interrupt: '用户打断', page_hidden: '页面进入后台', client_error: '客户端连接中断', connection_closed: '连接断开', timeout: '生成超时', superseded: '开始新一轮' } as Record<string, string>)[event.reason ?? ''] ?? '请求被取消'}；已写入的草稿会保留`; break;
     case 'run.failed': label = event.message; failed = true; break;
     default: return previous;
   }

@@ -26,7 +26,7 @@ test('panel changes and tool failures appear before final response and survive c
   state = applyLiveEvent(state, event({ type: 'tool.completed', name: 'update_content', toolCallId: 't', isError: true }, 4), 300);
   state = applyLiveEvent(state, event({ type: 'run.cancelled' }, 5), 400);
   assert.equal(state.steps[2].failed, true);
-  assert.equal(state.status, '本轮已取消');
+  assert.match(state.status, /本轮已中断.*草稿会保留/);
   assert.equal(state.panel, panel);
   assert.deepEqual(state.steps.map(step => step.elapsedMs), [100, 200, 300, 400]);
   assert.equal(emptyLiveRun().panel, undefined);

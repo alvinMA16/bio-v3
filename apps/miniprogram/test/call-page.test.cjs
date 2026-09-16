@@ -9,6 +9,7 @@ function setup() {
   let page, callbacks;
   let starts = 0, closes = 0, destroyed = 0;
   const timers = new Set();
+  const activities = [];
   const source = ts.transpileModule(readFileSync(resolve(__dirname, '../miniprogram/pages/chat/index.ts'), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
@@ -20,14 +21,14 @@ function setup() {
     setInterval: fn => { timers.add(fn); return fn; },
     clearInterval: fn => timers.delete(fn),
     require: id => id.includes('fox-animation') ? { FoxAnimationController: class {
-      startAutoCycle() {} resume() {} suspend() {} setActivity() {} destroy() { destroyed++; }
+      startAutoCycle() {} resume() {} suspend() {} setActivity(activity) { activities.push(activity); } destroy() { destroyed++; }
     } } : id.includes('voice-client') ? { MiniVoiceClient: class {
       constructor(_, handlers) { callbacks = handlers; }
       start() { starts++; } close() { closes++; callbacks.ended(); }
     } } : { createReceipt: () => null, queueReceipt() {} },
   });
   page.setData = values => Object.assign(page.data, values);
-  return { page, timers, callbacks: () => callbacks, counts: () => ({ starts, closes, destroyed }) };
+  return { page, timers, activities, callbacks: () => callbacks, counts: () => ({ starts, closes, destroyed }) };
 }
 
 test('phone call route starts voice once, updates subtitle and releases call resources on exit', () => {
@@ -58,4 +59,28 @@ test('plain chat route does not start microphone or animation', () => {
   state.page.onReady();
   assert.equal(state.page.data.callMode, false);
   assert.equal(state.counts().starts, 0);
+});
+
+test('call distinguishes waiting, user speech, playback and hangup without dropping the notebook', () => {
+  const state = setup();
+  state.page.onLoad({ mode: 'call' });
+  state.page.onReady();
+  const handlers = state.callbacks();
+  handlers.event({ type: 'state', state: 'listening' });
+  assert.equal(state.activities.at(-1).phase, 'waiting');
+  handlers.speaking(true);
+  assert.equal(state.activities.at(-1).phase, 'listening');
+  handlers.speaking(false);
+  assert.equal(state.activities.at(-1).phase, 'waiting');
+  handlers.event({ type: 'state', state: 'agent' });
+  handlers.playback(true);
+  assert.equal(state.activities.at(-1).speech, 'audio');
+  handlers.event({ type: 'state', state: 'synthesizing' });
+  assert.equal(state.activities.at(-1).speech, 'audio', 'server state must not stop ongoing mouth animation');
+  handlers.playback(false);
+  assert.equal(state.activities.at(-1).phase, 'processing');
+  assert.ok(state.activities.every(activity => activity.notebook));
+  handlers.ended();
+  assert.equal(state.activities.at(-1).phase, 'idle');
+  assert.equal(state.activities.at(-1).notebook, false);
 });

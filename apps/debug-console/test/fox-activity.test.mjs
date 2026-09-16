@@ -22,10 +22,16 @@ test('audio playback overrides text streaming, including silence and user interr
 test('connecting and listening do not write; finalizing and queued speech keep thinking', () => {
   const input = { running: true, panel: undefined, live, audioPlaying: false };
   for (const voiceState of ['connecting', 'listening']) {
-    assert.equal(foxActivityOf({ ...input, voiceState }).phase, 'listening');
+    assert.equal(foxActivityOf({ ...input, voiceState }).phase, 'waiting');
   }
   for (const voiceState of ['finalizing', 'agent', 'synthesizing']) {
     assert.equal(foxActivityOf({ ...input, running: false, voiceState }).phase, 'processing');
   }
   assert.equal(foxActivityOf({ ...input, running: false }).phase, 'idle');
+});
+
+test('silent tool work during a call holds the notebook instead of writing', () => {
+  const result = foxActivityOf({ running: true, panel: undefined, live: { ...live, activeTools: [{ id: 'a', name: 'update_content' }] }, audioPlaying: false, voiceState: 'agent' });
+  assert.equal(result.phase, 'processing');
+  assert.equal(result.notebook, true);
 });

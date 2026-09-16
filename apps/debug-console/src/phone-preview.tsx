@@ -1,4 +1,5 @@
 import { MaterialFolder } from './material-folder';
+import { ManuscriptFolder } from './manuscript-folder';
 import { ReceiptPrinter } from './receipt-printer';
 import type { Material } from '@bio/contracts';
 import type { SessionReceipt } from './session-receipt';
@@ -101,7 +102,7 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
           <section className="phone-desk-drawer" role="dialog" aria-modal="true" aria-label={drawer === 'folder' ? '资料夹' : '文稿集'} onClick={event => event.stopPropagation()} onKeyDown={event => { if (event.key === 'Escape') setDrawer(null); }}>
             <button type="button" autoFocus aria-label="关闭" onClick={() => setDrawer(null)}>×</button>
             <h2>{drawer === 'folder' ? '资料夹' : '文稿集'}</h2>
-            {drawer === 'folder' ? <MaterialFolder disabled={startDisabled} onChat={item => { setDrawer(null); onMaterialChat(item); }} /> : <p>文稿收录功能正在准备中</p>}
+            {drawer === 'folder' ? <MaterialFolder disabled={startDisabled} onChat={item => { setDrawer(null); onMaterialChat(item); }} /> : <ManuscriptFolder />}
           </section>
         </div>}
 
@@ -115,7 +116,7 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
         <section className={`phone-content-panel ${mode !== 'conversation' ? 'phone-content-panel--document' : ''}`} aria-label={mode === 'conversation' ? '对话内容' : mode === 'attachment' ? '附件内容' : '编辑内容'}>
           {mode === 'conversation' ? <div className="phone-panel-scroll phone-dialogue" ref={subtitleRef}>
             <p>{subtitle || (running && phase !== 'listening' ? '让我想一想…' : '我在这里，慢慢讲。')}</p>
-          </div> : <div className="phone-panel-scroll">{children}</div>}
+          </div> : <div className="phone-panel-scroll">{mode === 'editor' && <p className="document-progress" role="status">{running ? '正在整理文稿，完成后会保存到文稿集…' : '本轮已结束；已写入的草稿可在文稿集中查看。若正文为空，说明尚未生成成功。'}</p>}{children}</div>}
         </section>
         <p className="phone-call-status" role="status">{status || (running ? speaking ? '正在回应' : '正在思考' : '等待连接')}</p>
         <footer className="phone-call-controls" aria-label="通话控制">

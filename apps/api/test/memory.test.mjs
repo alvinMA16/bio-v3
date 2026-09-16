@@ -63,6 +63,10 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
   let server;
   try {
     await t.test('new call pins overview and stores original without writing long-term memory', async () => {
+      assert.equal(await memory.claimCallOpening(other, call, connection), false);
+      assert.equal(await memory.claimCallOpening(user, call, 'wrong-connection'), false);
+      assert.equal(await memory.claimCallOpening(user, call, connection), true);
+      assert.equal(await memory.claimCallOpening(user, call, connection), false);
       await memory.archive(scope, conversation, run, message, 'user', '请保留我的口语。父亲在一九九八年送我去车站。');
       assert.deepEqual(await memory.overview(user), { preferences: [], entries: [] });
       assert.equal((await memory.pool.query('SELECT * FROM bio_memory_jobs WHERE call_id=$1', [call])).rowCount, 0);
@@ -74,6 +78,7 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
       await memory.disconnectCall(user, call, connection, false);
       assert.equal((await memory.pool.query('SELECT * FROM bio_memory_jobs WHERE call_id=$1', [call])).rowCount, 0);
       await memory.beginCall(user, call, 'reconnected');
+      assert.equal(await memory.claimCallOpening(user, call, 'reconnected'), false);
       await memory.disconnectCall(user, call, connection, true); // stale connection cannot end resumed call
       assert.equal((await memory.pool.query('SELECT status FROM bio_memory_calls WHERE id=$1', [call])).rows[0].status, 'active');
       await memory.disconnectCall(user, call, 'reconnected', true);
@@ -124,8 +129,11 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
       const first = join(directory, 'first'); const second = join(directory, 'second');
       const release = await memory.acquireSession(user, conversation, randomUUID(), first);
       await writeFile(join(first, 'session.jsonl'), 'persisted-sdk-state');
+      await writeFile(join(first, 'panel.json'), JSON.stringify({ documents: [{ id: 'saved-draft', title: '保存的文稿', version: 2, blocks: [{ id: 'p1', kind: 'paragraph', text: '可恢复的正文' }] }] }));
       await assert.rejects(memory.acquireSession(user, conversation, randomUUID(), second));
       await release();
+      assert.equal((await memory.manuscripts(user))[0].document.blocks[0].text, '可恢复的正文');
+      assert.deepEqual(await memory.manuscripts(other, conversation), []);
       await assert.rejects(memory.acquireSession(other, conversation, randomUUID(), second));
       const release2 = await memory.acquireSession(user, conversation, randomUUID(), second);
       assert.equal(await readFile(join(second, 'session.jsonl'), 'utf8'), 'persisted-sdk-state');
@@ -146,7 +154,7 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
           tool = { name: 'propose_memory_batch', args: { noChange: false, callSummary, batch: JSON.stringify({ changes: [{ id: task.unusedIds[0], expectedVersion: 0, type: 'interaction', title: '最近聊到父亲', summary: '聊了父亲', body: '本次用户聊到父亲。', active: true, sources: [newSource] }], overview: task.overview }) } };
           if (mode === 'noChange') tool.args = { noChange: true, callSummary };
         } else text = '候选已提交。';
-      } else if (!toolMessages.length) tool = { name: 'read_memory', args: { memoryId: memId } };
+      } else if (mode !== 'opening' && !toolMessages.length) tool = { name: 'read_memory', args: { memoryId: memId } };
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       const send = (delta, finish_reason = null) => res.write(`data: ${JSON.stringify({ id: 'mock', object: 'chat.completion.chunk', model: 'mock-memory', choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
       send({ role: 'assistant' });
@@ -166,6 +174,23 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
       assert.ok(!result.message.content.includes(memId));
       assert.equal((await memory.pool.query('SELECT * FROM bio_memory_jobs WHERE call_id=$1', [newCall])).rowCount, 0);
       await memory.disconnectCall(user, newCall, 'agent', true);
+    });
+    await t.test('real Pi opening uses hidden server event, loads history, and archives no fabricated user evidence', async () => {
+      mode = 'opening'; requests.length = 0;
+      const openingCall = `opening-${prefix}`;
+      const conv = await memory.beginCall(user, openingCall, 'opening');
+      const storage = new AgentStorage(config); const factory = new PiSessionFactory(config, storage, {}, memory);
+      const agent = new AgentService(factory, storage, config, memory);
+      await agent.run({ conversationId: conv, message: '' }, undefined, undefined, { userId: user, callId: openingCall }, 'call_opening');
+      assert.match(JSON.stringify(requests[0].messages), /bio_call_opening|服务端事件/);
+      assert.match(JSON.stringify(requests[0].messages), /bio_runtime_context/);
+      assert.match(JSON.stringify(requests[0].messages), /call_history/);
+      const originals = (await memory.pool.query('SELECT role FROM bio_memory_messages WHERE call_id=$1', [openingCall])).rows;
+      assert.ok(originals.some(row => row.role === 'assistant'));
+      assert.equal(originals.some(row => row.role === 'user'), false);
+      // No user participated; leave no pending organization ahead of the worker fixture.
+      await memory.disconnectCall(user, openingCall, 'opening', true);
+      await memory.pool.query("UPDATE bio_memory_jobs SET status='done',finished_at=now() WHERE call_id=$1", [openingCall]);
     });
     await t.test('real Pi background worker reads the call then commits a validated proposal', async () => {
       mode = 'worker'; requests.length = 0;

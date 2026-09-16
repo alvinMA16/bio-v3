@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AgentTraceEntry } from '@bio/contracts';
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
 
@@ -33,6 +33,17 @@ export class AgentStorage {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     // Synchronous writes keep local event order and surface disk failures immediately.
     appendFileSync(join(directory, `${entry.runId}.jsonl`), `${JSON.stringify(entry)}\n`, { mode: 0o600 });
+  }
+
+  localManuscripts() {
+    const root = join(this.root, 'conversations');
+    if (!existsSync(root)) return [];
+    return readdirSync(root).filter(id => UUID.test(id)).flatMap(conversationId => {
+      const path = join(root, conversationId, 'panel.json');
+      if (!existsSync(path)) return [];
+      const value = JSON.parse(readFileSync(path, 'utf8'));
+      return (value.documents ?? []).map((document: import('@bio/contracts').PanelDocument) => ({ conversationId, document }));
+    });
   }
 
   readTrace(runId: string): AgentTraceEntry[] {

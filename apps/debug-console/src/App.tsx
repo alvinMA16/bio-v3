@@ -111,10 +111,12 @@ export function App() {
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
   const [micEnabled, setMicEnabled] = useState(false);
   const [micListening, setMicListening] = useState(false);
+  const [userSpeaking, setUserSpeaking] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState('');
   const [voiceState, setVoiceState] = useState<Extract<VoiceServerMessage, { type: 'state' }>['state']>('connecting');
+  const [memoryEnabled, setMemoryEnabled] = useState<boolean>();
   const [spokenSubtitle, setSpokenSubtitle] = useState('');
   const voiceRef = useRef<BrowserVoice | null>(null);
   const voiceTurn = useRef<{ record: RunRecord; saved: boolean } | null>(null);
@@ -157,7 +159,7 @@ export function App() {
 
   useEffect(() => {
     void fetch('/api/v1/health')
-      .then((response) => setApiStatus(response.ok ? 'online' : 'offline'))
+      .then(async response => { setApiStatus(response.ok ? 'online' : 'offline'); if (response.ok) { const value = await response.json(); setMemoryEnabled(value.capabilities?.memory); } })
       .catch(() => setApiStatus('offline'));
   }, []);
 
@@ -265,6 +267,7 @@ export function App() {
       microphoneError: setVoiceStatus,
       inputLevel: setMicLevel,
       listening: setMicListening,
+      speaking: setUserSpeaking,
       playback: (playing, text) => {
         setAudioPlaying(playing);
         if (text) setSpokenSubtitle(text);
@@ -465,6 +468,7 @@ export function App() {
             : apiStatus === 'checking'
               ? 'Checking API'
               : 'API offline'}
+          {apiStatus === 'online' && <span> · {memoryEnabled === true ? '长期记忆已启用' : memoryEnabled === false ? '长期记忆未启用' : '记忆状态待确认'}</span>}
         </div>
       </header>
 
@@ -475,7 +479,7 @@ export function App() {
         <div className="lab-main" ref={resultRef}>
           <section className="lab-preview-column">
             <header className="lab-section-heading"><h1>用户界面预览</h1><span>手机 · 实时状态</span></header>
-            <PhonePreview subtitle={subtitle} running={running} activity={foxActivityOf({ running, live, panel: shownPanel, ...(callOpen ? { audioPlaying, ...(voiceEnabled ? { voiceState } : {}), userSpeaking: micEnabled && micListening } : {}) })}
+            <PhonePreview subtitle={subtitle} running={running} activity={foxActivityOf({ running, live, panel: shownPanel, ...(callOpen ? { audioPlaying, ...(voiceEnabled ? { voiceState } : {}), userSpeaking: micEnabled && micListening && userSpeaking } : {}) })}
               callOpen={callOpen} callStartedAt={callStartedAt} status={voiceStatus} mode={shownPanel?.mode ?? 'conversation'}
               onMaterialChat={item => { setMaterialTitle(item.title); setMaterialIds([item.id]); setScene('attachment_conversation'); setMessage(`我们聊聊《${item.title}》这份资料吧。`); inputRef.current?.focus(); }}
               startDisabled={busy} onStart={startVoice} speakerEnabled={speakerEnabled}
