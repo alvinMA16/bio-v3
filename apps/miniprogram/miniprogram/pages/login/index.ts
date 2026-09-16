@@ -1,4 +1,5 @@
 import { authRequest, clearAccount } from '../../lib/account';
+import { migrateLegacyOwnerReceipt } from '../../lib/session-receipt';
 Page({
   timer: undefined as ReturnType<typeof setInterval> | undefined,
   retryAt: 0,
@@ -25,6 +26,7 @@ Page({
     this.setData({ busy: true, error: '' });
     try {
       const result = await authRequest<{ token: string; user: { id: string; phone: string } }>('login', { phone: this.data.phone, code: this.data.code });
+      migrateLegacyOwnerReceipt(result.user.id);
       clearAccount(); wx.setStorageSync('bio-auth-token', result.token); wx.setStorageSync('bio-account-id', result.user.id); wx.setStorageSync('bio-account-phone', result.user.phone);
       wx.reLaunch({ url: '/pages/character/index' });
     } catch (error) { this.setData({ error: error instanceof Error ? error.message : '登录失败' }); }

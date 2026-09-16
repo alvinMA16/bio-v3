@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import './account.css';
+import { migrateLegacyOwnerCache } from './account-cache';
 
 const TOKEN_KEY = 'bio-account-token';
 const nativeFetch = window.fetch.bind(window);
@@ -49,6 +50,7 @@ export function AccountBoundary({ children }: { children: ReactNode }) {
         if (response.status === 401) { clear(); return; }
         if (!response.ok) throw new Error('暂时无法确认登录状态，请重试');
         const value = await response.json();
+        migrateLegacyOwnerCache(value.id);
         sessionStorage.setItem('bio-account-id', value.id); setUser(value); setState('ready');
       } catch { if (active) { setError('暂时无法连接服务，请重试'); setState('error'); } }
     })();
@@ -68,6 +70,7 @@ export function AccountBoundary({ children }: { children: ReactNode }) {
     setBusy(true); setError('');
     try {
       const result = await api('login', { phone, code });
+      migrateLegacyOwnerCache(result.user.id);
       localStorage.setItem(TOKEN_KEY, result.token); sessionStorage.setItem('bio-auth-token', result.token);
       sessionStorage.setItem('bio-account-id', result.user.id); setUser(result.user); setCode(''); setState('ready');
     } catch (e) { setError(e instanceof Error ? e.message : '登录失败'); }

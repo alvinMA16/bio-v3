@@ -1,4 +1,4 @@
-import { clearReceipt } from './session-receipt';
+import { clearReceipt, migrateLegacyOwnerReceipt } from './session-receipt';
 export function authHeader(): Record<string, string> {
   const token = wx.getStorageSync('bio-auth-token');
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -22,6 +22,7 @@ export async function requireAccount(): Promise<boolean> {
     if (!config.enabled) return true;
     if (wx.getStorageSync('bio-auth-token')) {
       const user = await authRequest<{ id: string; phone: string }>('me');
+      migrateLegacyOwnerReceipt(user.id);
       wx.setStorageSync('bio-account-id', user.id); wx.setStorageSync('bio-account-phone', user.phone); return true;
     }
   } catch (error) { wx.showToast({ title: error instanceof Error ? error.message : '请重新登录', icon: 'none' }); }
