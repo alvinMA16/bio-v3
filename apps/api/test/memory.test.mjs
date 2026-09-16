@@ -149,10 +149,12 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
         const initial = input.messages.find(m => m.role === 'user');
         const task = JSON.parse(typeof initial.content === 'string' ? initial.content : initial.content[0].text);
         if (!toolMessages.length) tool = { name: 'read_source', args: { callId: task.callId } };
-        else if (toolMessages.length === 1) {
+        else if (toolMessages.length === 1 || mode === 'worker' && toolMessages.length === 2) {
           const newSource = JSON.parse(toolMessages[0].content).messages.find(m => m.role === 'user').source_ref;
           tool = { name: 'propose_memory_batch', args: { noChange: false, callSummary, batch: JSON.stringify({ changes: [{ id: task.unusedIds[0], expectedVersion: 0, type: 'interaction', title: '最近聊到父亲', summary: '聊了父亲', body: '本次用户聊到父亲。', active: true, sources: [newSource] }], overview: task.overview }) } };
           if (mode === 'noChange') tool.args = { noChange: true, callSummary };
+          // A contradictory proposal must return an error, not silently discard its batch.
+          if (mode === 'worker' && toolMessages.length === 1) tool.args.noChange = true;
         } else text = '候选已提交。';
       } else if (mode !== 'opening' && !toolMessages.length) tool = { name: 'read_memory', args: { memoryId: memId } };
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
@@ -201,6 +203,7 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
       assert.deepEqual((await memory.pool.query('SELECT call_summary FROM bio_memory_calls WHERE id=$1', [`agent-${prefix}`])).rows[0].call_summary, callSummary);
       assert.equal((await memory.search(user, '最近聊到父亲', 'interaction')).items.length, 1);
       assert.ok(requests.length >= 3);
+      assert.match(JSON.stringify(requests), /Omit batch for noChange=true/);
       await worker.tick();
       assert.equal((await memory.search(user, '最近聊到父亲', 'interaction')).items.length, 1);
     });
