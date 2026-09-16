@@ -9,6 +9,9 @@ const source = name => readFileSync(new URL(`../../miniprogram/miniprogram/lib/$
 const moduleUrl = code => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText).toString('base64')}`;
 const behaviorUrl = moduleUrl(source('fox-behavior'));
 const { FoxAnimationController } = await import(moduleUrl(source('fox-animation-controller').replace("'./fox-behavior'", JSON.stringify(behaviorUrl))));
+const controllerUrl = moduleUrl(source('fox-animation-controller').replace("'./fox-behavior'", JSON.stringify(behaviorUrl)));
+const { FOX_ANIMATION_CLIPS } = await import(controllerUrl);
+const { FoxFrameGate } = await import(moduleUrl(source('fox-frame-gate').replace("'./fox-animation-controller'", JSON.stringify(controllerUrl))));
 const activity = fields => ({ ...DEFAULT_FOX_ACTIVITY, ...fields });
 
 function setup(t) {
@@ -95,11 +98,12 @@ test('acknowledgment requires notebook listening and has a cooldown', t => {
 });
 
 
-test('thinking holds the notebook, speech loops, interruption writes, and end returns to empty hands', t => {
+test('thinking writes, speech loops, interruption writes, and end returns to empty hands', t => {
   const { controller, last } = setup(t);
   controller.setActivity(activity({ phase: 'processing' }));
-  t.mock.timers.tick(450);
-  assert.equal(last().action.id, 'notebookTalk');
+  t.mock.timers.tick(120);
+  t.mock.timers.tick(200);
+  assert.equal(last().action.id, 'note');
   assert.equal(last().frame, 1);
   controller.setActivity(activity({ phase: 'processing', speech: 'audio' }));
   assert.equal(last().action.id, 'notebookTalk');
@@ -137,4 +141,36 @@ test('reading does not introduce a dedicated action or write notes', t => {
   t.mock.timers.tick(3000);
   assert.equal(last().action.id, 'blink');
   assert.equal(last().frame, 0);
+});
+
+test('slow or failed sprite loads retain the actor and late loads cannot resurrect an old action', () => {
+  const gate = new FoxFrameGate();
+  const state = (id, frame) => ({ action: FOX_ANIMATION_CLIPS[id], frame, playing: true, phase: 'action' });
+  assert.equal(gate.request(state('note', 4)), undefined);
+  assert.equal(gate.loaded('blink').action.id, 'blink');
+  assert.equal(gate.request(state('note', 1)).action.id, 'blink');
+  assert.equal(gate.loaded('note').frame, 1);
+  assert.equal(gate.request(state('nod', 5)).action.id, 'note');
+  gate.request(state('notebookTalk', 8));
+  assert.equal(gate.loaded('nod').action.id, 'note');
+  assert.equal(gate.loaded('notebookTalk').frame, 8);
+  assert.equal(gate.request(state('wave', 2)).action.id, 'notebookTalk', 'failed load must keep the last actor');
+});
+
+test('processing pauses between strokes; audible speech immediately stops writing', t => {
+  const { controller, last } = setup(t);
+  controller.setActivity(activity({ phase: 'processing' }));
+  t.mock.timers.tick(120);
+  t.mock.timers.tick(200);
+  assert.equal(last().frame, 1);
+  t.mock.timers.tick(360);
+  assert.equal(last().frame, 1, 'thinking strokes should be slower than listening');
+  t.mock.timers.tick(240);
+  assert.equal(last().frame, 4);
+  controller.setActivity(activity({ phase: 'processing', speech: 'audio' }));
+  assert.equal(last().action.id, 'notebookTalk');
+  for (let i = 0; i < 60; i++) {
+    t.mock.timers.tick(200);
+    assert.equal(last().action.id, 'notebookTalk');
+  }
 });

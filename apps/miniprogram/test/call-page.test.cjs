@@ -20,7 +20,7 @@ function setup() {
     getApp: () => ({ globalData: { apiBaseUrl: '/api/v1' } }),
     setInterval: fn => { timers.add(fn); return fn; },
     clearInterval: fn => timers.delete(fn),
-    require: id => id.includes('fox-animation') ? { FoxAnimationController: class {
+    require: id => id.includes('fox-frame-gate') ? { FoxFrameGate: class {} } : id.includes('fox-animation') ? { FOX_ANIMATION_CLIPS: {}, FoxAnimationController: class {
       startAutoCycle() {} resume() {} suspend() {} setActivity(activity) { activities.push(activity); } destroy() { destroyed++; }
     } } : id.includes('voice-client') ? { MiniVoiceClient: class {
       constructor(_, handlers) { callbacks = handlers; }

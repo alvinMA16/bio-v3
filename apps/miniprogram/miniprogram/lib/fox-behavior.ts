@@ -34,6 +34,6 @@ export function chooseFoxBehavior(activity: FoxActivity): FoxBehavior {
   if (activity.speech !== 'silent') return {
     action: activity.notebook ? 'notebookTalk' : 'talk', playback: 'speech',
   };
-  if (activity.phase === 'writing') return { action: 'note', playback: 'writing' };
+  if (activity.phase === 'writing' || activity.phase === 'processing') return { action: 'note', playback: 'writing' };
   return { action: resting, playback: 'ambient' };
 }

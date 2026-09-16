@@ -55,7 +55,7 @@ test('chat backgrounding does not print; unloading prints once and cancels pendi
   let page;
   load('pages/chat/index.ts', {
     Page: value => { page = value; },
-    require: id => id.includes('session-receipt') ? receipt : { MiniVoiceClient: class {} },
+    require: id => id.includes('session-receipt') ? receipt : { FOX_ANIMATION_CLIPS: {}, MiniVoiceClient: class {} },
   });
   page.onLoad();
   page.onShow();
@@ -77,7 +77,7 @@ test('explicit hang-up prepares receipt before the home page becomes visible', (
   load('pages/chat/index.ts', {
     Page: value => { page = value; },
     wx: { navigateBack: () => { shown = receipt.takePendingReceipt(); } },
-    require: id => id.includes('session-receipt') ? receipt : { MiniVoiceClient: class {} },
+    require: id => id.includes('session-receipt') ? receipt : { FOX_ANIMATION_CLIPS: {}, MiniVoiceClient: class {} },
   });
   page.onLoad(); page.onShow(); page.data.messages = messages;
   page.leaveChat();

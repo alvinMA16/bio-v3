@@ -1,4 +1,5 @@
-import { FoxAnimationController, type FoxAnimationState } from '../../lib/fox-animation-controller';
+import { FOX_ANIMATION_CLIPS, FoxAnimationController, type FoxActionId, type FoxAnimationState } from '../../lib/fox-animation-controller';
+import { FoxFrameGate } from '../../lib/fox-frame-gate';
 import { MiniVoiceClient } from '../../lib/voice-client';
 import { createReceipt, queueReceipt } from '../../lib/session-receipt';
 let voiceClient: MiniVoiceClient | null = null;
@@ -25,6 +26,7 @@ interface ChatCompletionResponse {
 Page({
   materialIds: [] as string[],
   animationController: null as FoxAnimationController | null,
+  frameGate: null as FoxFrameGate | null,
   callTimer: null as ReturnType<typeof setInterval> | null,
   callConnectedAt: 0,
   startedAt: 0,
@@ -38,7 +40,8 @@ Page({
   data: {
     callMode: false, callDuration: '未连接', callSubtitle: '',
     actorSrc: '/assets/animations/fox-clerk/blink.webp',
-    actorWidth: 400, actorHeight: 300, actorLeft: 0, actorTop: 0,
+    actorSheets: Object.values(FOX_ANIMATION_CLIPS), actorReady: false,
+    actorLeft: 0, actorTop: 0,
     voiceActive: false, voiceStatus: '', voiceTranscript: '', audioPlaying: false, agentWorking: false,
     materialTitle: '',
     input: '',
@@ -57,8 +60,9 @@ Page({
     if (options.mode === 'call') this.setData({ callMode: true });
     if (this.data.callMode) {
       wx.setNavigationBarTitle({ title: '与令狸通话' });
+      this.frameGate = new FoxFrameGate();
       this.animationController = new FoxAnimationController((state: FoxAnimationState) => {
-        this.setData({ actorSrc: state.action.src, actorWidth: state.action.columns * 100, actorHeight: state.action.rows * 100, actorLeft: -(state.frame % state.action.columns) * 100, actorTop: -Math.floor(state.frame / state.action.columns) * 100 });
+        this.showActorFrame(this.frameGate!.request(state));
       });
       this.animationController.startAutoCycle();
     }
@@ -69,6 +73,15 @@ Page({
   },
 
   onReady(): void { if (this.data.callMode) this.startVoice(); },
+
+  onActorLoaded(event: WechatMiniprogram.CustomEvent): void {
+    if (!this.unloaded) this.showActorFrame(this.frameGate?.loaded(event.currentTarget.dataset.action as FoxActionId));
+  },
+
+  showActorFrame(state: FoxAnimationState | undefined): void {
+    if (!state || this.unloaded) return;
+    this.setData({ actorReady: true, actorSrc: state.action.src, actorLeft: -(state.frame % state.action.columns) * 100, actorTop: -Math.floor(state.frame / state.action.columns) * 100 });
+  },
 
   onShow(): void { this.visibleSince = Date.now(); this.animationController?.resume(); },
 

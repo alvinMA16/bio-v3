@@ -5,6 +5,8 @@ import type { Material } from '@bio/contracts';
 import type { SessionReceipt } from './session-receipt';
 import type { FoxActivity } from '../../miniprogram/miniprogram/lib/fox-behavior';
 import { FoxAnimationController, type FoxAnimationState } from '../../miniprogram/miniprogram/lib/fox-animation-controller';
+import { FoxFrameGate } from '../../miniprogram/miniprogram/lib/fox-frame-gate';
+import type { FoxActionId } from '../../miniprogram/miniprogram/lib/fox-animation-controller';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 interface Animation {
@@ -38,6 +40,7 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
   }, [callStartedAt, callOpen]);
   const callDuration = `${String(Math.floor(callSeconds / 60)).padStart(2, '0')}:${String(callSeconds % 60).padStart(2, '0')}`;
   const [animationState, setAnimationState] = useState<FoxAnimationState>();
+  const frameGate = useRef(new FoxFrameGate());
   const controllerRef = useRef<FoxAnimationController | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
   const subtitleRef = useRef<HTMLDivElement>(null);
@@ -57,7 +60,7 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
     return () => media.removeEventListener('change', update);
   }, []);
   useEffect(() => {
-    const controller = new FoxAnimationController(setAnimationState);
+    const controller = new FoxAnimationController(state => setAnimationState(frameGate.current.request(state)));
     controllerRef.current = controller;
     controller.setActivity({ phase: 'idle', notebook: false, speech: 'silent', reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches });
     controller.startWelcomeSequence();
@@ -81,10 +84,13 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
   const artwork = <>
       {manifest && <>
         <div className="phone-art phone-art--background" style={{ backgroundImage: `url(${manifest.layers.environment.src})` }} />
-        {animation && <div className="phone-art phone-art--actor" style={{
-          backgroundImage: `url(${animation.src})`, backgroundSize: `${animation.columns * 100}% ${animation.rows * 100}%`,
-          backgroundPosition: `${animation.columns > 1 ? column / (animation.columns - 1) * 100 : 0}% ${animation.rows > 1 ? row / (animation.rows - 1) * 100 : 0}%`,
-        }} />}
+        {manifest.animations.map(sheet => <img key={sheet.id} src={sheet.src} alt=""
+          onLoad={() => setAnimationState(frameGate.current.loaded(sheet.id as FoxActionId))}
+          style={{ position: 'absolute', maxWidth: 'none', pointerEvents: 'none', zIndex: 1,
+            width: `${sheet.columns * 100}%`, height: `${sheet.rows * 100}%`,
+            left: `${sheet.id === animation?.id ? -column * 100 : 0}%`, top: `${sheet.id === animation?.id ? -row * 100 : 0}%`,
+            visibility: animationState && sheet.id === animation?.id ? 'visible' : 'hidden',
+          }} />)}
         <div className="phone-art phone-art--board" style={{ backgroundImage: `url(${manifest.layers.innerPanel.src})` }} />
       </>}
       {!manifest && <div className="phone-art-fallback">令狸<span>{assetError ? '场景素材加载失败' : '正在加载场景…'}</span></div>}

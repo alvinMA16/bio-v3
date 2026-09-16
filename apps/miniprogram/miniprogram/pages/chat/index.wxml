@@ -4,7 +4,7 @@
     <view class="call-video" aria-label="令狸的对话画面">
       <view class="call-scene">
         <image class="call-layer" src="/assets/animations/fox-clerk/environment.webp" mode="scaleToFill" />
-        <image class="call-actor" src="{{actorSrc}}" mode="scaleToFill" style="width: {{actorWidth}}%; height: {{actorHeight}}%; left: {{actorLeft}}%; top: {{actorTop}}%;" />
+        <image wx:for="{{actorSheets}}" wx:key="id" class="call-actor" src="{{item.src}}" data-action="{{item.id}}" bindload="onActorLoaded" mode="scaleToFill" style="width: {{item.columns * 100}}%; height: {{item.rows * 100}}%; left: {{actorSrc === item.src ? actorLeft : 0}}%; top: {{actorSrc === item.src ? actorTop : 0}}%; visibility: {{actorReady && actorSrc === item.src ? 'visible' : 'hidden'}};" />
         <image class="call-layer" src="/assets/animations/fox-clerk/inner-panel.webp" mode="scaleToFill" />
       </view>
     </view>

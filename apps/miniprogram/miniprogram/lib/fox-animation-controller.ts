@@ -176,7 +176,10 @@ export class FoxAnimationController {
       }
       this.frame = this.frame === 4 ? 1 : 4;
       this.emit();
-      this.schedule(() => this.advance(), this.strokes % 8 === 0 ? FOX_TIMING.writingPause : 360);
+      const thinking = this.activity.phase === 'processing';
+      this.schedule(() => this.advance(), thinking
+        ? this.strokes % 4 === 0 ? 1400 : 600
+        : this.strokes % 8 === 0 ? FOX_TIMING.writingPause : 360);
       return;
     }
     this.frame += 1;
