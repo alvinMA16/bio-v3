@@ -57,6 +57,20 @@ def actor_mask(size: tuple[int, int], pose: str) -> Image.Image:
         (289, 696), (271, 682), (256, 665), (247, 649),
         (246, 633), (251, 615), (257, 592), (260, 564), (265, 534),
     ]
+    if pose == "writing-down":
+        # The bowed ears sit lower than the upright head. Leaving the upright
+        # mask here would carry shelf pixels around the moving ear tips.
+        fox = [
+            (280, 547), (274, 511), (275, 477), (280, 450),
+            (292, 437), (310, 438), (336, 450), (361, 467), (381, 485),
+            (405, 472), (435, 472), (464, 485), (490, 466), (520, 450),
+            (548, 448), (565, 461), (578, 485), (578, 514), (570, 548),
+            (577, 580), (582, 611), (588, 640), (584, 666),
+            (570, 696), (552, 712),
+        ] + fox[34:53] + [
+            (302, 719), (280, 700), (264, 679), (257, 653),
+            (261, 628), (270, 595),
+        ]
     draw.polygon(points(fox), fill=255)
 
     if pose.startswith("wave"):
@@ -184,7 +198,7 @@ def write_sheet(frames: list[Image.Image], action: str, columns: int = 4) -> dic
             "blink": "狐狸层切换睁眼、半闭和闭眼姿态；环境与白框保持静止",
             "talk": "整张狐狸与板子完全固定，只切换嘴部口型，消除脸部纹理闪动",
             "wave": "固定狐狸身体与板子，仅让四指纯橙色毛毡手臂完成抬手、慢速摆动和收手",
-            "note": "手持浅色笔记本，用铅笔完成几次短笔画，再回到静止姿态",
+            "note": "抬头听、低头看本子连续写几笔、停笔回看、抬头眨眼；书写期间视线保持朝下",
             "nod": "保持本子与双手稳定，低头回应后抬头，再回到静止姿态",
             "notebookTalk": "拿着本子面向你说话，本子与双手固定，仅切换口型",
         }[action],
@@ -232,8 +246,13 @@ def main() -> None:
     hold_actor = actor_frame(hold, "neutral")
     # Writing uses complete generated actor/board keyframes, never hand patches
     # or a separately pasted notebook. Occlusion belongs to the source image.
-    note_hold_actor = actor_frame(normalized_image("notebook-hold.png", size), "neutral")
-    writing_actor = actor_frame(normalized_image("notebook-write-active.png", size), "neutral")
+    writing_actor = actor_frame(normalized_image("notebook-write-down.png", size), "writing-down")
+    writing_stroke = actor_frame(normalized_image("notebook-write-down-stroke.png", size), "writing-down")
+    # Eyes only: keep the approved notebook/face plate completely stable.
+    eyes_mask = rounded_mask(size, (318, 592, 519, 639), 16).filter(ImageFilter.GaussianBlur(3))
+    notebook_blink = actor_frame(Image.composite(
+        normalized_image("notebook-blink.png", size), hold, eyes_mask,
+    ), "neutral")
     nod_actor = actor_frame(nodding, "neutral")
     notebook_quiet = actor_frame(keep_only_mouth(poses["talk-quiet"], hold), "neutral")
     notebook_open = actor_frame(keep_only_mouth(poses["talk-a"], hold), "neutral")
@@ -271,9 +290,9 @@ def main() -> None:
         write_sheet(talk_frames, "talk"),
         write_sheet(wave_frames, "wave"),
         write_sheet([
-            actor["neutral"], note_hold_actor, note_hold_actor, note_hold_actor,
-            writing_actor, writing_actor, writing_actor, writing_actor,
-            note_hold_actor, note_hold_actor, note_hold_actor, note_hold_actor,
+            actor["neutral"], hold_actor, nod_actor, writing_actor,
+            writing_actor, writing_stroke, writing_actor, writing_stroke,
+            writing_actor, nod_actor, hold_actor, notebook_blink,
             actor["neutral"],
         ], "note"),
         write_sheet([
@@ -289,7 +308,7 @@ def main() -> None:
         ], "notebookTalk"),
     ]
     manifest = {
-        "version": 12,
+        "version": 13,
         "character": "fox-clerk",
         "style": "needle-felt stop-motion",
         "frameMode": "three-layer",

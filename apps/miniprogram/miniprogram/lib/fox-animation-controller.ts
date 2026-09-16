@@ -81,6 +81,22 @@ export const FOX_ANIMATION_CLIPS: Record<FoxActionId, FoxAnimationClip> = {
 
 type StateListener = (state: FoxAnimationState) => void;
 
+// Semantic poses in note.webp: hold, lower head, write A/B, pause, raise, blink.
+// A writing bout stays looking at the page; eye contact happens only after it.
+const WRITING_SEQUENCE = [
+  { frame: 2, listening: 180, thinking: 260 },
+  { frame: 3, listening: 220, thinking: 420 },
+  { frame: 4, listening: 240, thinking: 440 },
+  { frame: 5, listening: 300, thinking: 520 },
+  { frame: 6, listening: 220, thinking: 420 },
+  { frame: 7, listening: 340, thinking: 580 },
+  { frame: 8, listening: 480, thinking: 1500 },
+  { frame: 9, listening: 180, thinking: 260 },
+  { frame: 10, listening: 1100, thinking: 1800 },
+  { frame: 11, listening: 130, thinking: 130 },
+  { frame: 10, listening: 1000, thinking: 1400 },
+] as const;
+
 /** Shared playback driver. Hosts provide activity and render emitted frames. */
 export class FoxAnimationController {
   private actionId: FoxActionId = 'blink';
@@ -93,7 +109,7 @@ export class FoxAnimationController {
   private behavior: FoxBehavior = chooseFoxBehavior(this.activity);
   private welcomed = false;
   private lastAcknowledged = -Infinity;
-  private strokes = 0;
+  private writingStep = 0;
   private listener: StateListener;
 
   constructor(listener: StateListener) { this.listener = listener; }
@@ -149,7 +165,10 @@ export class FoxAnimationController {
 
   private startOneShot(action: FoxActionId, phase: FoxAnimationPhase): void {
     this.stopTimer(); this.actionId = action; this.frame = this.firstFrame;
-    if (action === 'note' && this.behavior.playback === 'writing') { this.frame = 4; this.strokes = 0; }
+    if (action === 'note' && this.behavior.playback === 'writing') {
+      this.phase = phase; this.playing = true; this.writingStep = 0;
+      this.showWritingStep(); return;
+    }
     this.phase = phase; this.playing = true; this.emit();
     this.schedule(() => this.advance(), 1000 / this.clip.fps);
   }
@@ -164,23 +183,22 @@ export class FoxAnimationController {
       this.phase = 'action';
       this.schedule(() => this.advance(), 1000 / this.clip.fps);
     } else if (this.behavior.playback === 'writing') {
-      this.schedule(() => this.startOneShot('note', 'action'), FOX_TIMING.writingDelay);
+      this.schedule(() => this.startOneShot('note', 'action'),
+        this.activity.phase === 'listening' ? 900 : FOX_TIMING.writingDelay);
     } else this.scheduleAmbient();
   }
 
   private advance(): void {
     if (this.actionId === 'note' && this.behavior.playback === 'writing') {
-      this.strokes++;
-      if (this.strokes >= 8 && Date.now() - this.lastAcknowledged >= FOX_TIMING.acknowledgeCooldown) {
-        this.lastAcknowledged = Date.now(); this.startOneShot('nod', 'action'); return;
+      this.writingStep++;
+      if (this.writingStep >= WRITING_SEQUENCE.length) {
+        if (this.activity.phase === 'listening'
+          && Date.now() - this.lastAcknowledged >= FOX_TIMING.acknowledgeCooldown) {
+          this.lastAcknowledged = Date.now(); this.startOneShot('nod', 'action'); return;
+        }
+        this.writingStep = 0;
       }
-      this.frame = this.frame === 4 ? 1 : 4;
-      this.emit();
-      const thinking = this.activity.phase === 'processing';
-      this.schedule(() => this.advance(), thinking
-        ? this.strokes % 4 === 0 ? 1400 : 600
-        : this.strokes % 8 === 0 ? FOX_TIMING.writingPause : 360);
-      return;
+      this.showWritingStep(); return;
     }
     this.frame += 1;
     if (this.frame < this.endFrame) {
@@ -191,9 +209,23 @@ export class FoxAnimationController {
     } else this.applyBehavior();
   }
 
+  private showWritingStep(): void {
+    const step = WRITING_SEQUENCE[this.writingStep] ?? WRITING_SEQUENCE[0];
+    this.frame = step.frame; this.emit();
+    this.schedule(() => this.advance(), this.activity.phase === 'processing' ? step.thinking : step.listening);
+  }
+
+  private blinkWithNotebook(): void {
+    this.actionId = 'note'; this.frame = 11; this.phase = 'action'; this.emit();
+    this.schedule(() => this.applyBehavior(), 130);
+  }
+
   private scheduleAmbient(): void {
     if (this.behavior.playback !== 'ambient') return;
-    this.schedule(() => this.startOneShot(this.activity.notebook ? 'nod' : 'blink', 'action'),
+    this.schedule(() => {
+      if (this.activity.notebook) this.blinkWithNotebook();
+      else this.startOneShot('blink', 'action');
+    },
       FOX_TIMING.blinkMin + Math.random() * (FOX_TIMING.blinkMax - FOX_TIMING.blinkMin));
   }
   private schedule(callback: () => void, delay: number): void {

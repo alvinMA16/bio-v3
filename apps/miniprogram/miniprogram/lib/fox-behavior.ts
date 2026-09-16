@@ -11,7 +11,7 @@ export const DEFAULT_FOX_ACTIVITY: FoxActivity = {
 };
 export const FOX_TIMING = {
   blinkMin: 8000, blinkMax: 14_000, writingDelay: 120,
-  writingPause: 500, acknowledgeCooldown: 12_000,
+  acknowledgeCooldown: 12_000,
 };
 export type FoxBehaviorAction = 'blink' | 'talk' | 'wave' | 'note' | 'nod' | 'notebookTalk';
 export interface FoxBehavior {

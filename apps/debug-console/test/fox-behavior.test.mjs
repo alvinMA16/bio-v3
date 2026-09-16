@@ -38,7 +38,7 @@ test('welcome plays once and is immediately interrupted by user speech', t => {
   assert.equal(last().action.id, 'notebookTalk');
 });
 
-test('writing starts visibly within 120 ms and keeps making strokes', t => {
+test('writing lowers the head before alternating down-facing strokes', t => {
   const { controller, last } = setup(t);
   controller.setActivity(activity({ phase: 'writing', notebook: true }));
   t.mock.timers.tick(60);
@@ -49,12 +49,16 @@ test('writing starts visibly within 120 ms and keeps making strokes', t => {
   controller.setActivity(activity({ phase: 'writing', notebook: true }));
   t.mock.timers.tick(120);
   assert.equal(last().action.id, 'note');
+  assert.equal(last().frame, 2);
+  t.mock.timers.tick(180);
+  assert.equal(last().frame, 3);
+  t.mock.timers.tick(220);
   assert.equal(last().frame, 4);
-  t.mock.timers.tick(360);
+  t.mock.timers.tick(240);
   assert.equal(last().action.id, 'note');
-  assert.equal(last().frame, 1);
-  t.mock.timers.tick(360);
-  assert.equal(last().frame, 4);
+  assert.equal(last().frame, 5);
+  t.mock.timers.tick(300);
+  assert.equal(last().frame, 6);
 });
 
 test('audio keeps talking after agent becomes idle, and interruption stops its loop', t => {
@@ -104,7 +108,7 @@ test('thinking writes, speech loops, interruption writes, and end returns to emp
   t.mock.timers.tick(120);
   t.mock.timers.tick(200);
   assert.equal(last().action.id, 'note');
-  assert.equal(last().frame, 1);
+  assert.equal(last().frame, 2);
   controller.setActivity(activity({ phase: 'processing', speech: 'audio' }));
   assert.equal(last().action.id, 'notebookTalk');
   t.mock.timers.tick(170);
@@ -114,7 +118,7 @@ test('thinking writes, speech loops, interruption writes, and end returns to emp
   controller.setActivity(activity({ phase: 'listening', speech: 'audio' }));
   assert.equal(last().action.id, 'notebookTalk');
   assert.equal(last().frame, 1);
-  t.mock.timers.tick(450);
+  t.mock.timers.tick(900);
   assert.equal(last().action.id, 'note');
   controller.setActivity(activity({ phase: 'processing' }));
   t.mock.timers.tick(450);
@@ -161,11 +165,11 @@ test('processing pauses between strokes; audible speech immediately stops writin
   const { controller, last } = setup(t);
   controller.setActivity(activity({ phase: 'processing' }));
   t.mock.timers.tick(120);
-  t.mock.timers.tick(200);
-  assert.equal(last().frame, 1);
+  t.mock.timers.tick(260);
+  assert.equal(last().frame, 3);
   t.mock.timers.tick(360);
-  assert.equal(last().frame, 1, 'thinking strokes should be slower than listening');
-  t.mock.timers.tick(240);
+  assert.equal(last().frame, 3, 'thinking strokes should be slower than listening');
+  t.mock.timers.tick(60);
   assert.equal(last().frame, 4);
   controller.setActivity(activity({ phase: 'processing', speech: 'audio' }));
   assert.equal(last().action.id, 'notebookTalk');
@@ -173,4 +177,38 @@ test('processing pauses between strokes; audible speech immediately stops writin
     t.mock.timers.tick(200);
     assert.equal(last().action.id, 'notebookTalk');
   }
+});
+
+test('listening holds eye contact then writes a whole bout before raising its head', t => {
+  const { controller, last } = setup(t);
+  controller.setActivity(activity({ phase: 'listening' }));
+  t.mock.timers.tick(899);
+  assert.equal(last().action.id, 'notebookTalk');
+  t.mock.timers.tick(1);
+  for (const [frame, duration] of [[2, 180], [3, 220], [4, 240], [5, 300], [6, 220], [7, 340], [8, 480], [9, 180], [10, 1100], [11, 130]]) {
+    assert.equal(last().action.id, 'note');
+    assert.equal(last().frame, frame);
+    t.mock.timers.tick(duration);
+  }
+  assert.equal(last().frame, 10);
+});
+
+test('waiting blinks with the notebook and interruption cancels the blink callback', t => {
+  const { controller, last } = setup(t);
+  t.mock.method(Math, 'random', () => 0);
+  controller.setActivity(activity({ phase: 'waiting' }));
+  t.mock.timers.tick(8000);
+  assert.equal(last().action.id, 'note');
+  assert.equal(last().frame, 11);
+  t.mock.timers.tick(130);
+  assert.equal(last().action.id, 'notebookTalk');
+  assert.equal(last().frame, 1);
+  t.mock.timers.tick(8000);
+  controller.setActivity(activity({ speech: 'audio' }));
+  t.mock.timers.tick(130);
+  assert.equal(last().action.id, 'notebookTalk');
+  controller.setActivity(activity({ phase: 'listening', reducedMotion: true }));
+  t.mock.timers.tick(30_000);
+  assert.equal(last().action.id, 'notebookTalk');
+  assert.equal(last().frame, 1);
 });
