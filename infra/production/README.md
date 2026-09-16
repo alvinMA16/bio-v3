@@ -65,6 +65,9 @@ CONNECT tunnels; TLS still terminates at Google. Qwen, DeepSeek and voice provid
 domains listed in `NO_PROXY` keep their direct route. Recreate the API container
 after environment changes; a plain container restart retains its old environment.
 Validate real streaming and tool calls before switching the default model.
+For `gemini-3.8-flash`, the model adapter selects LOW thinking for both interactive
+sessions and memory organization: this model rejects the MINIMAL level Pi sends
+when thinking is off. Earlier Gemini Flash models retain their existing setting.
 
 ## Verify alignment
 

@@ -21,7 +21,8 @@ test('Gemini is accepted by request validation and requires its own key', async 
   await assert.rejects(createModelRuntime(new ConfigService({ GEMINI_API_KEY: ' ' }), tmpdir(), 'gemini'), /GEMINI_API_KEY is not configured/);
 });
 
-test('Gemini native streaming executes tools and sends results back to the model', { timeout: 20000 }, async () => {
+for (const [modelId, thinkingLevel] of [['gemini-3.8-flash', 'LOW'], ['gemini-3-flash-preview', 'MINIMAL']]) {
+test(`${modelId} native streaming uses supported thinking and executes tools`, { timeout: 20000 }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'bio-gemini-'));
   const requests = [];
   const mock = createServer(async (req, res) => {
@@ -38,12 +39,13 @@ test('Gemini native streaming executes tools and sends results back to the model
   try {
     mock.listen(0, '127.0.0.1');
     await once(mock, 'listening');
-    const config = new ConfigService({ GEMINI_API_KEY: 'gemini-local-test-key', GEMINI_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1beta`, AGENT_DATA_DIR: root });
+    const config = new ConfigService({ GEMINI_MODEL: modelId, GEMINI_API_KEY: 'gemini-local-test-key', GEMINI_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1beta`, AGENT_DATA_DIR: root });
     const factory = new PiSessionFactory(config, new AgentStorage(config), {});
     session = await factory.create(randomUUID(), '请使用工具读取内容。', () => {});
     await session.prompt('请读取内容');
     assert.equal(requests.length, 2);
-    assert.match(requests[0].url, /^\/v1beta\/models\/gemini-3.8-flash:streamGenerateContent\?alt=sse$/);
+    assert.equal(requests[0].url, `/v1beta/models/${modelId}:streamGenerateContent?alt=sse`);
+    assert.equal(requests[0].body.generationConfig.thinkingConfig.thinkingLevel, thinkingLevel);
     assert.equal(requests[0].headers['x-goog-api-key'], 'gemini-local-test-key');
     assert.ok(requests[0].body.systemInstruction);
     assert.ok(requests[0].body.tools[0].functionDeclarations.some(tool => tool.name === 'get_content'));
@@ -59,3 +61,4 @@ test('Gemini native streaming executes tools and sends results back to the model
     await rm(root, { recursive: true, force: true });
   }
 });
+}

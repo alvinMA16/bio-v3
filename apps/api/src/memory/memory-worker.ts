@@ -84,7 +84,7 @@ export class MemoryWorker implements OnModuleInit, OnModuleDestroy {
     const seen = new Set<string>(); const ranges = new Map<string, Array<[number, number]>>(); const usage: unknown[] = [];
     const unusedIds = Array.from({ length: 40 }, () => randomUUID());
     try {
-      const { modelRuntime, model } = await createModelRuntime(this.config, cwd);
+      const { modelRuntime, model, thinkingLevel } = await createModelRuntime(this.config, cwd);
       const settingsManager = SettingsManager.inMemory({ compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 16000 }, retry: { enabled: true, maxRetries: 1 } });
       const resourceLoader = new DefaultResourceLoader({ cwd, agentDir: cwd, settingsManager, noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true, systemPromptOverride: () => PROMPT });
       await resourceLoader.reload();
@@ -110,7 +110,7 @@ export class MemoryWorker implements OnModuleInit, OnModuleDestroy {
           if (end >= m.totalCharacters) seen.add(m.source_ref);
         }
       }), submit];
-      ({ session } = await createAgentSession({ cwd, agentDir: cwd, modelRuntime, model, thinkingLevel: 'off', settingsManager, resourceLoader,
+      ({ session } = await createAgentSession({ cwd, agentDir: cwd, modelRuntime, model, thinkingLevel, settingsManager, resourceLoader,
         sessionManager: SessionManager.inMemory(cwd), tools: tools.map(t => t.name), customTools: tools }));
       let calls = 0; let exhausted = false; let failed = false;
       session.subscribe(event => {

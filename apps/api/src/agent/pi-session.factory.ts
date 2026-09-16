@@ -35,7 +35,7 @@ export class PiSessionFactory {
     const workspace = new PanelWorkspace(cwd, context?.attachments ?? []);
     emit({ type: 'panel.state.updated', panel: workspace.state() });
 
-    const { modelRuntime, model } = await createModelRuntime(this.config, cwd, provider);
+    const { modelRuntime, model, thinkingLevel } = await createModelRuntime(this.config, cwd, provider);
 
     const memoryContext = scope && this.memory?.enabled ? await this.memory.context(scope) : '';
     const memoryTools = scope && this.memory?.enabled ? createMemoryTools(this.memory, scope.userId) : [];
@@ -54,7 +54,7 @@ export class PiSessionFactory {
     await resourceLoader.reload();
     const sessionManager = SessionManager.open(join(cwd, 'session.jsonl'), cwd, cwd);
     const { session } = await createAgentSession({
-      cwd, agentDir: cwd, modelRuntime, model, thinkingLevel: 'off',
+      cwd, agentDir: cwd, modelRuntime, model, thinkingLevel,
       settingsManager, resourceLoader, sessionManager,
       tools: ['switch_mode', 'update_content', 'get_content', ...memoryTools.map(t => t.name)], customTools: [...createPresentationTools(workspace, emit), ...memoryTools],
     });

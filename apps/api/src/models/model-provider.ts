@@ -38,5 +38,7 @@ export async function createModelRuntime(config: ConfigService, cwd: string, req
   await modelRuntime.setRuntimeApiKey(providerId, apiKey);
   const model = modelRuntime.getModel(providerId, modelId);
   if (!model) throw new ServiceUnavailableException('Agent model is unavailable');
-  return { modelRuntime, model };
+  // Gemini 3.8 rejects MINIMAL, which Pi emits for thinkingLevel: 'off'.
+  const thinkingLevel: 'low' | 'off' = selected === 'gemini' && modelId === 'gemini-3.8-flash' ? 'low' : 'off';
+  return { modelRuntime, model, thinkingLevel };
 }
