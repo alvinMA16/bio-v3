@@ -44,18 +44,21 @@ Notebook actions (`note` and `nod`, 13 frames at 5 fps) share generated
 full-canvas keyframes:
 
 - `notebook-hold.png`: open sage notebook and wooden pencil, eyes forward.
-- `notebook-write-active.png`: adjacent writing pose with a more visible pencil
-  angle change; the pencil tip stays behind the upright notebook page.
+- `notebook-write-down.png` and `notebook-write-down-stroke.png`: bowed head,
+  eyes on the page, adjacent pencil strokes; the tip stays behind the book.
+- `notebook-blink.png`: closed-eye source for a brief blink while holding the book.
 - `notebook-nod.png`: head lowered in a friendly nod, holding the same notebook.
 
 Writing uses the complete actor/board region from each source keyframe. Do not
 paste a moving hand or foreground notebook into the writing frames: mismatched
-hand textures and positions caused visible jitter. Runtime writing alternates
-the two poses every 360 ms and occasionally pauses or nods. Only the shared
-outer silhouette is extracted for the existing scene layers. The notebook
+hand textures and positions caused visible jitter. Runtime writing keeps the
+head down through a complete bout, pauses to read, then raises the head and
+blinks before another bout. Processing uses longer strokes and reading pauses.
+The bowed head uses a separate silhouette to avoid retaining background pixels
+around the lowered ears. The notebook
 occludes the tip in the source itself; the visible page edges are not writing
 surfaces. The experimental `*-v2.png` and `notebook-write-occluded.png` sources
-are not used. The approved nod and speech assembly remains unchanged.
+and `notebook-write-active.png` are not used. The approved nod and speech assembly remains unchanged.
 The sheets retain neutral bookends for compatibility, but the shared runtime
 controller excludes them, including during notebook speech. Select actions in the
 debug console's animation lab, or call `playCharacterAction('note')` /
@@ -81,6 +84,21 @@ Generation used the built-in imagegen tool, sequentially, grounded first in
    full-image alignment: use the whole actor, not a pasted hand patch.
 3. Preserve the hold keyframe; gently bow the head with lowered chin/muzzle
    and eyelids for a friendly nod. Keep notebook, pencil, paws and torso fixed.
+4. Built-in imagegen edit of `notebook-write-active.png`: preserve the exact
+   portrait composition, lighting, character, notebook, hands and pencil; bow
+   the head forward about 15 degrees, lower the muzzle, keep eyes gently open
+   and visibly looking down at the page/pencil tip. No redesign or text.
+5. Built-in imagegen edit of `notebook-write-down.png`: keep the bowed head,
+   gaze and scene fixed; tilt the rigid pencil and writing paw slightly left,
+   about 12 source pixels at its upper end. Keep the tip hidden inside the book.
+6. Built-in imagegen edit of `notebook-hold.png`: change only both eyes to
+   thin relaxed closed eyelids for a brief blink. Preserve head, mouth, props,
+   lighting and canvas. The builder retains only this generated eye region.
+
+The 13-frame note sheet uses frame 1 for holding, 2/9 for lowering/raising,
+3–8 for bowed writing/reading, 10 for holding and 11 for blinking; 0/12 are
+legacy bookends excluded by runtime. Waiting uses frame 11 for 130 ms every
+8–14 seconds. Speech never plays this blink frame.
 
 Run `python3 apps/miniprogram/tools/fox-clerk-stop-motion/preview_notebook.py`
 after building to validate the sheets and regenerate `qa/note.gif`,
