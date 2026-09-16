@@ -3,6 +3,12 @@
 Repository: `https://github.com/alvinMA16/bio-v3.git`, branch `main`.
 Server: `qs@neozeppelin.com`. Website: `https://app.storyofme.cn`.
 
+Web Agent debugger: `https://app.storyofme.cn/internal/` (`/internal` redirects
+to the trailing-slash URL). It uses the same origin's `/api/v1/` HTTP endpoints
+and `/api/v1/voice` WebSocket, so conversations, materials and memory use the
+real deployed backend. The existing root entry remains available. Both entries
+require the same private-preview login and share the owner identity and data.
+
 ## Publish
 
 Commit and push the desired changes first. A release must be an exact 40-character
