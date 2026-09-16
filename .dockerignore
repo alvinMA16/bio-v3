@@ -1,0 +1,12 @@
+.git
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+.env*
+.bio-agent
+.deploy-private
+.bench-private
+bench
+apps/miniprogram/tools
+**/__pycache__

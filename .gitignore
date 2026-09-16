@@ -7,6 +7,8 @@ coverage/
 .env.*
 !.env.example
 .bio-agent/
+.deploy-private/
+__pycache__/
 .DS_Store
 *.log
 .idea/
