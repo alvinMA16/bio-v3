@@ -11,6 +11,8 @@ services:
       - ${BIO_ENV_FILE:?set BIO_ENV_FILE}
     ports:
       - "127.0.0.1:3100:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - /srv/bio-v3/data/agent:/data/agent
     restart: unless-stopped

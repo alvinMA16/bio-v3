@@ -42,6 +42,30 @@ outside calls. Application rollback does not revert database migrations: review
 schema compatibility before deploying an older commit. Backups are taken before
 activation. There is no automatic deployment on push; invoke the script deliberately.
 
+## Gemini network configuration
+
+The application already supports Google's native Gemini API through Pi. Like A,
+B can reach `https://generativelanguage.googleapis.com/v1beta` through the existing
+host HTTP proxy at port 8118. Compose maps `host.docker.internal` to the Docker
+host; Node 24 honors the proxy when `NODE_USE_ENV_PROXY=1` is set at startup.
+Configure these private runtime values in `shared/production.env` when enabling it:
+
+```dotenv
+MODEL_PROVIDER=gemini
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+GEMINI_MODEL=<validated Agent-capable Gemini model>
+GEMINI_API_KEY=<private key, never commit>
+NODE_USE_ENV_PROXY=1
+HTTPS_PROXY=http://host.docker.internal:8118
+NO_PROXY=localhost,127.0.0.1,::1,db,host.docker.internal,.aliyuncs.com,.deepseek.com,.bytedance.com,.volces.com
+```
+
+Do not replace the API base URL with the proxy URL. The proxy carries HTTPS
+CONNECT tunnels; TLS still terminates at Google. Qwen, DeepSeek and voice provider
+domains listed in `NO_PROXY` keep their direct route. Recreate the API container
+after environment changes; a plain container restart retains its old environment.
+Validate real streaming and tool calls before switching the default model.
+
 ## Verify alignment
 
 ```sh
