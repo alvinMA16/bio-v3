@@ -106,6 +106,8 @@ test('PostgreSQL OTP lifecycle, races, durable sessions, HTTP guards and account
   assert.equal((await http.inject({ method: 'POST', url: '/api/v1/auth/code', payload: { phone: 'invalid' } })).statusCode, 400);
   assert.equal((await http.inject({ method: 'GET', url: `/api/v1/materials/${item.id}/file`, headers: { authorization: `Bearer ${bob.token}` } })).statusCode, 404);
   assert.equal((await http.inject({ method: 'GET', url: `/api/v1/materials/${item.id}/file`, headers: { cookie: `bio-file-session=${alice.token}` } })).statusCode, 200);
+  assert.equal((await http.inject({ method: 'GET', url: `/api/v1/materials/${item.id}/file`, headers: { authorization: 'Basic old-preview-credentials', cookie: `bio-file-session=${alice.token}` } })).statusCode, 200);
+  assert.equal((await http.inject({ method: 'GET', url: `/api/v1/materials/${item.id}/file`, headers: { authorization: `Bearer ${bob.token}`, cookie: `bio-file-session=${alice.token}` } })).statusCode, 404);
   assert.equal((await http.inject({ method: 'GET', url: '/api/v1/materials', headers: { cookie: `bio-file-session=${alice.token}` } })).statusCode, 401);
   assert.equal((await http.inject({ method: 'GET', url: `/api/v1/agent/manuscripts/${conversation}/doc`, headers: { authorization: `Bearer ${bob.token}` } })).statusCode, 404);
   assert.equal((await http.inject({ method: 'GET', url: `/api/v1/agent/manuscripts/${conversation}/doc`, headers: { authorization: `Bearer ${alice.token}` } })).statusCode, 200);

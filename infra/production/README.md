@@ -3,6 +3,16 @@
 Repository: `https://github.com/alvinMA16/bio-v3.git`, branch `main`.
 Server: `qs@neozeppelin.com`. Website: `https://app.storyofme.cn`.
 
+## Related bio2 deployment (remembered server reference)
+
+The existing **bio2 / biography-v2** service is on **`root@47.118.18.96`**
+(`ssh root@47.118.18.96`), with Compose in `/root/alvin/biography-v2/deploy`. Its running backend is
+`deploy-backend-1` and database is `deploy-db-1`. This is the reference deployment
+for the working Aliyun SMS configuration. Use its actual runtime configuration;
+the local biography-v2 `.env` contains placeholders and is not authoritative.
+Never print credentials or copy unrelated service settings. The bio-v3 production
+host remains `qs@neozeppelin.com`; do not deploy bio-v3 over the bio2 service.
+
 Web Agent debugger: `https://app.storyofme.cn/internal/` (`/internal` redirects
 to the trailing-slash URL). It uses the same origin's `/api/v1/` HTTP endpoints
 and `/api/v1/voice` WebSocket, so conversations, materials and memory use the
