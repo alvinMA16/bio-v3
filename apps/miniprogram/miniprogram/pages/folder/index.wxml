@@ -1,27 +1,64 @@
-<view class="folder">
-  <view class="eyebrow">令狸 · 故事收集处</view>
-  <view class="heading">{{selected ? '一份留存的回忆' : '资料夹'}}</view>
+<view class="folder-nav" style="padding-top: {{statusBarHeight}}px; padding-right: {{navigationRight}}px;">
+  <view class="folder-nav-row" style="height: {{navigationHeight}}px;">
+    <button class="nav-back" bindtap="exitFolder" aria-label="{{searchOpen || selected ? '返回资料夹' : '返回书桌'}}"><view class="back-chevron" /></button><text wx:if="{{!searchOpen}}" class="nav-title">{{selected ? selected.title : '资料夹'}}</text><input wx:else class="search-page-input" focus="{{searchOpen}}" value="{{query}}" bindinput="searchInput" bindconfirm="searchNow" confirm-type="search" maxlength="200" placeholder="搜索文件名" placeholder-style="color: #969d91;" aria-label="搜索文件名" />
+    <button wx:if="{{!searchOpen && !selected}}" class="search-toggle" bindtap="toggleSearch" aria-label="搜索资料"><icon type="search" size="18" color="#858b80" /></button>
+    <button wx:if="{{selected}}" class="preview-delete" bindtap="remove" aria-label="删除这份资料" disabled="{{busy}}"><image src="/assets/materials/delete.svg" /></button>
+  </view>
+</view>
+<view class="folder {{selected ? 'folder--preview' : ''}}">
   <view wx:if="{{error}}" class="error">{{error}}<button size="mini" bindtap="refresh" disabled="{{busy}}">重新加载</button></view>
   <block wx:if="{{selected}}">
-    <button bindtap="back" disabled="{{busy}}">← 全部资料</button>
     <image wx:if="{{selected.kind === 'image'}}" class="preview" src="{{previewUrl}}" mode="aspectFit" bindtap="preview" />
-    <button bindtap="preview">查看原件</button>
-    <view class="label">标题</view><input value="{{title}}" maxlength="300" bindinput="titleInput" disabled="{{busy}}" />
-    <view class="label">补充说明</view><textarea value="{{description}}" maxlength="2000" bindinput="descriptionInput" disabled="{{busy}}" placeholder="照片里是谁？这份资料有什么故事？" />
-    <view wx:if="{{selected.statusMessage}}" class="hint">{{selected.statusMessage}}</view>
-    <scroll-view wx:if="{{selected.text}}" scroll-y class="text-preview"><text selectable>{{selected.text}}</text></scroll-view>
-    <button bindtap="save" disabled="{{busy || !title}}">保存修改</button>
-    <button class="primary" bindtap="chat" disabled="{{busy || title !== selected.title || description !== selected.description}}">聊聊这份资料</button>
-    <button class="delete" bindtap="remove" disabled="{{busy}}">删除资料</button>
+    <image wx:elif="{{thumbnails[selected.id]}}" class="document-preview" src="{{thumbnails[selected.id]}}" mode="widthFix" bindtap="preview" />
+    <view wx:elif="{{selected.text}}" class="document-text"><text selectable>{{selected.text}}</text></view>
+    <view wx:else class="hint">这份资料暂不支持页内预览，请打开原件。</view>
+    <button class="open-original" bindtap="preview">打开原件</button>
+
+    <view class="fox-chat-footer"><button class="fox-chat" bindtap="chat" disabled="{{busy}}"><view class="fox-portrait"><image src="/assets/materials/lingli-chat.webp" mode="aspectFit" /></view><text>和令狸聊聊</text><text class="chat-arrow">→</text></button></view>
   </block>
   <block wx:else>
-    <view class="intro">把照片、信件和生活片段留在这里。</view>
-    <button class="primary" bindtap="add" loading="{{busy}}" disabled="{{busy || loading}}">{{busy ? '正在上传并整理…' : '＋ 添加资料'}}</button>
-    <view class="hint">照片 / PDF / DOCX / TXT / MD · 每份最多 20 MB</view>
+    <view class="results {{leaving ? 'is-leaving' : ''}}">
     <view wx:if="{{loading}}" class="empty">正在打开资料夹…</view>
-    <view wx:elif="{{!items.length}}" class="empty">还没有资料，放进第一份回忆吧。</view>
-    <button wx:for="{{items}}" wx:key="id" class="item" data-id="{{item.id}}" bindtap="select" disabled="{{busy}}">
-      <view class="icon">{{item.kind === 'image' ? '图' : '文'}}</view><view class="item-info"><view class="item-title">{{item.title}}</view><view class="hint">{{item.status === 'ready' ? '已整理' : '待补充说明'}}</view></view><text>›</text>
-    </button>
+    <view wx:elif="{{searchOpen && !query}}" class="empty">输入文件名，查找照片或文档</view>
+    <view wx:elif="{{searchOpen && query !== renderedQuery}}" class="empty">正在搜索…</view>
+    <view wx:elif="{{!visibleItems.length}}" class="empty">{{items.length ? '没有找到资料，试试其他名称或分类。' : '还没有资料，放进第一份回忆吧。'}}</view>
+    <view class="material-grid">
+      <button wx:for="{{visibleItems}}" wx:key="id" class="material-card" style="animation-delay: {{index > 7 ? 196 : index * 28}}ms" data-id="{{item.id}}" bindtap="select" bindlongpress="fileActions" disabled="{{busy || leaving}}">
+        <view class="cover cover--{{item.kind}}">
+          <image wx:if="{{thumbnails[item.id]}}" src="{{thumbnails[item.id]}}" mode="aspectFill" />
+          <view wx:elif="{{item.kind === 'document'}}" class="paper-content"><view class="paper-sprig"><view /><view /><view /><view /><view /></view><view class="paper-lines" /></view>
+          <view wx:else class="cover-placeholder">照片</view>
+          <view class="cover-caption"><text>{{item.fileType}}</text><text>{{item.sizeLabel}}</text></view>
+        </view>
+        <view class="card-title">{{item.title}}</view>
+        <view wx:if="{{item.title !== item.filename}}" class="card-filename">{{item.filename}}</view>
+      </button>
+    </view>
+    </view>
+    <view wx:if="{{!searchOpen}}" class="dock"><view class="filters"><view class="glass-thumb" style="transform: translateX({{tabIndex * 100}}%);"><view class="glass-shine" style="transform: translateX({{tabIndex * 15 - 20}}%);" /></view>
+      <button class="filter {{filter === 'all' ? 'active' : ''}}" aria-label="全部资料" aria-pressed="{{filter === 'all'}}" data-filter="all" bindtap="changeFilter">全部</button>
+      <button class="filter {{filter === 'image' ? 'active' : ''}}" aria-label="照片" aria-pressed="{{filter === 'image'}}" data-filter="image" bindtap="changeFilter">照片</button>
+      <button class="filter {{filter === 'document' ? 'active' : ''}}" aria-label="文档" aria-pressed="{{filter === 'document'}}" data-filter="document" bindtap="changeFilter">文档</button>
+    </view><button class="add" bindtap="add" aria-label="添加资料" loading="{{busy}}" disabled="{{busy || loading}}"><view class="plus" wx:if="{{!busy}}" /></button></view>
   </block>
+</view>
+
+<view wx:if="{{actionItem}}" class="file-actions" catchtap="dismissActions" catchtouchmove="keepActions">
+  <view class="file-actions-stack" catchtap="keepActions">
+    <view class="file-keepsake">
+      <view class="cover cover--{{actionItem.kind}}">
+        <image wx:if="{{thumbnails[actionItem.id]}}" src="{{thumbnails[actionItem.id]}}" mode="aspectFill" />
+        <view wx:elif="{{actionItem.kind === 'document'}}" class="paper-content"><view class="paper-sprig"><view /><view /><view /><view /><view /></view><view class="paper-lines" /></view>
+        <view wx:else class="cover-placeholder">照片</view>
+        <view class="cover-caption"><text>{{actionItem.fileType}}</text><text>{{actionItem.sizeLabel}}</text></view>
+      </view>
+      <view class="file-keepsake-title">{{actionItem.title}}</view>
+    </view>
+    <view class="file-actions-menu">
+      <button data-action="preview" bindtap="chooseAction">预览</button>
+      <button data-action="chat" bindtap="chooseAction">和令狸聊聊</button>
+      <button class="file-action-danger" data-action="delete" bindtap="chooseAction">删除</button>
+      <button class="file-action-cancel" bindtap="dismissActions">取消</button>
+    </view>
+  </view>
 </view>

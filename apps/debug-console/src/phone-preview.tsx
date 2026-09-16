@@ -1,4 +1,5 @@
 import { MaterialFolder } from './material-folder';
+import { uiAsset } from './ui-asset';
 import { ManuscriptFolder } from './manuscript-folder';
 import { ReceiptPrinter } from './receipt-printer';
 import type { Material } from '@bio/contracts';
@@ -29,6 +30,7 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
   const speaking = speech !== 'silent' && phase !== 'listening';
   const [manifest, setManifest] = useState<Manifest>();
   const [assetError, setAssetError] = useState(false);
+  const [folderSearchOpen, setFolderSearchOpen] = useState(false);
   const [drawer, setDrawer] = useState<'folder' | 'manuscripts' | null>(null);
   const [callSeconds, setCallSeconds] = useState(0);
   useEffect(() => {
@@ -50,7 +52,10 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
     const controller = new AbortController();
     void fetch('/animations/fox-clerk/manifest.json', { signal: controller.signal })
       .then(response => { if (!response.ok) throw new Error('Assets unavailable'); return response.json() as Promise<Manifest>; })
-      .then(setManifest).catch(() => { if (!controller.signal.aborted) setAssetError(true); });
+      .then(value => setManifest({ ...value,
+        layers: { environment: { src: uiAsset(value.layers.environment.src) }, innerPanel: { src: uiAsset(value.layers.innerPanel.src) } },
+        animations: value.animations.map(animation => ({ ...animation, src: uiAsset(animation.src) })),
+      })).catch(() => { if (!controller.signal.aborted) setAssetError(true); });
     return () => controller.abort();
   }, []);
   useEffect(() => {
@@ -99,16 +104,19 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
     <div className={`phone-screen ${callOpen ? 'phone-screen--call' : ''}`} style={{ aspectRatio: '320/692' }}>
       {!callOpen ? <>
         {artwork}
-        <section className={`phone-desk ${receiptVisible ? 'phone-desk--printing' : ''}`} inert={receiptVisible} aria-label="令狸的书桌">
-          <button type="button" className="phone-desk-entry phone-desk-entry--folder" aria-label="资料夹" onClick={() => setDrawer('folder')}><img src="/desk/folder.png" alt="" /></button>
-          <button type="button" className="phone-desk-entry phone-desk-entry--call" aria-label="呼叫令狸" disabled={startDisabled} onClick={onStart}><img src="/desk/phone.png" alt="" /></button>
-          <button type="button" className="phone-desk-entry phone-desk-entry--manuscripts" aria-label="文稿集" onClick={() => setDrawer('manuscripts')}><span className="phone-manuscript-art"><img src="/desk/manuscripts.png" alt="" /><img className="phone-manuscript-label" src="/desk/manuscripts-label.png" alt="" /></span></button>
+        <section className={`phone-desk ${receiptVisible ? 'phone-desk--printing' : ''}`} inert={receiptVisible || !!drawer} aria-label="令狸的书桌">
+          <button type="button" className="phone-desk-entry phone-desk-entry--folder" aria-label="资料夹" onClick={() => { setFolderSearchOpen(false); setDrawer('folder'); }}><img src={uiAsset('folder.png')} alt="" /></button>
+          <button type="button" className="phone-desk-entry phone-desk-entry--call" aria-label="呼叫令狸" disabled={startDisabled} onClick={onStart}><img src={uiAsset('phone.png')} alt="" /></button>
+          <button type="button" className="phone-desk-entry phone-desk-entry--manuscripts" aria-label="文稿集" onClick={() => setDrawer('manuscripts')}><span className="phone-manuscript-art"><img src={uiAsset('manuscripts.png')} alt="" /><img className="phone-manuscript-label" src={uiAsset('manuscripts-label.png')} alt="" /></span></button>
         </section>
-        {drawer && <div className="phone-desk-backdrop" onClick={() => setDrawer(null)}>
-          <section className="phone-desk-drawer" role="dialog" aria-modal="true" aria-label={drawer === 'folder' ? '资料夹' : '文稿集'} onClick={event => event.stopPropagation()} onKeyDown={event => { if (event.key === 'Escape') setDrawer(null); }}>
+        {drawer === 'folder' && <section className="phone-folder-page" aria-label="资料夹" onKeyDown={event => { if (event.key === 'Escape') setDrawer(null); }}>
+          <header className="phone-folder-nav" inert={folderSearchOpen}><button type="button" autoFocus aria-label="返回书桌" onClick={() => setDrawer(null)}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m14 6-6 6 6 6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg></button><h2>资料夹</h2><button className="phone-folder-search-toggle" type="button" aria-label={folderSearchOpen ? '收起搜索' : '搜索资料'} aria-expanded={folderSearchOpen} onClick={() => setFolderSearchOpen(value => !value)}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="1.8" /><path d="m16 16 5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg></button></header>
+          <div className="phone-folder-scroll"><MaterialFolder onCloseSearch={() => setFolderSearchOpen(false)} searchOpen={folderSearchOpen} disabled={startDisabled} onChat={item => { setDrawer(null); onMaterialChat(item); }} /></div>
+        </section>}
+        {drawer === 'manuscripts' && <div className="phone-desk-backdrop" onClick={() => setDrawer(null)}>
+          <section className="phone-desk-drawer" role="dialog" aria-modal="true" aria-label="文稿集" onClick={event => event.stopPropagation()} onKeyDown={event => { if (event.key === 'Escape') setDrawer(null); }}>
             <button type="button" autoFocus aria-label="关闭" onClick={() => setDrawer(null)}>×</button>
-            <h2>{drawer === 'folder' ? '资料夹' : '文稿集'}</h2>
-            {drawer === 'folder' ? <MaterialFolder disabled={startDisabled} onChat={item => { setDrawer(null); onMaterialChat(item); }} /> : <ManuscriptFolder />}
+            <h2>文稿集</h2><ManuscriptFolder />
           </section>
         </div>}
 

@@ -35,7 +35,7 @@ test('materials preserve originals, edits and chat content across restart, and d
 });
 test('rejects unsupported, mismatched, oversized, empty and invalid text files', async t => {
   const service = await setup(t);
-  for (const [name, buffer] of [['bad.exe', Buffer.from('hi')], ['bad.png', Buffer.from('hello')], ['bad.pdf', Buffer.from('hello')], ['bad.docx', Buffer.from('hello')], ['empty.txt', Buffer.alloc(0)], ['bad.txt', Buffer.from([0xff])], ['big.txt', Buffer.alloc(MAX_FILE_SIZE + 1)]]) {
+  for (const [name, buffer] of [['bad.exe', Buffer.from('hi')], ['bad.png', Buffer.from('hello')], ['bad.pdf', Buffer.from('hello')], ['bad.doc', Buffer.from('hello')], ['bad.docx', Buffer.from('hello')], ['empty.txt', Buffer.alloc(0)], ['bad.txt', Buffer.from([0xff])], ['big.txt', Buffer.alloc(MAX_FILE_SIZE + 1)]]) {
     await assert.rejects(service.upload(name, buffer));
   }
   await assert.rejects(service.get('../../private'));
@@ -51,6 +51,8 @@ test('valid image is stored without claiming recognition when no vision provider
     assert.equal(item.text, '');
     assert.match(item.statusMessage, /尚未识别/);
     assert.deepEqual((await service.original(item.id)).buffer, source);
+    assert.ok(item.thumbnailUrl);
+    assert.equal((await sharp(await service.thumbnail(item.id)).metadata()).format, 'webp');
   }
 });
 test('long text clearly reports truncation while keeping the whole original', async t => {
@@ -62,14 +64,20 @@ test('long text clearly reports truncation while keeping the whole original', as
   assert.deepEqual((await service.original(item.id)).buffer, source);
   await assert.rejects(service.update(item.id, ' ', ''));
 });
-test('extracts genuine PDF and DOCX text', async t => {
+test('extracts genuine PDF, DOC and DOCX text and renders PDF first-page thumbnails', async t => {
   const service = await setup(t);
   const { readFile } = await import('node:fs/promises');
-  for (const extension of ['pdf', 'docx']) {
+  for (const extension of ['pdf', 'doc', 'docx']) {
     const buffer = await readFile(new URL(`./fixtures/letter.${extension}`, import.meta.url));
     const item = await service.upload(`letter.${extension}`, buffer);
     assert.equal(item.status, 'ready');
     assert.match(item.text, /Grandma planted a tree/);
+    assert.deepEqual((await service.original(item.id)).buffer, buffer);
+    if (extension === 'pdf') {
+      assert.equal(item.pageCount, 1);
+      assert.ok(item.thumbnailUrl);
+      assert.equal((await sharp(await service.thumbnail(item.id)).metadata()).format, 'webp');
+    }
   }
 });
 test('HTTP upload, validation, original download and deletion work through Fastify', async t => {

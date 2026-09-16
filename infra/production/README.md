@@ -154,3 +154,12 @@ Nginx renderer removes private-preview Basic Auth and forwards client Authorizat
 without substituting the owner token. With the flag absent/false, the existing private
 preview remains unchanged. Existing owner records are not assigned to new phone
 accounts automatically. Configure and verify real SMS before activating this switch.
+
+## UI assets on OSS
+
+The Web debugger loads artwork through `/api/v1/ui-assets/<filename>` and a signed
+CDN redirect. Set `ASSET_CDN_DOMAIN` and `ASSET_CDN_PRIVATE_KEY` in the private
+production environment before deploying this integration. The API signs only the
+published UI-asset allowlist, not arbitrary objects. Publishing new asset versions,
+the Calendar reference and directory ownership are documented in
+[OSS artwork](../oss/README.md). Keep old object versions for rollback.

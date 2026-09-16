@@ -88,6 +88,8 @@ test('PostgreSQL OTP lifecycle, races, durable sessions, HTTP guards and account
   assert.equal(await restarted.identity(undefined, `bio-voice,bio-auth.${alice.token}`), alice.user.id); await restarted.onModuleDestroy();
   await auth.sendCode(otherPhone, prefix); const bob = await auth.login(otherPhone, '123456'); users.push(bob.user.id);
   const item = await materials.upload('private.txt', Buffer.from('Private'), alice.user.id);
+  const { default: sharp } = await import('sharp');
+  const image = await materials.upload('private.png', await sharp({ create: { width: 10, height: 10, channels: 3, background: 'white' } }).png().toBuffer(), alice.user.id);
   const conversation = randomUUID(), run = randomUUID(); await memory.ensureUser(alice.user.id);
   await memory.pool.query('INSERT INTO bio_memory_sessions(id,user_id,snapshot) VALUES($1,$2,$3)', [conversation, alice.user.id, { 'panel.json': JSON.stringify({ documents: [{ id: 'doc', title: 'Private manuscript', version: 1 }] }) }]);
   await memory.pool.query('INSERT INTO bio_memory_runs(id,user_id) VALUES($1,$2)', [run, alice.user.id]);
@@ -102,6 +104,13 @@ test('PostgreSQL OTP lifecycle, races, durable sessions, HTTP guards and account
   // Avoid lifecycle duplication/closing shared test services via the Nest test app.
   app = module.createNestApplication(new FastifyAdapter()); app.setGlobalPrefix('api/v1'); app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true })); await app.init();
   const http = app.getHttpAdapter().getInstance();
+  for (const suffix of ['file', 'thumbnail']) {
+    const url = `/api/v1/materials/${image.id}/${suffix}`;
+    assert.equal((await http.inject({ method: 'GET', url })).statusCode, 401);
+    assert.equal((await http.inject({ method: 'GET', url, headers: { authorization: `Bearer ${bob.token}`, cookie: `bio-file-session=${alice.token}` } })).statusCode, 404);
+    const own = await http.inject({ method: 'GET', url, headers: { cookie: `bio-file-session=${alice.token}` } });
+    assert.equal(own.statusCode, 200); assert.equal(own.headers['cache-control'], 'private, no-store');
+  }
   for (const url of ['/api/v1/materials', `/api/v1/materials/${item.id}/file`, '/api/v1/agent/manuscripts', `/api/v1/agent/runs/${run}/trace`]) assert.equal((await http.inject({ method: 'GET', url })).statusCode, 401);
   assert.equal((await http.inject({ method: 'POST', url: '/api/v1/auth/code', payload: { phone: 'invalid' } })).statusCode, 400);
   assert.equal((await http.inject({ method: 'GET', url: `/api/v1/materials/${item.id}/file`, headers: { authorization: `Bearer ${bob.token}` } })).statusCode, 404);

@@ -6,6 +6,7 @@ import { ConfigModule } from '@nestjs/config';
 
 import { ChatModule } from './chat/chat.module.js';
 import { HealthController } from './health/health.controller.js';
+import { AssetsController } from './assets/assets.controller.js';
 
 @Module({
   imports: [
@@ -18,6 +19,6 @@ import { HealthController } from './health/health.controller.js';
     ChatModule,
     VoiceModule,
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, AssetsController],
 })
 export class AppModule {}

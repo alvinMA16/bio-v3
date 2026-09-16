@@ -1,0 +1,103 @@
+{
+  "baseUrl": "https://calendar-images.oss-cn-beijing.aliyuncs.com/bio-v3/assets/5d907751142d191f",
+  "prefix": "bio-v3/assets/5d907751142d191f/",
+  "cdnDomain": "image.neozeppelin.com",
+  "files": [
+    {
+      "path": "animations/fox-clerk/blink.webp",
+      "sha256": "9e63ee7f02ec61ed05e279800fc3250f876d689aa82e4378d3f6d44bf3216414",
+      "bytes": 319568,
+      "contentType": "image/webp"
+    },
+    {
+      "path": "animations/fox-clerk/environment.webp",
+      "sha256": "01ae0383ccbc8d4b90e1fc74f9d6cf4df7949c7a7b554e246baba618ab7b57b1",
+      "bytes": 42874,
+      "contentType": "image/webp"
+    },
+    {
+      "path": "animations/fox-clerk/inner-panel.webp",
+      "sha256": "724c33ded1c735befd8b9f6a64a02aa06f1300911d2c1e7f8b6e3bdbd9b9291f",
+      "bytes": 93506,
+      "contentType": "image/webp"
+    },
+    {
+      "path": "animations/fox-clerk/manifest.json",
+      "sha256": "574598cdea77e27d1245cc58f9f5eee9e06b452daa2c1b4e0837f6016bb5ccaf",
+      "bytes": 3062,
+      "contentType": "application/json"
+    },
+    {
+      "path": "animations/fox-clerk/nod.webp",
+      "sha256": "94e9052412f025d93d11db8bc3700fcf4f9b9147c6ea2c020a2b63e5efedf2dc",
+      "bytes": 267574,
+      "contentType": "image/webp"
+    },
+    {
+      "path": "animations/fox-clerk/note.webp",
+      "sha256": "c94a453b81371b6e382208990edd818653a0774e43415828c9486fab22856548",
+      "bytes": 398190,
+      "contentType": "image/webp"
+    },
+    {
+      "path": "animations/fox-clerk/notebookTalk.webp",
+      "sha256": "e921ff6b17702ef44800602c7030e14e58d96fcd344fb4de15101ab165e3d486",
+      "bytes": 224262,
+      "contentType": "image/webp"
+    },
+    {
+      "path": "animations/fox-clerk/talk.webp",
+      "sha256": "17bd22618a98f486517cb2513b26c6e402799fade2b5bbc47343a358012e204c",
+      "bytes": 208616,
+      "contentType": "image/webp"
+    },
+    {
+      "path": "animations/fox-clerk/wave.webp",
+      "sha256": "803a79a4370f9292521bee70c51d70b5415f494cbd7190e6599065244117fede",
+      "bytes": 238012,
+      "contentType": "image/webp"
+    },
+    {
+      "path": "desk/folder.png",
+      "sha256": "71cc9a3a1fb4ade85ed4b21494900c32633adbdde3453fc46ed2dd8239c7db6f",
+      "bytes": 409865,
+      "contentType": "image/png"
+    },
+    {
+      "path": "desk/manuscripts-label.png",
+      "sha256": "a9fc1c7afa51f433ad5b3041419d8731dfcde5f23d8e7261b113a46804475e6c",
+      "bytes": 510334,
+      "contentType": "image/png"
+    },
+    {
+      "path": "desk/manuscripts.png",
+      "sha256": "b5fa7577fa1c472cb4448d7154b96b9d425d7dc33004084dc1da32f24699358f",
+      "bytes": 344655,
+      "contentType": "image/png"
+    },
+    {
+      "path": "desk/phone.png",
+      "sha256": "0839cf997bfcfe8c121f9f84b527e5c84954934b18bc9789afe32a340ee76cdd",
+      "bytes": 268943,
+      "contentType": "image/png"
+    },
+    {
+      "path": "materials/delete.svg",
+      "sha256": "3f43f343437097a57bb02c12124e9944ce685b7a16ce7588e443eb1958073871",
+      "bytes": 246,
+      "contentType": "image/svg+xml"
+    },
+    {
+      "path": "materials/felt-oat.webp",
+      "sha256": "8113ccbcd25bb82cde5a2bbfd35dfdeed76a8e6df0bc1b6c6044999d53c58405",
+      "bytes": 76528,
+      "contentType": "image/webp"
+    },
+    {
+      "path": "materials/lingli-chat.webp",
+      "sha256": "3bec13f29c10b6e92ef157deefa2774eb1782ec4a359ecfec14d8f861a694ee8",
+      "bytes": 19902,
+      "contentType": "image/webp"
+    }
+  ]
+}

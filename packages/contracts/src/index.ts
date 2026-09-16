@@ -54,6 +54,9 @@ export interface PanelState {
 export interface Material extends PanelAttachment {
   filename: string; description: string; mimeType: string; size: number; createdAt: string;
   url: string; text: string; status: 'ready' | 'needs-description'; statusMessage: string;
+  /** Private, owner-authenticated derivative; originals remain untouched. */
+  thumbnailUrl?: string;
+  pageCount?: number;
 }
 
 export interface AgentContextSnapshot {
