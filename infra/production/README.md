@@ -135,3 +135,12 @@ sudo /usr/local/sbin/bio-v3-backup
 Nightly backups copy files while the service is live; stop incoming writes for a
 fully consistent cross-store snapshot. Local private credentials and test logs live
 in ignored `.deploy-private/` and must never be committed.
+
+## Phone account rollout
+
+Phone accounts are available behind `AUTH_ENABLED=true`; see [accounts](../../docs/accounts.md)
+for database, SMS sign/template, key and trusted-proxy configuration. In this mode the
+Nginx renderer removes private-preview Basic Auth and forwards client Authorization
+without substituting the owner token. With the flag absent/false, the existing private
+preview remains unchanged. Existing owner records are not assigned to new phone
+accounts automatically. Configure and verify real SMS before activating this switch.

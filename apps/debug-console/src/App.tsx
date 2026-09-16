@@ -1,4 +1,5 @@
 import { MemoryInspector } from './memory-inspector';
+import { accountCacheKey } from './account-cache';
 import { collectReceiptMessage, createReceipt, readReceipt, saveReceipt, type CallMessages } from './session-receipt';
 import { FeltMicrophone } from './felt-microphone';
 import { BrowserVoice } from './voice/browser-voice';
@@ -53,7 +54,7 @@ const DEFAULT_SYSTEM_PROMPT = '你是令狸，用户的人生记录伙伴。';
 
 function readHistory(): RunRecord[] {
   try {
-    const value = localStorage.getItem(HISTORY_KEY);
+    const value = localStorage.getItem(accountCacheKey(HISTORY_KEY));
     return value ? (JSON.parse(value) as RunRecord[]) : [];
   } catch {
     return [];
@@ -164,7 +165,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 20))); }
+    try { localStorage.setItem(accountCacheKey(HISTORY_KEY), JSON.stringify(history.slice(0, 20))); }
     catch { /* Large panel histories may exceed browser storage; keep this session in memory. */ }
   }, [history]);
 
@@ -194,7 +195,7 @@ export function App() {
   }
   const { message: _voiceText, ...latestContext } = prepareRequest('');
   voiceContext.current = latestContext;
-  useEffect(() => () => voiceRef.current?.close(), []);
+  useEffect(() => () => { voiceRef.current?.close(); abortRef.current?.abort(); }, []);
 
   function saveVoiceTurn(error?: string): void {
     const turn = voiceTurn.current;
@@ -432,7 +433,7 @@ export function App() {
   function clearHistory(): void {
     setHistory([]);
     setSelectedRunId(null);
-    localStorage.removeItem(HISTORY_KEY);
+    localStorage.removeItem(accountCacheKey(HISTORY_KEY));
   }
 
   return (

@@ -14,7 +14,7 @@ import { AppModule } from './app.module.js';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: true }),
+    new FastifyAdapter({ logger: true, trustProxy: process.env.TRUST_PROXY === 'true' ? 1 : false }),
   );
 
   await app.register(multipart, { limits: { fileSize: MAX_FILE_SIZE, files: 1, fields: 0, parts: 1 } });

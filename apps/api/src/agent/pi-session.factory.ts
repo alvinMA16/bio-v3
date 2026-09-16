@@ -23,7 +23,7 @@ export class PiSessionFactory {
 
   async create(conversationId: string, systemPrompt: string | undefined, emit: (event: AgentEventPayload) => void, provider?: ModelProvider, context?: AgentContextSnapshot, scope?: MemoryScope) {
     if (context?.materialIds?.length) {
-      const attachments = await Promise.all(context.materialIds.map(id => this.materials.attachment(id)));
+      const attachments = await Promise.all(context.materialIds.map(id => this.materials.attachment(id, scope?.userId)));
       context = { ...context, attachments: [...(context.attachments ?? []), ...attachments] };
     }
     const cwd = this.storage.conversationDirectory(conversationId, scope?.userId);

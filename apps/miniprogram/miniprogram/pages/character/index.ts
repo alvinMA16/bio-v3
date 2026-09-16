@@ -1,4 +1,5 @@
 import type { FoxActivity } from '../../lib/fox-behavior';
+import { requireAccount } from '../../lib/account';
 import { getLatestReceipt, takePendingReceipt, type SessionReceipt } from '../../lib/session-receipt';
 import {
   FOX_ANIMATION_CLIPS,
@@ -51,7 +52,8 @@ Page({
     animationController.startAutoCycle();
   },
 
-  onShow(): void {
+  async onShow(): Promise<void> {
+    if (!await requireAccount() || this.unloaded) return;
     animationController?.resume();
     const pending = takePendingReceipt();
     if (pending) this.openReceipt();
@@ -95,6 +97,7 @@ Page({
   openFolder(): void {
     wx.navigateTo({ url: '/pages/folder/index' });
   },
+  openAccount(): void { wx.navigateTo({ url: '/pages/login/index' }); },
 
   openManuscripts(): void {
     wx.navigateTo({ url: '/pages/manuscripts/index' });

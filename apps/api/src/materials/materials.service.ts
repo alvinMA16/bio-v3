@@ -16,34 +16,37 @@ export class MaterialsService {
   constructor(private readonly config: ConfigService) {
     this.root = join(resolve(config.get<string>('AGENT_DATA_DIR', '../../.bio-agent')), 'materials');
   }
-  private directory(id: string) {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) throw new BadRequestException('无效的资料 ID');
-    return join(this.root, id);
+  private userRoot(user?: string) {
+    return user ? join(this.root, '.users', createHash('sha256').update(user).digest('hex')) : this.root;
   }
-  async get(id: string): Promise<Material> {
-    try { return JSON.parse(await readFile(join(this.directory(id), 'metadata.json'), 'utf8')); }
+  private directory(id: string, user?: string) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) throw new BadRequestException('无效的资料 ID');
+    return join(this.userRoot(user), id);
+  }
+  async get(id: string, user?: string): Promise<Material> {
+    try { return JSON.parse(await readFile(join(this.directory(id, user), 'metadata.json'), 'utf8')); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new NotFoundException('资料不存在'); throw error; }
   }
-  async list(): Promise<Material[]> {
-    await mkdir(this.root, { recursive: true, mode: 0o700 });
-    const entries = await readdir(this.root);
+  async list(user?: string): Promise<Material[]> {
+    await mkdir(this.userRoot(user), { recursive: true, mode: 0o700 });
+    const entries = await readdir(this.userRoot(user));
     const items = await Promise.all(entries.filter(id => !id.startsWith('.')).map(async id => {
-      try { return await this.get(id); } catch (error) { if (error instanceof NotFoundException) return null; throw error; }
+      try { return await this.get(id, user); } catch (error) { if (error instanceof NotFoundException) return null; throw error; }
     }));
     return items.filter((item): item is Material => item !== null).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
-  async original(id: string) { const item = await this.get(id); return { item, buffer: await readFile(join(this.directory(id), 'original')) }; }
-  async update(id: string, title: string, description: string) {
-    const item = { ...await this.get(id), title: title.trim(), description: description.trim() };
+  async original(id: string, user?: string) { const item = await this.get(id, user); return { item, buffer: await readFile(join(this.directory(id, user), 'original')) }; }
+  async update(id: string, title: string, description: string, user?: string) {
+    const item = { ...await this.get(id, user), title: title.trim(), description: description.trim() };
     if (!item.title || item.title.length > 300 || item.description.length > 2000) throw new BadRequestException('标题或说明长度不正确');
-    const temp = join(this.directory(id), `${randomUUID()}.tmp`);
+    const temp = join(this.directory(id, user), `${randomUUID()}.tmp`);
     await writeFile(temp, JSON.stringify(item), { mode: 0o600 });
-    await rename(temp, join(this.directory(id), 'metadata.json'));
+    await rename(temp, join(this.directory(id, user), 'metadata.json'));
     return item;
   }
-  async remove(id: string) { await this.get(id); await rm(this.directory(id), { recursive: true }); return { deleted: true }; }
-  async attachment(id: string): Promise<PanelAttachment> {
-    const item = await this.get(id);
+  async remove(id: string, user?: string) { await this.get(id, user); await rm(this.directory(id, user), { recursive: true }); return { deleted: true }; }
+  async attachment(id: string, user?: string): Promise<PanelAttachment> {
+    const item = await this.get(id, user);
     const version = createHash('sha256').update(JSON.stringify([item.title, item.description, item.text])).digest('hex').slice(0, 12);
     return { id: `m_${id}_${version}`, kind: item.kind, title: item.title, url: item.url,
       text: [item.description ? `用户补充说明：${item.description}` : '', item.text ? `${item.kind === 'image' ? '机器识别内容（可能有误）' : '提取正文'}：\n${item.text}` : '', item.statusMessage].filter(Boolean).join('\n\n') };
@@ -65,7 +68,7 @@ export class MaterialsService {
     const data = await response.json() as { choices?: { message?: { content?: string } }[] };
     return data.choices?.[0]?.message?.content?.trim() ?? '';
   }
-  async upload(filename: string, buffer: Buffer): Promise<Material> {
+  async upload(filename: string, buffer: Buffer, user?: string): Promise<Material> {
     const extension = extname(filename).slice(1).toLowerCase();
     const mimeType = types[extension];
     if (!mimeType) throw new BadRequestException('支持 JPG、PNG、WebP、PDF、DOCX、TXT 和 MD');
@@ -104,13 +107,13 @@ export class MaterialsService {
     if (!text && !statusMessage) statusMessage = '未提取到正文，可补充说明。';
     const id = randomUUID();
     const item: Material = { id, title: filename.slice(0, 300), filename: filename.slice(0, 300), description: '', kind, mimeType, size: buffer.length, createdAt: new Date().toISOString(), url: `/api/v1/materials/${id}/file`, text, status: text ? 'ready' : 'needs-description', statusMessage };
-    await mkdir(this.root, { recursive: true, mode: 0o700 });
-    const temp = join(this.root, `.${id}`);
+    await mkdir(this.userRoot(user), { recursive: true, mode: 0o700 });
+    const temp = join(this.userRoot(user), `.${id}`);
     await mkdir(temp, { mode: 0o700 });
     try {
       await writeFile(join(temp, 'original'), buffer, { mode: 0o600 });
       await writeFile(join(temp, 'metadata.json'), JSON.stringify(item), { mode: 0o600 });
-      await rename(temp, this.directory(id));
+      await rename(temp, this.directory(id, user));
     } catch (error) { await rm(temp, { recursive: true, force: true }); throw error; }
     return item;
   }

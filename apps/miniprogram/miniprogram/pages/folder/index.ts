@@ -1,15 +1,16 @@
 import type { Material } from '@bio/contracts';
+import { authHeader, requireAccount, handleUnauthorized } from '../../lib/account';
 const base = () => getApp<IAppOption>().globalData.apiBaseUrl;
 function request<T extends object = Record<string, unknown>>(path = '', method: 'GET' | 'PUT' | 'DELETE' = 'GET', data?: Record<string, string>): Promise<T> {
-  return new Promise((resolve, reject) => wx.request<T>({ url: `${base()}/materials${path}`, method, ...(data ? { data } : {}),
-    success: result => result.statusCode >= 200 && result.statusCode < 300 ? resolve(result.data) : reject(new Error('资料操作失败，请重试')),
+  return new Promise((resolve, reject) => wx.request<T>({ url: `${base()}/materials${path}`, method, header: authHeader(), ...(data ? { data } : {}),
+    success: result => { handleUnauthorized(result.statusCode); result.statusCode >= 200 && result.statusCode < 300 ? resolve(result.data) : reject(new Error('资料操作失败，请重试')); },
     fail: () => reject(new Error('网络连接失败，请重试')),
   }));
 }
 Page({
   unloaded: false,
   data: { items: [] as Material[], selected: null as Material | null, title: '', description: '', busy: false, loading: true, error: '', previewUrl: '' },
-  onLoad() { void this.refresh(); },
+  async onLoad() { if (await requireAccount()) void this.refresh(); },
   onUnload() { this.unloaded = true; },
   async refresh() {
     this.setData({ loading: true, error: '' });
@@ -21,7 +22,13 @@ Page({
     const item = this.data.items.find(value => value.id === event.currentTarget.dataset.id);
     if (item) this.showItem(item);
   },
-  showItem(item: Material) { this.setData({ selected: item, title: item.title, description: item.description, previewUrl: `${base()}/materials/${item.id}/file`, error: '' }); },
+  showItem(item: Material) {
+    this.setData({ selected: item, title: item.title, description: item.description, previewUrl: '', error: '' });
+    if (item.kind === 'image') wx.downloadFile({ url: `${base()}/materials/${item.id}/file`, header: authHeader(), success: result => {
+      handleUnauthorized(result.statusCode);
+      if (!this.unloaded && this.data.selected?.id === item.id && result.statusCode === 200) this.setData({ previewUrl: result.tempFilePath });
+    } });
+  },
   back() { this.setData({ selected: null, error: '' }); },
   titleInput(event: WechatMiniprogram.Input) { this.setData({ title: event.detail.value }); },
   descriptionInput(event: WechatMiniprogram.Input) { this.setData({ description: event.detail.value }); },
@@ -43,8 +50,9 @@ Page({
     const uploadPath = `${wx.env.USER_DATA_PATH}/${Date.now()}-${filename}`;
     this.setData({ busy: true, error: '' });
     wx.getFileSystemManager().copyFile({ srcPath: path, destPath: uploadPath, success: () => {
-      wx.uploadFile({ url: `${base()}/materials`, filePath: uploadPath, name: 'file', timeout: 180000,
+      wx.uploadFile({ url: `${base()}/materials`, filePath: uploadPath, name: 'file', timeout: 180000, header: authHeader(),
         success: result => {
+          handleUnauthorized(result.statusCode);
           if (this.unloaded) return;
           try {
             const body = JSON.parse(result.data);
@@ -68,9 +76,10 @@ Page({
   },
   preview() {
     const item = this.data.selected; if (!item) return;
-    if (item.kind === 'image') { wx.previewImage({ urls: [this.data.previewUrl] }); return; }
+    if (item.kind === 'image') { if (this.data.previewUrl) wx.previewImage({ urls: [this.data.previewUrl] }); return; }
     if (/\.(txt|md)$/i.test(item.filename)) { wx.showModal({ title: item.title, content: item.text.slice(0, 3000) || '没有可显示的正文', showCancel: false }); return; }
-    wx.downloadFile({ url: this.data.previewUrl, success: result => {
+    wx.downloadFile({ url: `${base()}/materials/${item.id}/file`, header: authHeader(), success: result => {
+      handleUnauthorized(result.statusCode);
       if (result.statusCode !== 200) { this.setData({ error: '原件下载失败' }); return; }
       wx.openDocument({ filePath: result.tempFilePath, fileType: item.filename.toLowerCase().endsWith('.pdf') ? 'pdf' : 'docx', showMenu: true, fail: () => this.setData({ error: '原件暂时无法打开' }) });
     }, fail: () => this.setData({ error: '原件下载失败' }) });

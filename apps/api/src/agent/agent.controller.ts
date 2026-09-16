@@ -11,7 +11,7 @@ export class AgentController {
 
   @Get('manuscripts')
   async manuscripts(@Req() request: FastifyRequest) {
-    const user = this.memory?.identity(request.headers.authorization);
+    const user = await this.memory?.resolveIdentity(request.headers.authorization);
     const items = user ? await this.memory!.manuscripts(user) : this.storage.localManuscripts();
     return items.map(({ conversationId, document }) => ({ conversationId, id: document.id, title: document.title, version: document.version }));
   }
@@ -19,7 +19,7 @@ export class AgentController {
   @Get('manuscripts/:conversationId/:documentId')
   async manuscript(@Param('conversationId') conversationId: string, @Param('documentId') documentId: string, @Req() request: FastifyRequest) {
     this.storage.assertId(conversationId);
-    const user = this.memory?.identity(request.headers.authorization);
+    const user = await this.memory?.resolveIdentity(request.headers.authorization);
     const items = user ? await this.memory!.manuscripts(user, conversationId) : this.storage.localManuscripts();
     const item = items.find(item => item.conversationId === conversationId && item.document.id === documentId);
     if (!item) throw new NotFoundException('文稿不存在');
@@ -28,7 +28,7 @@ export class AgentController {
 
   @Get('runs/:runId/trace')
   async trace(@Param('runId') runId: string, @Req() request: FastifyRequest) {
-    const user = this.memory?.identity(request.headers.authorization);
+    const user = await this.memory?.resolveIdentity(request.headers.authorization);
     if (user) await this.memory!.assertRun(user, runId);
     return this.storage.readTrace(runId);
   }
@@ -36,7 +36,7 @@ export class AgentController {
   /** POST + NDJSON supports fetch streams and mini-program chunked requests. */
   @Post('runs/stream')
   async stream(@Body() body: CompleteChatDto, @Req() request: FastifyRequest, @Res() reply: FastifyReply): Promise<void> {
-    const user = this.memory?.identity(request.headers.authorization);
+    const user = await this.memory?.resolveIdentity(request.headers.authorization);
     const controller = new AbortController();
     const disconnect = () => { if (!reply.raw.writableEnded) controller.abort('connection_closed'); };
     reply.raw.on('close', disconnect);

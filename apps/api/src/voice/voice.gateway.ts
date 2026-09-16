@@ -28,7 +28,7 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
   }
   onApplicationBootstrap(): void {
     const server = this.adapter.httpAdapter.getHttpServer() as Server;
-    server.on('upgrade', (request, socket, head) => {
+    server.on('upgrade', async (request, socket, head) => {
       if (request.url?.split('?')[0] !== '/api/v1/voice') return;
       const origins = String(this.config.get('VOICE_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173')).split(',');
       const origin = request.headers.origin;
@@ -41,9 +41,18 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
         socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n'); return;
       }
       let user: string | undefined;
-      try { user = this.memory?.identity(request.headers.authorization, request.headers['sec-websocket-protocol']); }
+      try { user = await this.memory?.resolveIdentity(request.headers.authorization, request.headers['sec-websocket-protocol']); }
       catch { socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n'); return; }
-      this.wss.handleUpgrade(request, socket, head, ws => this.connect(ws, user));
+      if (socket.destroyed) return;
+      if (this.wss.clients.size >= 8) { socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n'); return; }
+      this.wss.handleUpgrade(request, socket, head, ws => {
+        const authCheck = setInterval(() => {
+          void this.memory?.resolveIdentity(request.headers.authorization, request.headers['sec-websocket-protocol'])
+            .catch(() => ws.close(1008, 'Login expired'));
+        }, 20000);
+        ws.once('close', () => clearInterval(authCheck));
+        this.connect(ws, user);
+      });
     });
   }
   private connect(ws: WebSocket, user?: string): void {

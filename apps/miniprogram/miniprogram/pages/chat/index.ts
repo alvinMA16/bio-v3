@@ -1,5 +1,6 @@
 import { FOX_ANIMATION_CLIPS, FoxAnimationController, type FoxActionId, type FoxAnimationState } from '../../lib/fox-animation-controller';
 import { FoxFrameGate } from '../../lib/fox-frame-gate';
+import { requireAccount, handleUnauthorized } from '../../lib/account';
 import { MiniVoiceClient } from '../../lib/voice-client';
 import { createReceipt, queueReceipt } from '../../lib/session-receipt';
 let voiceClient: MiniVoiceClient | null = null;
@@ -52,7 +53,9 @@ Page({
     selectedBlockId: '',
   },
 
-  onLoad(options: Record<string, string | undefined> = {}): void {
+  async onLoad(options: Record<string, string | undefined> = {}): Promise<void> {
+    if (!await requireAccount() || this.unloaded) return;
+    this.authenticated = true;
     if (options.materialId) {
       this.materialIds = [options.materialId];
       this.setData({ materialTitle: options.title || '这份资料', input: `我们聊聊《${options.title || '这份资料'}》吧。` });
@@ -70,9 +73,13 @@ Page({
     this.activeMs = 0;
     this.receiptQueued = false;
     this.unloaded = false;
+    if (this.pageReady && this.data.callMode) this.startVoice();
   },
 
-  onReady(): void { if (this.data.callMode) this.startVoice(); },
+  authenticated: false,
+  hidden: false,
+  pageReady: false,
+  onReady(): void { this.pageReady = true; if (this.authenticated && this.data.callMode) this.startVoice(); },
 
   onActorLoaded(event: WechatMiniprogram.CustomEvent): void {
     if (!this.unloaded) this.showActorFrame(this.frameGate?.loaded(event.currentTarget.dataset.action as FoxActionId));
@@ -83,7 +90,7 @@ Page({
     this.setData({ actorReady: true, actorSrc: state.action.src, actorLeft: -(state.frame % state.action.columns) * 100, actorTop: -Math.floor(state.frame / state.action.columns) * 100 });
   },
 
-  onShow(): void { this.visibleSince = Date.now(); this.animationController?.resume(); },
+  onShow(): void { this.hidden = false; this.visibleSince = Date.now(); this.animationController?.resume(); },
 
   stopCallTimer(): void {
     if (this.callTimer) clearInterval(this.callTimer);
@@ -104,7 +111,7 @@ Page({
   },
 
   startVoice(): void {
-    if (this.data.sending || this.data.voiceActive) return;
+    if (!this.authenticated || this.hidden || this.unloaded || this.data.sending || this.data.voiceActive) return;
     this.setData({ voiceActive: true, voiceStatus: '正在连接语音', voiceTranscript: '' });
     this.userSpeaking = false;
     this.callListening = true;
@@ -166,7 +173,7 @@ Page({
   finishVoice(): void { voiceClient?.finish(); },
   interruptVoice(): void { voiceClient?.interrupt(); },
   stopVoice(): void { voiceClient?.close(); },
-  onHide(): void { this.pauseTimer(); voiceClient?.close(false, 'page_hidden'); this.stopCallTimer(); this.animationController?.suspend(); },
+  onHide(): void { this.hidden = true; this.pauseTimer(); voiceClient?.close(false, 'page_hidden'); this.stopCallTimer(); this.animationController?.suspend(); },
   onUnload(): void {
     this.pauseTimer();
     this.unloaded = true;
@@ -225,6 +232,7 @@ Page({
         conversationId: this.data.conversationId || undefined,
       },
       success: ({ data, statusCode }) => {
+        handleUnauthorized(statusCode);
         if (this.unloaded) return;
         if (statusCode < 200 || statusCode >= 300) {
           this.showRequestError('Agent 暂时无法响应，请稍后重试。');

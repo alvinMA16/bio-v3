@@ -4,8 +4,7 @@ server {
     ssl_certificate /etc/letsencrypt/live/app.storyofme.cn/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/app.storyofme.cn/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
-    auth_basic "Bio private preview";
-    auth_basic_user_file /etc/nginx/bio-v3.htpasswd;
+    __PREVIEW_AUTH__
     root /srv/bio-v3/web/current;
     index index.html;
     client_max_body_size 25m;
@@ -19,10 +18,10 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Authorization "Bearer __OWNER_TOKEN__";
+        proxy_set_header Authorization __AUTHORIZATION__;
         proxy_buffering off;
         proxy_read_timeout 600s;
         proxy_send_timeout 600s;

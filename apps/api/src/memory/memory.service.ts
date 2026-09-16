@@ -1,4 +1,5 @@
-import { Injectable, UnauthorizedException, NotFoundException, ConflictException, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Optional, UnauthorizedException, NotFoundException, ConflictException, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { AuthService } from '../auth/auth.service.js';
 import { ConfigService } from '@nestjs/config';
 import { Pool, type PoolClient } from 'pg';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
@@ -11,7 +12,7 @@ import { EMPTY_OVERVIEW, validateBatch, type MemoryBatch, type Overview, type Me
 @Injectable()
 export class MemoryService implements OnModuleInit, OnModuleDestroy {
   readonly pool?: Pool;
-  constructor(private readonly config: ConfigService) {
+  constructor(private readonly config: ConfigService, @Optional() private readonly auth?: AuthService) {
     const url = config.get<string>('MEMORY_DATABASE_URL');
     if (url) this.pool = new Pool({ connectionString: url, max: 12, connectionTimeoutMillis: 5000 });
   }
@@ -24,8 +25,13 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
   }
   async onModuleDestroy(): Promise<void> { await this.pool?.end(); }
 
-  /** Identity comes from a server-controlled token map, never a model/request userId. */
+  async resolveIdentity(authorization?: string, protocols?: string): Promise<string | undefined> {
+    if (this.auth?.enabled) return this.auth.identity(authorization, protocols);
+    return this.identity(authorization, protocols);
+  }
+  /** Legacy private-preview identity; disabled when phone accounts are enabled. */
   identity(authorization?: string, protocols?: string): string | undefined {
+    if (this.auth?.enabled) throw new UnauthorizedException('Use account authentication');
     if (!this.enabled) return undefined;
     const token = authorization?.replace(/^Bearer /i, '') ?? protocols?.split(',').map(x => x.trim()).find(x => x.startsWith('bio-auth.'))?.slice(9);
     const users: Record<string, string> = JSON.parse(this.config.get('MEMORY_AUTH_TOKENS', '{}'));

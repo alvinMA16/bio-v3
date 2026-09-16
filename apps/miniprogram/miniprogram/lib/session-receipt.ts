@@ -4,14 +4,16 @@ export { createReceipt, type ReceiptMessage, type SessionReceipt } from './sessi
 const STORAGE_KEY = 'lingli.last-session-receipt.v1';
 let latest: SessionReceipt | null = null;
 let pending: SessionReceipt | null = null;
+const key = () => wx.getStorageSync('bio-account-id') ? `${STORAGE_KEY}:${wx.getStorageSync('bio-account-id')}` : STORAGE_KEY;
+export function clearReceipt(): void { latest = null; pending = null; }
 export function saveReceipt(receipt: SessionReceipt): void {
   latest = parseReceipt(receipt);
-  try { wx.setStorageSync(STORAGE_KEY, latest); } catch { /* Available in memory if storage is full. */ }
+  try { wx.setStorageSync(key(), latest); } catch { /* Available in memory if storage is full. */ }
 }
 
 export function getLatestReceipt(): SessionReceipt | null {
   if (latest) return latest;
-  try { latest = parseReceipt(wx.getStorageSync(STORAGE_KEY)); } catch { /* Local cache is optional. */ }
+  try { latest = parseReceipt(wx.getStorageSync(key())); } catch { /* Local cache is optional. */ }
   return latest;
 }
 

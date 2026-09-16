@@ -11,7 +11,7 @@ export class ChatController {
 
   @Post('completions')
   async complete(@Body() body: CompleteChatDto, @Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply): Promise<ChatCompletionResponse> {
-    const user = this.memory?.identity(request.headers.authorization);
+    const user = await this.memory?.resolveIdentity(request.headers.authorization);
     const controller = new AbortController();
     const disconnect = () => { if (!reply.raw.writableEnded) controller.abort(); };
     request.raw.on('aborted', disconnect);

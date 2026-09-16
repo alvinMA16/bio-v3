@@ -5,7 +5,7 @@ const { resolve } = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-function setup() {
+function setup(authenticate = async () => true) {
   let page, callbacks;
   let starts = 0, closes = 0, destroyed = 0;
   const timers = new Set();
@@ -20,7 +20,7 @@ function setup() {
     getApp: () => ({ globalData: { apiBaseUrl: '/api/v1' } }),
     setInterval: fn => { timers.add(fn); return fn; },
     clearInterval: fn => timers.delete(fn),
-    require: id => id.includes('fox-frame-gate') ? { FoxFrameGate: class {} } : id.includes('fox-animation') ? { FOX_ANIMATION_CLIPS: {}, FoxAnimationController: class {
+    require: id => id.includes('account') ? { requireAccount: authenticate } : id.includes('fox-frame-gate') ? { FoxFrameGate: class {} } : id.includes('fox-animation') ? { FOX_ANIMATION_CLIPS: {}, FoxAnimationController: class {
       startAutoCycle() {} resume() {} suspend() {} setActivity(activity) { activities.push(activity); } destroy() { destroyed++; }
     } } : id.includes('voice-client') ? { MiniVoiceClient: class {
       constructor(_, handlers) { callbacks = handlers; }
@@ -31,9 +31,9 @@ function setup() {
   return { page, timers, activities, callbacks: () => callbacks, counts: () => ({ starts, closes, destroyed }) };
 }
 
-test('phone call route starts voice once, updates subtitle and releases call resources on exit', () => {
+test('phone call route starts voice once, updates subtitle and releases call resources on exit', async () => {
   const state = setup();
-  state.page.onLoad({ mode: 'call' });
+  await state.page.onLoad({ mode: 'call' });
   state.page.onShow();
   state.page.onReady();
   state.page.startVoice();
@@ -53,17 +53,17 @@ test('phone call route starts voice once, updates subtitle and releases call res
   assert.equal(state.counts().destroyed, 1);
 });
 
-test('plain chat route does not start microphone or animation', () => {
+test('plain chat route does not start microphone or animation', async () => {
   const state = setup();
-  state.page.onLoad();
+  await state.page.onLoad();
   state.page.onReady();
   assert.equal(state.page.data.callMode, false);
   assert.equal(state.counts().starts, 0);
 });
 
-test('call distinguishes waiting, user speech, playback and hangup without dropping the notebook', () => {
+test('call distinguishes waiting, user speech, playback and hangup without dropping the notebook', async () => {
   const state = setup();
-  state.page.onLoad({ mode: 'call' });
+  await state.page.onLoad({ mode: 'call' });
   state.page.onReady();
   const handlers = state.callbacks();
   handlers.event({ type: 'state', state: 'listening' });
@@ -83,4 +83,20 @@ test('call distinguishes waiting, user speech, playback and hangup without dropp
   handlers.ended();
   assert.equal(state.activities.at(-1).phase, 'idle');
   assert.equal(state.activities.at(-1).notebook, false);
+});
+
+test('authentication finishing after onReady starts one call; denied or unloaded pages never start', async () => {
+  let resolve;
+  const state = setup(() => new Promise(done => { resolve = done; }));
+  const load = state.page.onLoad({ mode: 'call' }); state.page.onReady();
+  assert.equal(state.counts().starts, 0);
+  resolve(true); await load; assert.equal(state.counts().starts, 1); state.page.onUnload();
+  const denied = setup(async () => false); await denied.page.onLoad({ mode: 'call' }); denied.page.onReady();
+  assert.equal(denied.counts().starts, 0);
+  const abandoned = setup(() => new Promise(done => { resolve = done; }));
+  const pending = abandoned.page.onLoad({ mode: 'call' }); abandoned.page.onReady(); abandoned.page.onUnload(); resolve(true); await pending;
+  assert.equal(abandoned.counts().starts, 0);
+  const hidden = setup(() => new Promise(done => { resolve = done; }));
+  const hiddenLoad = hidden.page.onLoad({ mode: 'call' }); hidden.page.onReady(); hidden.page.onHide(); resolve(true); await hiddenLoad;
+  assert.equal(hidden.counts().starts, 0); hidden.page.onUnload();
 });

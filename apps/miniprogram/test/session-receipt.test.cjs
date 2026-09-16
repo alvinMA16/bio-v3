@@ -50,14 +50,14 @@ test('receipt is queued once and only contains basic information without any net
   assert.equal(requests.length, 0);
 });
 
-test('chat backgrounding does not print; unloading prints once and cancels pending request', () => {
+test('chat backgrounding does not print; unloading prints once and cancels pending request', async () => {
   const { receipt } = setup();
   let page;
   load('pages/chat/index.ts', {
     Page: value => { page = value; },
-    require: id => id.includes('session-receipt') ? receipt : { FOX_ANIMATION_CLIPS: {}, MiniVoiceClient: class {} },
+    require: id => id.includes('account') ? { requireAccount: async () => true } : id.includes('session-receipt') ? receipt : { FOX_ANIMATION_CLIPS: {}, MiniVoiceClient: class {} },
   });
-  page.onLoad();
+  await page.onLoad();
   page.onShow();
   page.data.messages = messages;
   page.onHide();
@@ -71,15 +71,15 @@ test('chat backgrounding does not print; unloading prints once and cancels pendi
   assert.equal(receipt.takePendingReceipt(), null);
 });
 
-test('explicit hang-up prepares receipt before the home page becomes visible', () => {
+test('explicit hang-up prepares receipt before the home page becomes visible', async () => {
   const { receipt } = setup();
   let page, shown;
   load('pages/chat/index.ts', {
     Page: value => { page = value; },
     wx: { navigateBack: () => { shown = receipt.takePendingReceipt(); } },
-    require: id => id.includes('session-receipt') ? receipt : { FOX_ANIMATION_CLIPS: {}, MiniVoiceClient: class {} },
+    require: id => id.includes('account') ? { requireAccount: async () => true } : id.includes('session-receipt') ? receipt : { FOX_ANIMATION_CLIPS: {}, MiniVoiceClient: class {} },
   });
-  page.onLoad(); page.onShow(); page.data.messages = messages;
+  await page.onLoad(); page.onShow(); page.data.messages = messages;
   page.leaveChat();
   assert.equal(shown.shares, 1);
   page.onUnload();

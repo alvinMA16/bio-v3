@@ -61,7 +61,7 @@ test('hangup waits for Agent cleanup and ends the server-owned call, not each tu
   let started, closed; const running = new Promise(resolve => { started = resolve; });
   const ended = new Promise(resolve => { closed = resolve; });
   const memory = {
-    identity(auth) { assert.equal(auth, 'Bearer test'); return 'alice'; },
+    async resolveIdentity(auth) { assert.equal(auth, 'Bearer test'); return 'alice'; },
     async beginCall(user, call) { assert.equal(user, 'alice'); assert.equal(call, 'phone-one'); return conv; },
     async claimCallOpening() { return true; },
     async disconnectCall(user, call, _connection, explicit) { order.push('ended'); closed({ user, call, explicit }); },

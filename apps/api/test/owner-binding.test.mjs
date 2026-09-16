@@ -1,0 +1,30 @@
+import 'reflect-metadata';
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { Pool } from 'pg';
+import { MEMORY_SCHEMA } from '../dist/memory/schema.js';
+import { AUTH_SCHEMA } from '../dist/auth/schema.js';
+import { bindOwner } from '../../../infra/production/bind-owner-account.mjs';
+
+test('owner binding preserves data and is dry-run safe, idempotent and conflict-safe', { skip: !process.env.AUTH_TEST_DATABASE_URL }, async t => {
+  const admin = new Pool({ connectionString: process.env.AUTH_TEST_DATABASE_URL });
+  const schema = `binding_${randomUUID().replaceAll('-', '')}`;
+  await admin.query(`CREATE SCHEMA ${schema}`);
+  const pool = new Pool({ connectionString: process.env.AUTH_TEST_DATABASE_URL, options: `-c search_path=${schema}` });
+  t.after(async () => { await pool.end(); await admin.query(`DROP SCHEMA ${schema} CASCADE`); await admin.end(); });
+  await pool.query(MEMORY_SCHEMA); await pool.query(AUTH_SCHEMA);
+  await assert.rejects(bindOwner(pool, '13800138000', true), /does not exist/);
+  await pool.query("INSERT INTO bio_memory_users(id,version,overview) VALUES('owner',7,'{\"preferences\":[],\"entries\":[]}')");
+  const session = randomUUID(); await pool.query("INSERT INTO bio_memory_sessions(id,user_id,snapshot) VALUES($1,'owner',$2)", [session, { 'panel.json': '{"documents":[{"title":"Old manuscript"}]}' }]);
+  const before = (await pool.query('SELECT * FROM bio_memory_sessions')).rows;
+  const dry = await bindOwner(pool, '13800138000'); assert.equal(dry.applied, false); assert.equal(dry.counts.bio_memory_sessions, 1);
+  assert.equal((await pool.query('SELECT count(*) FROM bio_auth_users')).rows[0].count, '0');
+  const migrated = await bindOwner(pool, '13800138000', true); assert.equal(migrated.overviewVersion, 7);
+  assert.deepEqual((await pool.query('SELECT * FROM bio_memory_sessions')).rows, before);
+  assert.equal((await bindOwner(pool, '13800138000', true)).alreadyBound, true);
+  await assert.rejects(bindOwner(pool, '13900139000', true), /different account/);
+  await pool.query("DELETE FROM bio_auth_users WHERE id='owner'");
+  await pool.query("INSERT INTO bio_auth_users(id,phone) VALUES('someone-else','13800138000')");
+  await assert.rejects(bindOwner(pool, '13800138000', true), /different account/);
+});

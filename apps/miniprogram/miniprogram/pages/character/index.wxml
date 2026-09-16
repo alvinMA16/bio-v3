@@ -39,6 +39,7 @@
     />
   </view>
   <image class="stage__layer stage__panel" src="{{innerPanelSrc}}" mode="scaleToFill" />
+  <button style="position:fixed;right:20rpx;top:20rpx;z-index:20;font-size:24rpx" size="mini" bindtap="openAccount">我的账号</button>
   <view wx:if="{{!receiptVisible}}" class="desk-home">
     <button class="desk-entry desk-entry--folder" hover-class="desk-entry--pressed" bindtap="openFolder" aria-label="资料夹，查看你的资料">
       <image class="desk-entry__icon" src="/assets/desk/folder.png" mode="aspectFit" />

@@ -1,4 +1,5 @@
 import type { VoiceServerMessage } from '@bio/contracts';
+import { accountCacheKey } from './account-cache.ts';
 import { parseReceipt, type ReceiptMessage, type SessionReceipt } from '../../miniprogram/miniprogram/lib/session-receipt-data.ts';
 export { createReceipt } from '../../miniprogram/miniprogram/lib/session-receipt-data.ts';
 export type { SessionReceipt } from '../../miniprogram/miniprogram/lib/session-receipt-data.ts';
@@ -20,10 +21,10 @@ export function collectReceiptMessage(messages: CallMessages, event: VoiceServer
 }
 
 export function saveReceipt(receipt: SessionReceipt): void {
-  try { localStorage.setItem(KEY, JSON.stringify(parseReceipt(receipt))); } catch { /* Keep the in-memory receipt available. */ }
+  try { localStorage.setItem(accountCacheKey(KEY), JSON.stringify(parseReceipt(receipt))); } catch { /* Keep the in-memory receipt available. */ }
 }
 
 export function readReceipt(): SessionReceipt | null {
-  try { return parseReceipt(JSON.parse(localStorage.getItem(KEY) ?? 'null')); }
+  try { return parseReceipt(JSON.parse(localStorage.getItem(accountCacheKey(KEY)) ?? 'null')); }
   catch { return null; }
 }
