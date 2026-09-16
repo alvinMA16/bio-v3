@@ -24,7 +24,8 @@ bash infra/production/deploy.sh <full-commit-sha>
 
 `deploy.sh` fetches Git, creates a clean detached worktree, builds an image tagged
 and labeled with the SHA, and runs typechecks/tests inside that exact image without
-production credentials. It extracts the web build outside the checkout, backs up
+production credentials. A startup probe also runs as the production user before
+touching the live service. It extracts the web build outside the checkout, backs up
 data, updates Docker Compose, waits for health, switches release links, renders
 Nginx from the versioned template, and installs the versioned backup/renewal scripts.
 A deployment lock prevents overlapping releases. Failures during activation attempt

@@ -4,7 +4,8 @@ LABEL org.opencontainers.image.revision=$BIO_COMMIT
 RUN npm install -g pnpm@11.19.0
 WORKDIR /app
 COPY . .
-RUN pnpm install --frozen-lockfile \
+RUN chmod -R a+rX /app \
+    && pnpm install --frozen-lockfile \
     && pnpm --filter @bio/contracts build \
     && pnpm --filter @bio/api build \
     && pnpm --filter @bio/debug-console build

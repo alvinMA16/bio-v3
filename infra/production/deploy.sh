@@ -13,7 +13,7 @@ git -C "$repo" fetch --prune origin
 git -C "$repo" merge-base --is-ancestor "$sha" origin/main
 release=$base/releases/$sha
 if [[ ! -d $release ]]; then
-    git -C "$repo" worktree add --detach "$release" "$sha"
+    (umask 022; git -C "$repo" worktree add --detach "$release" "$sha")
 fi
 [[ $(git -C "$release" rev-parse HEAD) == "$sha" ]]
 [[ -z $(git -C "$release" status --porcelain --ignored) ]] || { echo 'Release checkout is dirty' >&2; exit 1; }
@@ -24,6 +24,7 @@ compose=(docker compose --env-file "$candidate" -f "$release/infra/production/co
 # Test the exact image without production credentials or network access.
 docker run --rm --network none --user root --workdir /app "bio-v3:$sha" \
     sh -c 'pnpm typecheck && pnpm test'
+docker run --rm --network none "bio-v3:$sha" node /app/infra/production/runtime-smoke.mjs
 mkdir -p "$base/web/$sha"
 chmod 755 "$base/web" "$base/web/$sha"
 extract=bio-v3-extract-$sha
