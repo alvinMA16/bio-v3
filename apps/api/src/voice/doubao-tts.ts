@@ -3,7 +3,7 @@ import type { TtsProvider } from './providers.js';
 
 export class DoubaoTts implements TtsProvider {
   constructor(private config: { appId: string; accessKey: string; resourceId: string; speaker: string }) {}
-  async synthesize(text: string, signal: AbortSignal, onAudio: (pcm: Uint8Array) => void): Promise<void> {
+  async synthesize(text: string, signal: AbortSignal, onAudio: (pcm: Uint8Array) => void | Promise<void>): Promise<void> {
     const response = await fetch('https://openspeech.bytedance.com/api/v3/tts/unidirectional', {
       method: 'POST', signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]),
       headers: { 'Content-Type': 'application/json', 'X-Api-App-Id': this.config.appId,
@@ -12,11 +12,11 @@ export class DoubaoTts implements TtsProvider {
         text, speaker: this.config.speaker, audio_params: { format: 'pcm', sample_rate: 16000 },
       } }),
     });
-    if (!response.ok || !response.body) throw new Error('TTS request failed');
+    if (!response.ok || !response.body) throw new Error(`TTS HTTP ${response.status}`);
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '', completed = false;
-    const line = (value: string) => {
+    const line = async (value: string) => {
       if (!value.trim()) return;
       const data = JSON.parse(value) as { code: number; data?: string };
       if (data.code === 20000000) { completed = true; return; }
@@ -24,7 +24,8 @@ export class DoubaoTts implements TtsProvider {
       if (data.data) {
         const pcm = Buffer.from(data.data, 'base64');
         if (!pcm.length || pcm.length % 2) throw new Error('Invalid TTS PCM');
-        onAudio(pcm);
+        // Bound each delivery to one second; await credit before reading more PCM.
+        for (let offset = 0; offset < pcm.length; offset += 32000) await onAudio(pcm.subarray(offset, offset + 32000));
       }
     };
     try {
@@ -33,8 +34,8 @@ export class DoubaoTts implements TtsProvider {
         buffer += decoder.decode(chunk.value, { stream: !chunk.done });
         if (buffer.length > 2 * 1024 * 1024) throw new Error('TTS frame too large');
         let index: number;
-        while ((index = buffer.indexOf('\n')) >= 0) { line(buffer.slice(0, index)); buffer = buffer.slice(index + 1); }
-        if (chunk.done) { line(buffer); break; }
+        while ((index = buffer.indexOf('\n')) >= 0) { await line(buffer.slice(0, index)); buffer = buffer.slice(index + 1); }
+        if (chunk.done) { await line(buffer); break; }
       }
       if (!completed) throw new Error('TTS stream incomplete');
     } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }

@@ -30,7 +30,8 @@
     <view wx:if="{{panel.mode !== 'conversation'}}" class="work-panel">
       <view wx:if="{{panel.mode === 'attachment'}}">
         <view class="work-panel__title">{{panel.attachment.title}}</view>
-        <image wx:if="{{panel.attachment.kind === 'image'}}" src="{{panel.attachment.url}}" mode="widthFix" class="work-panel__image" />
+        <text wx:if="{{panel.attachment.originalStatus}}">{{panel.attachment.originalStatus === 'deleted' ? '原文件已删除' : '原文件不可用'}}，已有对话仍保留。查看或核对原文需重新上传。</text>
+        <image wx:elif="{{panel.attachment.kind === 'image'}}" src="{{panel.attachment.url}}" mode="widthFix" class="work-panel__image" />
         <text wx:else selectable>{{panel.attachment.text || panel.attachment.url}}</text>
       </view>
       <view wx:if="{{panel.mode === 'editor'}}" class="work-panel__hint">{{agentWorking || sending ? '正在整理文稿，完成后会保存到文稿集…' : '本轮已结束；已写入的草稿可在文稿集中查看。'}}</view>

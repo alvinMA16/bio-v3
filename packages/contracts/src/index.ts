@@ -28,6 +28,8 @@ export interface PanelAttachment {
   title: string;
   url?: string;
   text?: string;
+  /** Server-derived original availability; historical conversation content is retained. */
+  originalStatus?: 'deleted' | 'unavailable';
 }
 
 export interface PanelBlock {
@@ -57,6 +59,11 @@ export interface Material extends PanelAttachment {
   /** Private, owner-authenticated derivative; originals remain untouched. */
   thumbnailUrl?: string;
   pageCount?: number;
+}
+
+/** Upload-only outcome; never persisted as material metadata. */
+export interface MaterialUploadResult extends Material {
+  uploadOutcome: 'created' | 'duplicate' | 'renamed';
 }
 
 export interface AgentContextSnapshot {
@@ -144,4 +151,4 @@ export interface AgentTraceEntry {
   data: unknown;
 }
 
-export type { VoiceRequest, VoiceClientMessage, VoiceServerMessage, VoiceState } from './voice.js';
+export type { VoiceRequest, VoiceClientMessage, VoiceServerMessage, VoiceState, VoicePlaybackSnapshot } from './voice.js';

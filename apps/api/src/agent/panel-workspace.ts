@@ -25,6 +25,7 @@ export interface PanelUpdate {
 export class PanelWorkspace {
   private value: WorkspaceFile;
   private readonly path: string;
+  private readonly originalStatuses = new Map<string, PanelAttachment['originalStatus']>();
 
   constructor(cwd: string, attachments: PanelAttachment[] = []) {
     this.path = join(cwd, 'panel.json');
@@ -44,7 +45,24 @@ export class PanelWorkspace {
     if (attachments.length) this.commit(next);
   }
 
-  state(): PanelState { return structuredClone(this.value.panel); }
+  setOriginalStatus(id: string, status: PanelAttachment['originalStatus']): boolean {
+    if (this.originalStatuses.get(id) === status) return false;
+    this.originalStatuses.set(id, status);
+    return true;
+  }
+
+  private attachmentView(attachment: PanelAttachment): PanelAttachment {
+    const originalStatus = this.originalStatuses.get(attachment.id);
+    const view = structuredClone(attachment);
+    if (originalStatus) { view.originalStatus = originalStatus; delete view.text; }
+    return view;
+  }
+
+  state(): PanelState {
+    const panel = structuredClone(this.value.panel);
+    if (panel.attachment) panel.attachment = this.attachmentView(panel.attachment);
+    return panel;
+  }
 
   scene(): AgentScene {
     return this.value.panel.mode === 'attachment' ? 'attachment_conversation'
@@ -58,7 +76,7 @@ export class PanelWorkspace {
 
   /** Bounded model context. Full content is available through get_content. */
   context() {
-    const panel = this.value.panel;
+    const panel = this.state();
     let remaining = 6000;
     const document = panel.document && {
       id: panel.document.id, title: panel.document.title, version: panel.document.version,
@@ -87,7 +105,7 @@ export class PanelWorkspace {
         documentVersion: panel.document?.version ?? null,
       },
       attachment: panel.attachment && { ...panel.attachment, text: panel.attachment.text?.slice(0, 6000), textTruncated: (panel.attachment.text?.length ?? 0) > 6000 },
-      availableAttachments: this.value.attachments.map(({ id, kind, title }) => ({ id, kind, title })),
+      availableAttachments: this.value.attachments.map(({ id, kind, title }) => ({ id, kind, title, originalStatus: this.originalStatuses.get(id) })),
       availableDocuments: this.value.documents.map(({ id, title, version }) => ({ id, title, version })),
     };
   }
@@ -97,6 +115,9 @@ export class PanelWorkspace {
       if (documentId || blockId) throw new Error('附件与草稿不能同时读取');
       const attachment = this.value.attachments.find(item => item.id === attachmentId);
       if (!attachment) throw new Error('附件不存在');
+      const originalStatus = this.originalStatuses.get(attachment.id);
+      if (originalStatus) return { id: attachment.id, kind: attachment.kind, title: attachment.title, originalStatus,
+        message: originalStatus === 'deleted' ? '原文件已删除。可基于已有对话继续讨论；不能重新读取或核对原件，需要原文时请用户重新上传。' : '原文件不可用。可基于已有对话继续讨论；不能重新读取或核对原件。' };
       return structuredClone(attachment);
     }
     if (!documentId) {

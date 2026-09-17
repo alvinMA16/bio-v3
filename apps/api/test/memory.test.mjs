@@ -294,6 +294,34 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
       const next = await memory.source(user, undefined, longCall, first.nextAfter);
       assert.equal(next.messages.length, 2); assert.equal(next.nextAfter, null);
     });
+    await t.test('disconnect grace is visible to new calls; reconnect preserves history and playback ownership', async () => {
+      const id = `voice-${prefix}`, connection = 'first';
+      const conv = await memory.beginCall(user, id, connection);
+      await memory.archive({ userId: user, callId: id }, conv, randomUUID(), randomUUID(), 'user', '我们刚才在讨论简历。');
+      const progress = { turnId: 'turn', generated: true, sentSamples: 320000, playedSamples: 16000, interrupted: true,
+        lastPlayed: { segmentId: 1, messageId: 'assistant', text: '刚刚听到的部分。' } };
+      await memory.savePlayback(user, id, connection, progress);
+      await memory.disconnectCall(user, id, connection, false);
+      const next = `during-grace-${prefix}`; await memory.beginCall(user, next, 'next');
+      assert.ok(JSON.parse(await memory.context({ userId: user, callId: next })).pendingCalls.some(c => c.callId === id));
+      const recovery = JSON.parse(await memory.recoveryContext({ userId: user, callId: next }));
+      assert.ok(recovery.calls.some(c => c.id === id && c.status === 'disconnected'));
+      assert.equal(recovery.playback.find(p => p.call_id === id).data.playedSamples, 16000);
+      const resumed = await memory.resumeCall(user, id, 'second');
+      assert.deepEqual(resumed, { callId: id, conversationId: conv, resumed: true });
+      await memory.savePlayback(user, id, connection, { ...progress, playedSamples: 320000 });
+      await memory.savePlayback(other, id, 'second', { ...progress, playedSamples: 320000 });
+      assert.equal((await memory.pool.query('SELECT data FROM bio_voice_playback WHERE call_id=$1', [id])).rows[0].data.playedSamples, 16000);
+      await memory.disconnectCall(user, id, connection, true);
+      assert.equal((await memory.pool.query('SELECT status FROM bio_memory_calls WHERE id=$1', [id])).rows[0].status, 'active');
+      await memory.disconnectCall(user, id, 'second', true);
+      const replacement = await memory.resumeCall(user, id, 'third');
+      assert.equal(replacement.resumed, false); assert.notEqual(replacement.callId, id);
+      assert.ok(JSON.parse(await memory.context({ userId: user, callId: replacement.callId })).pendingCalls.some(c => c.callId === id));
+      await assert.rejects(memory.resumeCall(other, id, 'foreign'));
+      // Leave the worker's failure test independent of these synthetic pending jobs.
+      await memory.pool.query("UPDATE bio_memory_jobs SET status='done' WHERE call_id=$1", [id]);
+    });
     await t.test('failed organization preserves overview and enters bounded retry state', async () => {
       const failedCall = `failed-${prefix}`; const conv = await memory.beginCall(user, failedCall, 'failed');
       await memory.archive({ userId: user, callId: failedCall }, conv, randomUUID(), randomUUID(), 'user', '新内容');

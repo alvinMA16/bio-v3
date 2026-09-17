@@ -15,11 +15,12 @@ type Callbacks = {
   listening?: (active: boolean) => void;
   speaking?: (active: boolean) => void;
   microphoneError?: (message: string) => void;
+  status?: (message: string) => void;
 };
 
 /** Owns microphone, socket, and PCM playback; closing releases all browser resources. */
 export class BrowserVoice {
-  private socket?: WebSocket;
+  private socket: WebSocket | undefined;
   private stream: MediaStream | undefined;
   private context?: AudioContext;
   private capture?: AudioWorkletNode;
@@ -37,13 +38,31 @@ export class BrowserVoice {
   private drained = false;
   private nextTime = 0;
   private conversationId?: string;
-  private callId = crypto.randomUUID();
+  private callId: string = crypto.randomUUID();
   private micEnabled = true;
   private micGeneration = 0;
   private turnActive = false;
   private submitted = false;
+  private confirmed = false;
+  private resume = false;
+  private reconnects = 0;
+  private reconnectTimer?: ReturnType<typeof setTimeout>;
+  private connectionTimer?: ReturnType<typeof setTimeout>;
+  private audioFailed = false;
+  private queuedBytes = 0;
+  private receivedSamples = 0;
+  private acknowledgedSamples = 0;
+  private readonly storageKey: string;
   private onVisibility = () => { if (document.hidden) { this.callbacks.error('页面进入后台，通话已暂停；已写入的文稿会保留。'); this.close(false, 'page_hidden'); } };
-  constructor(private callbacks: Callbacks) {}
+  constructor(private callbacks: Callbacks, storageKey = 'bio-voice-resume') {
+    this.storageKey = storageKey;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(storageKey) ?? 'null');
+      if (saved && typeof saved.callId === 'string' && saved.expiresAt > Date.now()) {
+        this.callId = saved.callId; this.resume = true;
+      }
+    } catch { /* Storage is optional; in-memory reconnect still works. */ }
+  }
 
   async start(): Promise<void> {
     try {
@@ -71,11 +90,9 @@ export class BrowserVoice {
       if (this.stream) this.source = this.context.createMediaStreamSource(this.stream);
       this.muted = this.context.createGain(); this.muted.gain.value = 0;
       this.source?.connect(this.capture); this.capture.connect(this.muted); this.muted.connect(this.context.destination);
-      const url = new URL('/api/v1/voice', location.href); url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const authToken = typeof sessionStorage === 'undefined' ? '' : sessionStorage.getItem('bio-auth-token');
-      const ws = this.socket = new WebSocket(url, authToken ? ['bio-voice', `bio-auth.${authToken}`] : []);
       this.capture.port.onmessage = event => {
-        if (this.closed || ws.readyState !== WebSocket.OPEN) return;
+        const ws = this.socket;
+        if (this.closed || !ws || ws.readyState !== WebSocket.OPEN) return;
         if (event.data?.type === 'flushed') {
           if (this.finishing) { this.finishing = false; this.setListening(false); this.send({ type: 'finish', turnId: this.turnId }); }
           return;
@@ -91,13 +108,7 @@ export class BrowserVoice {
         this.callbacks.inputLevel?.(rms < 0.008 ? 0 : Math.min(4, Math.ceil(rms * 24)));
         ws.send(event.data as ArrayBuffer);
       };
-      ws.onopen = () => { if (!this.closed) { this.callbacks.connected?.(); this.listen(); } };
-      ws.onmessage = event => {
-        try { this.receive(JSON.parse(String(event.data)) as VoiceServerMessage); }
-        catch { this.fail('语音数据处理失败，请重试。'); }
-      };
-      ws.onerror = () => this.fail('暂时无法连接语音服务，请稍后重试。');
-      ws.onclose = () => { if (!this.closed) this.fail('语音连接已断开。'); };
+      this.connectSocket();
     } catch (error) {
       if (!this.closed) {
         console.error('Voice startup failed', error);
@@ -107,16 +118,64 @@ export class BrowserVoice {
     }
   }
 
+  private connectSocket(): void {
+    if (this.closed) return;
+    const url = new URL('/api/v1/voice', location.href); url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const authToken = typeof sessionStorage === 'undefined' ? '' : sessionStorage.getItem('bio-auth-token');
+    const ws = this.socket = new WebSocket(url, authToken ? ['bio-voice', `bio-auth.${authToken}`] : []);
+    this.connectionTimer = setTimeout(() => this.reconnect(ws), 10000);
+    ws.onopen = () => {
+      if (this.closed || this.socket !== ws) return;
+      clearTimeout(this.connectionTimer); this.callbacks.connected?.(); this.listen();
+    };
+    ws.onmessage = event => {
+      if (this.closed || this.socket !== ws) return;
+      try { this.receive(JSON.parse(String(event.data)) as VoiceServerMessage); }
+      catch (error) {
+        console.error('Voice receive failed', { callId: this.callId, turnId: this.turnId, name: error instanceof Error ? error.name : 'unknown' });
+        this.fail('语音数据处理失败，请重试。');
+      }
+    };
+    ws.onerror = () => this.reconnect(ws);
+    ws.onclose = event => {
+      if (this.closed || this.socket !== ws) return;
+      if (event?.code === 1008 || event?.code === 1000 && ['Call ended', 'Connection replaced'].includes(event.reason)) {
+        this.forget(); this.fail('通话已结束或登录已失效，请重新连接。');
+      } else this.reconnect(ws);
+    };
+  }
+
+  private reconnect(ws: WebSocket): void {
+    if (this.closed || this.socket !== ws) return;
+    clearTimeout(this.connectionTimer);
+    this.remember();
+    this.send({ type: 'disconnect', turnId: this.turnId || 'disconnect', reason: 'client_error' });
+    this.socket = undefined; ws.close();
+    this.setListening(false); this.stopAudio(); this.turnActive = false;
+    this.callbacks.event({ type: 'cancelled', turnId: this.turnId, elapsedMs: 0, reason: 'connection_lost' });
+    if (document.hidden || this.reconnects >= 3) { this.fail('连接暂时中断，重新连接可尝试恢复刚才的对话。'); return; }
+    this.resume = true;
+    this.callbacks.status?.('连接中断，正在恢复刚才的对话…');
+    const delay = [1000, 3000, 7000][this.reconnects++]!;
+    this.reconnectTimer = setTimeout(() => this.connectSocket(), delay);
+  }
+
+  private remember(): void {
+    if (!this.confirmed && !this.resume) return;
+    try { sessionStorage.setItem(this.storageKey, JSON.stringify({ callId: this.callId, expiresAt: Date.now() + 180000 })); } catch { /* Optional storage. */ }
+  }
+  private forget(): void { this.confirmed = false; this.resume = false; try { sessionStorage.removeItem(this.storageKey); } catch { /* Optional storage. */ } }
+
   private listen(): void {
     if (this.closed) return;
     if (!this.micEnabled || !this.stream || this.turnActive) return;
     this.turnActive = true; this.submitted = false;
-    this.stopAudio(); this.drained = false;
+    this.stopAudio(); this.drained = false; this.audioFailed = false; this.receivedSamples = 0; this.acknowledgedSamples = 0;
     this.turnId = crypto.randomUUID();
     const request = this.callbacks.request();
     if (this.conversationId) request.conversationId = this.conversationId;
     this.callbacks.start(this.turnId, request);
-    this.send({ type: 'listen', turnId: this.turnId, callId: this.callId, request });
+    this.send({ type: 'listen', turnId: this.turnId, callId: this.callId, resume: this.resume, playbackFeedback: true, request });
   }
   updateAttachmentView(view: { materialId: string; page: number }): void {
     if (!this.closed && this.turnId) this.send({ type: 'attachment.view', turnId: this.turnId, view });
@@ -134,15 +193,32 @@ export class BrowserVoice {
   }
   private receive(event: VoiceServerMessage): void {
     if (this.closed || event.turnId !== this.turnId) return;
+    if (event.type === 'connected') {
+      this.callId = event.callId; this.conversationId = event.conversationId;
+      this.confirmed = true; this.resume = false; this.reconnects = 0; this.remember();
+      if (event.resumed) this.callbacks.status?.('已恢复刚才的对话，可以继续说。');
+    }
+    if (event.type === 'error' && event.code === 'CALL_BUSY') { if (this.socket) this.reconnect(this.socket); return; }
     if (event.type === 'asr' && this.listening) this.speechSignal.recognize(event.text);
     if (event.type === 'state') this.setListening(this.micEnabled && event.state === 'listening');
     if (event.type === 'transcript' || event.type === 'audio' || event.type === 'agent') this.submitted = true;
     if (event.type === 'agent') this.conversationId = event.event.conversationId;
     if (event.type === 'result') this.conversationId = event.result.conversationId;
-    if (event.type === 'audio') this.enqueue(event);
+    if (event.type === 'audio' && !this.audioFailed) {
+      try { this.enqueue(event); }
+      catch (error) {
+        const code = error instanceof Error && ['invalid_audio', 'audio_queue_limit'].includes(error.message) ? error.message : 'audio_context_failed';
+        console.error('Voice playback failed', { callId: this.callId, turnId: this.turnId, segmentId: event.segmentId, code, queuedBytes: this.queuedBytes });
+        this.audioFailed = true; this.stopAudio();
+        this.send({ type: 'playback.stop', turnId: this.turnId, code });
+        this.callbacks.error('语音播放暂停，文字会继续保留；你可以继续交流。');
+      }
+    }
     this.callbacks.event(event);
+    // A broken ASR connection must not create an automatic open/fail/listen loop.
+    if (event.type === 'error' && event.recoverable && event.stage === 'asr') void this.setMicrophone(false);
     if (event.type === 'done') { this.drained = true; this.afterDrain(); }
-    if (event.type === 'error') this.close(false);
+    if (event.type === 'error' && !event.recoverable) this.close(false);
   }
   async setMicrophone(enabled: boolean): Promise<void> {
     if (this.closed || this.micEnabled === enabled) return;
@@ -188,14 +264,18 @@ export class BrowserVoice {
   }
   private enqueue(event: Extract<VoiceServerMessage, { type: 'audio' }>): void {
     const context = this.context;
-    if (!context || event.sampleRate !== 16000) throw new Error('Unsupported audio');
+    if (!context || event.sampleRate !== 16000 || event.data.length > 100000) throw new Error('invalid_audio');
     const bytes = Uint8Array.from(atob(event.data), value => value.charCodeAt(0));
-    if (!bytes.length || bytes.length % 2) throw new Error('Invalid PCM');
+    if (!bytes.length || bytes.length % 2) throw new Error('invalid_audio');
+    if (this.queuedBytes + bytes.length > 2 * 1024 * 1024 || this.sources.size >= 2000) throw new Error('audio_queue_limit');
     const buffer = context.createBuffer(1, bytes.length / 2, event.sampleRate);
     const samples = buffer.getChannelData(0), view = new DataView(bytes.buffer);
     for (let i = 0; i < samples.length; i++) samples[i] = view.getInt16(i * 2, true) / 32768;
     const start = Math.max(context.currentTime + 0.04, this.nextTime);
-    if (start - context.currentTime > 60) throw new Error('Playback queue too long');
+    if (start - context.currentTime > 60) throw new Error('audio_queue_limit');
+    this.queuedBytes += bytes.length;
+    this.receivedSamples += bytes.length / 2;
+    const endSample = event.endSample ?? this.receivedSamples;
     this.nextTime = start + buffer.duration;
     const source = context.createBufferSource(); source.buffer = buffer; source.connect(this.output!);
     this.sources.add(source);
@@ -207,6 +287,12 @@ export class BrowserVoice {
     this.timers.add(timer);
     source.onended = () => {
       source.disconnect(); this.sources.delete(source);
+      this.queuedBytes -= bytes.length;
+      if (!this.closed && turnId === this.turnId && endSample > this.acknowledgedSamples
+        && (endSample - this.acknowledgedSamples >= 16000 || !this.sources.size)) {
+        this.acknowledgedSamples = endSample;
+        this.send({ type: 'playback', turnId, playedSamples: endSample });
+      }
       if (!this.sources.size) { this.callbacks.playback(false, ''); this.afterDrain(); }
     };
     source.start(start);
@@ -223,7 +309,7 @@ export class BrowserVoice {
     for (const timer of this.timers) clearTimeout(timer);
     this.timers.clear();
     for (const source of this.sources) { source.onended = null; source.stop(); source.disconnect(); }
-    this.sources.clear(); this.nextTime = 0; this.callbacks.playback(false, '');
+    this.sources.clear(); this.nextTime = 0; this.queuedBytes = 0; this.callbacks.playback(false, '');
   }
   private send(message: VoiceClientMessage): void {
     if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message));
@@ -231,6 +317,8 @@ export class BrowserVoice {
   private fail(message: string): void { if (!this.closed) { this.callbacks.error(message); this.close(false); } }
   close(hangup = true, reason: 'page_hidden' | 'client_error' = 'client_error'): void {
     if (this.closed) return;
+    clearTimeout(this.reconnectTimer); clearTimeout(this.connectionTimer);
+    if (hangup) this.forget(); else this.remember();
     if (hangup) this.send({ type: 'hangup', turnId: this.turnId || 'hangup' });
     else this.send({ type: 'disconnect', turnId: this.turnId || 'disconnect', reason });
     document.removeEventListener('visibilitychange', this.onVisibility);

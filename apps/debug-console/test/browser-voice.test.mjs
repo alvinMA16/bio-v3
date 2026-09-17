@@ -25,6 +25,7 @@ test('transport failure leaves call completion to the server grace period', asyn
 });
 
 function environment(t, pendingMic, moduleError) {
+  const cache = new Map();
   const sockets = [], nodes = [], messages = [], events = [], starts = [], playback = [], captures = [], levels = [], gains = [];
   let stopped = 0, ended = 0;
   const stream = { getTracks: () => [{ stop() { stopped++; } }] };
@@ -50,6 +51,7 @@ function environment(t, pendingMic, moduleError) {
     AudioContext: Context,
     AudioWorkletNode: class { constructor() { captures.push(this); } port = { postMessage() {} }; connect() {} disconnect() {} },
     WebSocket: Socket,
+    sessionStorage: { getItem: key => cache.get(key) ?? null, setItem: (key, value) => cache.set(key, value), removeItem: key => cache.delete(key) },
   };
   const restore = [];
   for (const [key, value] of Object.entries(globals)) {
@@ -60,7 +62,7 @@ function environment(t, pendingMic, moduleError) {
   const client = new BrowserVoice({ request: () => ({}), start: id => starts.push(id), event: event => events.push(event),
     inputLevel: level => levels.push(level), playback: (...args) => playback.push(args), error: message => events.push({ type: 'local.error', message }), ended: () => ended++ });
   t.after(() => { client.close(); restore.forEach(fn => fn()); });
-  return { client, sockets, nodes, captures, levels, gains, starts, messages, events, playback, stream, stopped: () => stopped, ended: () => ended };
+  return { client, cache, sockets, nodes, captures, levels, gains, starts, messages, events, playback, stream, stopped: () => stopped, ended: () => ended };
 }
 
 test('interruption clears scheduled audio and rejects old turn callbacks', async t => {
@@ -193,4 +195,73 @@ test('worklet load failure shows a friendly error and releases microphone resour
   assert.equal(f.stopped(), 1);
   assert.equal(f.ended(), 1);
   assert.equal(f.sockets.length, 0);
+});
+
+test('playback credits are sent only after audio ends, and stale audio never acknowledges a new turn', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen();
+  const id = f.starts[0];
+  ws.onmessage({ data: JSON.stringify({ type: 'audio', turnId: id, sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1, endSample: 1 }) });
+  const messages = () => f.messages.map(JSON.parse).filter(m => m.type === 'playback');
+  assert.equal(messages().length, 0);
+  f.nodes[0].onended(); assert.deepEqual(messages()[0], { type: 'playback', turnId: id, playedSamples: 1 });
+  f.client.interrupt();
+  ws.onmessage({ data: JSON.stringify({ type: 'audio', turnId: id, sampleRate: 16000, data: 'AAA=', text: '旧音频', segmentId: 2, endSample: 2 }) });
+  assert.equal(messages().length, 1);
+});
+
+test('bad audio pauses speech while retaining complete text and keeping the call open', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] }); t.mock.method(console, 'error', () => {});
+  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen();
+  const id = f.starts[0];
+  ws.onmessage({ data: JSON.stringify({ type: 'audio', turnId: id, sampleRate: 16000, data: 'AA==', text: '错误音频', segmentId: 1 }) });
+  assert.equal(f.ended(), 0); assert.equal(ws.readyState, 1);
+  assert.ok(f.messages.map(JSON.parse).some(m => m.type === 'playback.stop'));
+  ws.onmessage({ data: JSON.stringify({ type: 'result', turnId: id, result: { conversationId: 'same', message: { content: '完整文字' } } }) });
+  assert.ok(f.events.some(e => e.type === 'result' && e.result.message.content === '完整文字'));
+  ws.onmessage({ data: JSON.stringify({ type: 'error', turnId: id, recoverable: true, stage: 'tts', message: '暂停' }) });
+  ws.onmessage({ data: JSON.stringify({ type: 'done', turnId: id }) });
+  t.mock.timers.tick(200); assert.equal(f.starts.length, 2); assert.equal(f.ended(), 0);
+});
+
+test('network reconnect reuses confirmed call identity and ignores the old socket; hangup stops retries', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = environment(t); await f.client.start(); const old = f.sockets[0]; old.onopen();
+  const first = f.messages.map(JSON.parse).find(m => m.type === 'listen');
+  old.onmessage({ data: JSON.stringify({ type: 'connected', turnId: first.turnId, callId: first.callId, conversationId: 'conv', resumed: false }) });
+  old.onclose({ code: 1006 });
+  t.mock.timers.tick(1000); const next = f.sockets[1]; next.onopen();
+  const resumed = f.messages.map(JSON.parse).filter(m => m.type === 'listen').at(-1);
+  assert.equal(resumed.callId, first.callId); assert.equal(resumed.resume, true);
+  assert.notEqual(resumed.turnId, first.turnId); assert.equal(resumed.request.conversationId, 'conv');
+  const count = f.events.length;
+  old.onmessage({ data: JSON.stringify({ type: 'transcript', turnId: first.turnId, text: '迟到的旧消息' }) });
+  assert.equal(f.events.length, count);
+  next.onclose({ code: 1006 }); f.client.close(); t.mock.timers.tick(20000);
+  assert.equal(f.sockets.length, 2);
+});
+
+test('manual reconnect restores the cached call; another account and explicit hangup do not inherit it', async t => {
+  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen();
+  const first = f.messages.map(JSON.parse).find(m => m.type === 'listen');
+  ws.onmessage({ data: JSON.stringify({ type: 'connected', turnId: first.turnId, callId: first.callId, conversationId: 'conv', resumed: false }) });
+  f.client.close(false);
+  const callbacks = { request: () => ({}), start() {}, event() {}, playback() {}, error() {}, ended() {} };
+  const resumed = new BrowserVoice(callbacks); t.after(() => resumed.close());
+  await resumed.start(); f.sockets[1].onopen();
+  const same = f.messages.map(JSON.parse).filter(m => m.type === 'listen').at(-1);
+  assert.equal(same.callId, first.callId); assert.equal(same.resume, true);
+  const other = new BrowserVoice(callbacks, 'bio-voice-resume:another-account'); t.after(() => other.close());
+  await other.start(); f.sockets[2].onopen();
+  assert.notEqual(f.messages.map(JSON.parse).filter(m => m.type === 'listen').at(-1).callId, first.callId);
+  resumed.close(); other.close(); assert.equal(f.cache.has('bio-voice-resume'), false);
+});
+
+test('recoverable recognition failure pauses microphone instead of looping and allows explicit retry', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen(); const turnId = f.starts[0];
+  ws.onmessage({ data: JSON.stringify({ type: 'error', turnId, stage: 'asr', recoverable: true, message: '识别暂时不可用' }) });
+  ws.onmessage({ data: JSON.stringify({ type: 'done', turnId }) });
+  t.mock.timers.tick(2000); assert.equal(f.starts.length, 1); assert.equal(f.ended(), 0);
+  await f.client.setMicrophone(true); assert.equal(f.starts.length, 2);
 });

@@ -129,8 +129,10 @@ export class MemoryWorker implements OnModuleInit, OnModuleDestroy {
       this.abort = () => { exhausted = true; void session!.abort(); };
       timer = setTimeout(this.abort, 180000);
       const call = (await this.memory.pool!.query('SELECT started_at,ended_at FROM bio_memory_calls WHERE id=$1 AND user_id=$2', [callId, user])).rows[0];
+      const playback = (await this.memory.pool!.query('SELECT data FROM bio_voice_playback WHERE call_id=$1 AND user_id=$2 ORDER BY updated_at DESC LIMIT 100', [callId, user])).rows.map(row => row.data);
       if (!call) throw new Error('Call not found');
-      await session.prompt(JSON.stringify({ callId, started_at: beijingTime(call.started_at), ended_at: beijingTime(call.ended_at), overview, unusedIds,
+      await session.prompt(JSON.stringify({ callId, started_at: beijingTime(call.started_at), ended_at: beijingTime(call.ended_at), overview, unusedIds, playback,
+        playbackRule: '助手完整生成不代表用户听完。播放回执不是用户同意的证据；interrupted 或未确认播放的建议不得写成双方达成的共识。用户原文仍可独立形成记忆。',
         batchShape: { changes: [{ id: 'uuid', expectedVersion: 0, type: 'person|story|interaction', title: '标题', summary: '摘要', body: '正文', active: true, sources: ['用户消息UUID'] }],
           overview: { preferences: [{ text: '偏好', sources: ['用户消息UUID'] }], entries: [{ memoryId: 'uuid', summary: '摘要入口' }] } } }), { expandPromptTemplates: false });
       if (!proposed || !callSummary || exhausted || failed) throw new Error('Incomplete memory organization');

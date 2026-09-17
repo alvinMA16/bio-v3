@@ -1,7 +1,7 @@
 :host { display: block; height: 100%; min-height: 0; }
 .viewer { height: 100%; display: flex; flex-direction: column; }
 .stage { flex: 1; min-height: 0; position: relative; overflow: hidden; }
-.zoom, .sheet, .sheet image, .text { width: 100%; height: 100%; }
+.sheet, .text { width: 100%; height: 100%; }
 .status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 26rpx; }
 .pager { flex: 0 0 88rpx; display: flex; justify-content: center; align-items: center; gap: 24rpx; font-size: 24rpx; }
 .pager button { width: 88rpx; font-size: 48rpx; }
@@ -10,5 +10,5 @@ button::after { border: 0; }
 button[disabled] { background: transparent; color: #7e8589; }
 .filebar { flex: 0 0 88rpx; display: flex; align-items: center; gap: 12rpx; font-size: 24rpx; }
 .filebar text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .7; }
-.filebar button, .zoom-button { border-radius: 44rpx; background: #d9e7dcaa; backdrop-filter: blur(16px); color: #37473c; font-size: 24rpx; }
-.zoom-button { position: absolute; bottom: 16rpx; right: 16rpx; line-height: 72rpx; }
+.focus-back { align-self: flex-start; flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 88rpx; height: 88rpx; }
+.back-chevron { width: 18rpx; height: 18rpx; border-left: 4rpx solid currentColor; border-bottom: 4rpx solid currentColor; transform: rotate(45deg); }

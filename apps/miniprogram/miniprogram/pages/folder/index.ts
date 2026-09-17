@@ -1,4 +1,4 @@
-import type { Material } from '@bio/contracts';
+import type { Material, MaterialUploadResult } from '@bio/contracts';
 import { authHeader, requireAccount, handleUnauthorized } from '../../lib/account';
 const base = () => getApp<IAppOption>().globalData.apiBaseUrl;
 type MaterialCard = Material & { fileType: string; sizeLabel: string };
@@ -154,10 +154,15 @@ Page({
     } });
   },
   upload(path: string, size: number, name?: string) {
+    if (this.data.busy) return;
     if (size > 20 * 1024 * 1024) { this.setData({ error: '每份文件不能超过 20 MB' }); return; }
     // wx.uploadFile derives multipart filename from filePath. Preserve the selected extension.
     const filename = (name || path.split('/').pop() || '照片.jpg').replace(/[^\p{L}\p{N}._ -]/gu, '_');
-    const uploadPath = `${wx.env.USER_DATA_PATH}/${Date.now()}-${filename}`;
+    const uploadDirectory = `${wx.env.USER_DATA_PATH}/upload-${Date.now()}`;
+    const uploadPath = `${uploadDirectory}/${filename}`;
+    try { wx.getFileSystemManager().mkdirSync(uploadDirectory, true); }
+    catch { this.setData({ error: '无法准备上传文件，请重试' }); return; }
+    const cleanup = () => wx.getFileSystemManager().rmdir({ dirPath: uploadDirectory, recursive: true });
     this.setData({ busy: true, error: '' });
     wx.getFileSystemManager().copyFile({ srcPath: path, destPath: uploadPath, success: () => {
       wx.uploadFile({ url: `${base()}/materials`, filePath: uploadPath, name: 'file', timeout: 180000, header: authHeader(),
@@ -167,12 +172,15 @@ Page({
           try {
             const body = JSON.parse(result.data);
             if (result.statusCode < 200 || result.statusCode >= 300) throw new Error(body.message || '上传失败');
-            this.showItem(body as Material); void this.refresh();
+            const item = body as MaterialUploadResult;
+            this.showItem(item); void this.refresh();
+            if (item.uploadOutcome === 'duplicate') wx.showToast({ title: '这份文件已经在资料夹里了', icon: 'none', duration: 3000 });
+            if (item.uploadOutcome === 'renamed') wx.showModal({ title: '已保留两份文件', content: `已有同名文件，新文件已另存为「${item.filename}」。`, showCancel: false });
           } catch (e) { this.setData({ error: e instanceof Error ? e.message : '上传失败，请重试' }); }
         }, fail: () => { if (!this.unloaded) this.setData({ error: '上传失败，请重试' }); },
-        complete: () => { wx.getFileSystemManager().unlink({ filePath: uploadPath }); if (!this.unloaded) this.setData({ busy: false }); },
+        complete: () => { cleanup(); if (!this.unloaded) this.setData({ busy: false }); },
       });
-    }, fail: () => this.setData({ busy: false, error: '无法读取所选文件，请重试' }) });
+    }, fail: () => { cleanup(); if (!this.unloaded) this.setData({ busy: false, error: '无法读取所选文件，请重试' }); } });
   },
   preview() {
     const item = this.data.selected; if (!item) return;
@@ -193,7 +201,7 @@ Page({
   },
   removeItem(item: Material) {
     if (this.data.busy) return;
-    wx.showModal({ title: '删除这份资料？', content: `删除「${item.title}」后无法恢复原件。`, confirmText: '删除', success: async result => {
+    wx.showModal({ title: '删除这份资料？', content: `删除「${item.title}」后将无法查看原文件或重新读取其内容，已有对话记录仍会保留。`, confirmText: '删除', success: async result => {
       if (!result.confirm || this.unloaded || this.data.busy) return;
       this.setData({ busy: true });
       try { await request(`/${item.id}`, 'DELETE'); if (!this.unloaded) { this.setData({ selected: null, error: '' }); await this.refresh(); } }

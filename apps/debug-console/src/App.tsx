@@ -1,4 +1,5 @@
 import { MemoryInspector } from './memory-inspector';
+import { useMaterialOriginal } from './use-material-original';
 import { accountCacheKey } from './account-cache';
 import { collectReceiptMessage, createReceipt, readReceipt, saveReceipt, type CallMessages } from './session-receipt';
 import { FeltMicrophone } from './felt-microphone';
@@ -17,6 +18,7 @@ import type {
   AgentEvent,
   PanelState,
   PanelBlock,
+  PanelAttachment,
 } from '@bio/contracts';
 
 type View = 'result' | 'inspector' | 'history';
@@ -247,6 +249,9 @@ export function App() {
     if (event.type === 'done') { timings.synthesisDone = event.elapsedMs; setVoiceStatus('等待播放结束'); saveVoiceTurn(); }
     if (event.type === 'cancelled') { setVoiceState('connecting'); saveVoiceTurn('语音已打断'); }
     if (event.type === 'error') { setVoiceStatus(event.message); saveVoiceTurn(event.message); }
+    if (turn.saved && (event.type === 'result' || event.type === 'done')) {
+      setHistory(items => items.map(item => item.id === record.id ? { ...record } : item));
+    }
   }
 
   function startVoice(): void {
@@ -270,6 +275,7 @@ export function App() {
       event: receiveVoice,
       microphone: enabled => { setMicEnabled(enabled); if (!enabled) setVoiceStatus(value => value === '正在听你说' ? '麦克风已关' : value); },
       microphoneError: setVoiceStatus,
+      status: setVoiceStatus,
       inputLevel: setMicLevel,
       listening: setMicListening,
       speaking: setUserSpeaking,
@@ -286,7 +292,7 @@ export function App() {
       },
       error: error => { setVoiceStatus(error); saveVoiceTurn(error); },
       ended: () => { if (receiptCall.current) receiptCall.current.endedAt = Date.now(); saveVoiceTurn('语音会话已结束'); setCallStartedAt(null); setVoiceEnabled(false); setMicEnabled(false); setAudioPlaying(false); setSpokenSubtitle(''); voiceRef.current = null; },
-    });
+    }, accountCacheKey('bio-voice-resume'));
     voiceRef.current = client; void client.start();
   }
 
@@ -981,24 +987,32 @@ function HistoryView({
   );
 }
 
+function HistoricalAttachment({ attachment }: { attachment: PanelAttachment }) {
+  const original = useMaterialOriginal(attachment);
+  const safeUrl = attachment.url && (attachment.url.startsWith('https://') || /^\/api\/v1\/materials\/[0-9a-f-]{36}\/file$/.test(attachment.url)) ? attachment.url : undefined;
+  return <>
+    <h3>{attachment.title}</h3>
+    {original.originalStatus ? <p role="status">{original.originalStatus === 'deleted' ? '原文件已删除' : '原文件不可用'}。已有对话仍保留，查看或核对原文需重新上传。</p>
+      : original.loading ? <p>正在确认原文件状态…</p>
+      : original.error ? <p role="alert">{original.error}<button onClick={original.retry}>重试</button></p>
+      : <>
+        {attachment.kind === 'image' && safeUrl && <img className="panel-attachment-image" src={safeUrl} alt={attachment.title} referrerPolicy="no-referrer" />}
+        {attachment.kind === 'document' && safeUrl && <a href={safeUrl} target="_blank" rel="noreferrer">打开文档原件</a>}
+      </>}
+    {attachment.text && <div className="answer-content">{original.originalStatus && <p>历史摘录</p>}{attachment.text}</div>}
+  </>;
+}
+
 function WorkspacePanel({ panel, onSelectBlock, selectedBlockId }: {
   panel: PanelState;
   selectedBlockId?: string;
   onSelectBlock?: (panel: PanelState, block: PanelBlock) => void;
 }) {
   const modes = { conversation: '纯对话', attachment: '附件查看', editor: '共同编辑' };
-  const safeUrl = panel.attachment?.url && (panel.attachment.url.startsWith('https://') || /^\/api\/v1\/materials\/[0-9a-f-]{36}\/file$/.test(panel.attachment.url)) ? panel.attachment.url : undefined;
   return <article className="answer-card work-panel">
     <div className="answer-label">{modes[panel.mode]}</div>
     {panel.mode === 'conversation' && <div className="phone-empty"><strong>慢慢讲，我在听。</strong><p>今天想从哪里聊起？</p></div>}
-    {panel.mode === 'attachment' && panel.attachment && <>
-      <h3>{panel.attachment.title}</h3>
-      {panel.attachment.kind === 'image' && safeUrl && <img className="panel-attachment-image" src={safeUrl} alt={panel.attachment.title} referrerPolicy="no-referrer" />}
-      {panel.attachment.kind === 'document' && <>
-        {panel.attachment.text && <div className="answer-content">{panel.attachment.text}</div>}
-        {safeUrl && <a href={safeUrl} target="_blank" rel="noreferrer">打开文档原件</a>}
-      </>}
-    </>}
+    {panel.mode === 'attachment' && panel.attachment && <HistoricalAttachment key={panel.attachment.id} attachment={panel.attachment} />}
     {panel.mode === 'editor' && !panel.document && <p>还没有文档内容。</p>}
     {panel.mode === 'editor' && panel.document && <>
       <h3>{panel.document.title} <small>版本 {panel.document.version}</small></h3>

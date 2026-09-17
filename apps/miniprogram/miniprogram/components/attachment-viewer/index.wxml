@@ -1,15 +1,12 @@
 <view class="viewer">
+  <button wx:if="{{focused}}" class="focus-back" bindtap="toggleFocus" aria-label="返回对话"><view class="back-chevron" /></button>
   <view class="stage">
-    <view wx:if="{{loading}}" class="status">正在展开资料…</view>
+    <view wx:if="{{originalStatus}}" class="status"><view>{{originalStatus === 'deleted' ? '原文件已删除' : '原文件不可用'}}</view><view>已有对话仍保留，可以继续聊。查看或核对原文需重新上传。</view></view>
+    <view wx:elif="{{loading}}" class="status">正在展开资料…</view>
     <view wx:elif="{{error}}" class="status">{{error}}<button bindtap="load">重试</button></view>
-    <movable-area wx:elif="{{image}}" class="zoom" scale-area>
-      <movable-view class="sheet" style="width: {{width || '100%'}}{{width ? 'px' : ''}}; height: {{height || '100%'}}{{height ? 'px' : ''}};" direction="all" scale scale-min="1" scale-max="4" scale-value="{{scale}}" x="{{x}}" y="{{y}}" bindscale="onScale" bindtap="tap" animation="{{false}}" out-of-bounds="{{false}}">
-        <image src="{{image}}" mode="aspectFit" bindload="imageLoaded" />
-      </movable-view>
-    </movable-area>
-    <scroll-view wx:else class="text" scroll-y><text selectable>{{text}}</text></scroll-view>
-    <button wx:if="{{image && !loading}}" class="zoom-button" bindtap="zoom">缩放 / 整页</button>
+    <image wx:elif="{{image}}" class="sheet" src="{{image}}" mode="aspectFit" bindtap="tap" />
+    <scroll-view wx:else class="text" scroll-y bindtap="tap"><text selectable>{{text}}</text></scroll-view>
   </view>
-  <view wx:if="{{count > 1}}" class="pager"><button data-step="-1" bindtap="turn" disabled="{{page === 1 || loading}}">‹</button><text>{{page}} / {{count}}</text><button data-step="1" bindtap="turn" disabled="{{page === count || loading}}">›</button></view>
-  <view class="filebar"><text>{{attachment.title}}</text><button bindtap="toggleFocus">{{focused ? '退出专注' : '专注查看'}}</button></view>
+  <view wx:if="{{!originalStatus && count > 1}}" class="pager"><button data-step="-1" bindtap="turn" disabled="{{page === 1 || loading}}">‹</button><text>{{page}} / {{count}}</text><button data-step="1" bindtap="turn" disabled="{{page === count || loading}}">›</button></view>
+  <view class="filebar"><text>{{attachment.title}}</text></view>
 </view>

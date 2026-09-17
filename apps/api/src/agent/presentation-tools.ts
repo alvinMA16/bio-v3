@@ -10,7 +10,7 @@ const block = Type.Object({
   text: Type.String({ maxLength: 12000 }),
 });
 
-export function createPresentationTools(workspace: PanelWorkspace, emit: (event: AgentEventPayload) => void) {
+export function createPresentationTools(workspace: PanelWorkspace, emit: (event: AgentEventPayload) => void, refreshAttachments?: () => Promise<void>) {
   const updated = (panel: PanelState) => {
     emit({ type: 'panel.state.updated', panel });
     return {
@@ -36,6 +36,7 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
         targetId: Type.Optional(id),
       }),
       execute: async (_id, params, signal) => {
+        await refreshAttachments?.();
         signal?.throwIfAborted();
         return updated(workspace.switchMode(params.mode, params.targetId));
       },
@@ -62,6 +63,7 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
       description: '按需读取当前内容展示模式、可用附件和草稿。指定 documentId 可读取该草稿全文，再指定 blockId 只读取一段；指定 attachmentId 读取附件完整文本或地址。已有上下文足够时不必重复读取。图片地址只用于展示，不代表你已看懂图片。',
       parameters: Type.Object({ documentId: Type.Optional(id), blockId: Type.Optional(id), attachmentId: Type.Optional(id) }),
       execute: async (_id, params, signal) => {
+        await refreshAttachments?.();
         signal?.throwIfAborted();
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(workspace.read(params.documentId, params.blockId, params.attachmentId)) }],

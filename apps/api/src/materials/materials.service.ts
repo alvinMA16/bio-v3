@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, GoneException, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
@@ -9,12 +9,27 @@ import { PDFParse } from 'pdf-parse';
 import sharp from 'sharp';
 import WordExtractor from 'word-extractor';
 import { MaterialObjectStore } from './material-object-store.js';
-import type { Material, PanelAttachment } from '@bio/contracts';
+import type { Material, MaterialUploadResult, PanelAttachment } from '@bio/contracts';
 
 export const MAX_FILE_SIZE = 20 * 1024 * 1024;
 const types: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', txt: 'text/plain', md: 'text/plain' };
 @Injectable()
 export class MaterialsService {
+  // The current deployment has one API process. Shared across service instances.
+  private static mutations = new Map<string, Promise<void>>();
+  private async mutate<T>(user: string | undefined, action: () => Promise<T>): Promise<T> {
+    const key = this.userRoot(user);
+    const previous = MaterialsService.mutations.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    MaterialsService.mutations.set(key, pending);
+    await previous;
+    try { return await action(); }
+    finally {
+      release();
+      if (MaterialsService.mutations.get(key) === pending) MaterialsService.mutations.delete(key);
+    }
+  }
   readonly root: string;
   readonly objectStore?: MaterialObjectStore;
   constructor(private readonly config: ConfigService) {
@@ -32,14 +47,17 @@ export class MaterialsService {
     return join(this.userRoot(user), id);
   }
   async get(id: string, user?: string): Promise<Material> {
-    try { return JSON.parse(await readFile(join(this.directory(id, user), 'metadata.json'), 'utf8')); }
+    const directory = this.directory(id, user);
+    try { await readFile(join(this.userRoot(user), '.deleted', id)); throw new GoneException('原文件已删除，请重新上传后再核对原文'); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    try { return JSON.parse(await readFile(join(directory, 'metadata.json'), 'utf8')); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new NotFoundException('资料不存在'); throw error; }
   }
   async list(user?: string): Promise<Material[]> {
     await mkdir(this.userRoot(user), { recursive: true, mode: 0o700 });
     const entries = await readdir(this.userRoot(user));
     const items = await Promise.all(entries.filter(id => !id.startsWith('.')).map(async id => {
-      try { return await this.get(id, user); } catch (error) { if (error instanceof NotFoundException) return null; throw error; }
+      try { return await this.get(id, user); } catch (error) { if (error instanceof NotFoundException || error instanceof GoneException) return null; throw error; }
     }));
     return items.filter((item): item is Material => item !== null).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
@@ -100,6 +118,9 @@ export class MaterialsService {
     } finally { await parser.destroy(); }
   }
   async update(id: string, title: string, description: string, user?: string) {
+    return this.mutate(user, () => this.updateStored(id, title, description, user));
+  }
+  private async updateStored(id: string, title: string, description: string, user?: string) {
     const item = { ...await this.get(id, user), title: title.trim(), description: description.trim() };
     if (!item.title || item.title.length > 300 || item.description.length > 2000) throw new BadRequestException('标题或说明长度不正确');
     const temp = join(this.directory(id, user), `${randomUUID()}.tmp`);
@@ -108,16 +129,40 @@ export class MaterialsService {
     return item;
   }
   async remove(id: string, user?: string) {
-    const item = await this.get(id, user);
+    return this.mutate(user, () => this.removeStored(id, user));
+  }
+  private async removeStored(id: string, user?: string) {
+    let item: Material;
+    try { item = await this.get(id, user); }
+    catch (error) {
+      if (!(error instanceof GoneException)) throw error;
+      await rm(this.directory(id, user), { recursive: true, force: true });
+      return { deleted: true };
+    }
     if (await this.storedInOss(id, user)) {
       const access = this.requireObjectStore(user);
       await access.store.remove(access.user, id, 'original');
       if (item.thumbnailUrl) await access.store.remove(access.user, id, 'thumbnail');
     }
-    await rm(this.directory(id, user), { recursive: true }); return { deleted: true };
+    // Owner-scoped tombstone distinguishes deletion from transient storage errors.
+    // It contains no file contents; history and conversation snapshots remain intact.
+    const deleted = join(this.userRoot(user), '.deleted');
+    await mkdir(deleted, { recursive: true, mode: 0o700 });
+    const temporary = join(deleted, `${id}.${randomUUID()}.tmp`);
+    try {
+      await writeFile(temporary, JSON.stringify({ title: item.title, kind: item.kind }), { mode: 0o600 });
+      await rename(temporary, join(deleted, id));
+    } finally { await rm(temporary, { force: true }); }
+    await rm(this.directory(id, user), { recursive: true, force: true }); return { deleted: true };
   }
   async attachment(id: string, user?: string): Promise<PanelAttachment> {
-    const item = await this.get(id, user);
+    let item: Material;
+    try { item = await this.get(id, user); }
+    catch (error) {
+      if (!(error instanceof GoneException)) throw error;
+      const deleted = JSON.parse(await readFile(join(this.userRoot(user), '.deleted', id), 'utf8')) as Pick<Material, 'title' | 'kind'>;
+      return { id: `m_${id}_deleted`, kind: deleted.kind, title: deleted.title, url: `/api/v1/materials/${id}/file`, originalStatus: 'deleted' };
+    }
     const version = createHash('sha256').update(JSON.stringify([item.title, item.description, item.text])).digest('hex').slice(0, 12);
     return { id: `m_${id}_${version}`, kind: item.kind, title: item.title, url: item.url,
       text: [item.description ? `用户补充说明：${item.description}` : '', item.text ? `${item.kind === 'image' ? '机器识别内容（可能有误）' : '提取正文'}：\n${item.text}` : '', item.statusMessage].filter(Boolean).join('\n\n') };
@@ -139,12 +184,43 @@ export class MaterialsService {
     const data = await response.json() as { choices?: { message?: { content?: string } }[] };
     return data.choices?.[0]?.message?.content?.trim() ?? '';
   }
-  async upload(filename: string, buffer: Buffer, user?: string): Promise<Material> {
+  async upload(filename: string, buffer: Buffer, user?: string): Promise<MaterialUploadResult> {
     if (this.objectStore && !user) throw new UnauthorizedException('请先登录');
     const extension = extname(filename).slice(1).toLowerCase();
     const mimeType = types[extension];
     if (!mimeType) throw new BadRequestException('支持 JPG、PNG、WebP、PDF、DOC、DOCX、PPT、PPTX、TXT 和 MD');
     if (!buffer.length || buffer.length > MAX_FILE_SIZE) throw new BadRequestException('文件不能为空，且不能超过 20 MB');
+    return this.mutate(user, async () => {
+      const digest = createHash('sha256').update(buffer).digest('hex');
+      const items = await this.list(user);
+      for (const item of items) {
+        if (item.size !== buffer.length) continue;
+        const path = join(this.directory(item.id, user), 'sha256');
+        let hash: string;
+        try { hash = await readFile(path, 'utf8'); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; hash = ''; }
+        if (!/^[a-f0-9]{64}$/.test(hash)) {
+          hash = createHash('sha256').update((await this.original(item.id, user)).buffer).digest('hex');
+          const temp = `${path}.${randomUUID()}.tmp`;
+          try { await writeFile(temp, hash, { mode: 0o600 }); await rename(temp, path); }
+          finally { await rm(temp, { force: true }); }
+        }
+        if (hash === digest) return { ...item, uploadOutcome: 'duplicate' };
+      }
+      const suffix = extname(filename);
+      const stem = filename.slice(0, -suffix.length).normalize('NFC');
+      const originalName = `${stem.slice(0, 300 - suffix.length)}${suffix}`;
+      const occupied = new Set(items.flatMap(item => [item.filename, item.title]).map(name => name.normalize('NFC').toLowerCase()));
+      let name = originalName;
+      for (let index = 2; occupied.has(name.normalize('NFC').toLowerCase()); index++) {
+        const ending = ` (${index})${suffix}`;
+        name = `${stem.slice(0, 300 - ending.length)}${ending}`;
+      }
+      const item = await this.saveUpload(name, buffer, mimeType, extension, digest, user);
+      return { ...item, uploadOutcome: name === originalName ? 'created' : 'renamed' };
+    });
+  }
+  private async saveUpload(filename: string, buffer: Buffer, mimeType: string, extension: string, digest: string, user?: string): Promise<Material> {
     const kind = mimeType.startsWith('image/') ? 'image' : 'document';
     let text = '', statusMessage = '';
     let thumbnail: Buffer | undefined;
@@ -208,6 +284,7 @@ export class MaterialsService {
       }
       if (converted) await writeFile(join(temp, 'converted.pdf'), converted, { mode: 0o600 });
       await writeFile(join(temp, 'metadata.json'), JSON.stringify(item), { mode: 0o600 });
+      await writeFile(join(temp, 'sha256'), digest, { mode: 0o600 });
       await rename(temp, this.directory(id, user));
     } catch (error) {
       if (this.objectStore && user) await Promise.allSettled([this.objectStore.remove(user, id, 'original'), this.objectStore.remove(user, id, 'thumbnail')]);

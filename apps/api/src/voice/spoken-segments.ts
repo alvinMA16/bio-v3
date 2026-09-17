@@ -13,7 +13,7 @@ export class SpokenSegments {
     while (entry.sent < entry.text.length) {
       const pending = entry.text.slice(entry.sent);
       const match = /[。！？!?；;\n]/u.exec(pending);
-      let size = match ? match.index + 1 : completed ? pending.length : 0;
+      let size = match ? Math.min(match.index + 1, 100) : completed ? Math.min(pending.length, 100) : 0;
       // Bound first-audio latency for long unpunctuated speech.
       if (!size && pending.length >= 100) size = 100;
       if (!size) break;

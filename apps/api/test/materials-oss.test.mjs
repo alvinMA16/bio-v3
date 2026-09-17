@@ -28,12 +28,16 @@ test('OSS originals and thumbnails stay private, owner-scoped, durable and inacc
   t.mock.method(client, 'delete', async key => { objects.delete(key); });
   const source = await sharp({ create: { width: 900, height: 700, channels: 3, background: '#718261' } }).png().toBuffer();
   const alice = await service.upload('family.png', source, 'alice');
+  const duplicate = await service.upload('renamed.png', source, 'alice');
+  assert.equal(duplicate.id, alice.id);
+  assert.equal(duplicate.uploadOutcome, 'duplicate');
+  assert.equal(objects.size, 2, 'duplicate upload does not write more OSS objects');
   const bob = await service.upload('family.png', source, 'bob');
   assert.equal(objects.size, 4);
   const aPrefix = createHash('sha256').update('alice').digest('hex');
   assert.ok([...objects.keys()].filter(key => key.includes(aPrefix)).length === 2);
   const files = await readdir(join(service.root, '.users', aPrefix, alice.id));
-  assert.deepEqual(files.sort(), ['metadata.json', 'storage']);
+  assert.deepEqual(files.sort(), ['metadata.json', 'sha256', 'storage']);
   assert.ok(!JSON.stringify(alice).includes('oss-'));
   assert.ok(!JSON.stringify(alice).includes(aPrefix));
   await assert.rejects(service.upload('unowned.txt', Buffer.from('unowned')));

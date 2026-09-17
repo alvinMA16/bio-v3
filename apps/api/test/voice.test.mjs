@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { SpokenSegments } from '../dist/voice/spoken-segments.js';
 import { VoiceSession } from '../dist/voice/voice-session.js';
+import { PlaybackWindow } from '../dist/voice/playback-window.js';
+import { DoubaoTts } from '../dist/voice/doubao-tts.js';
 
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 
@@ -25,7 +27,7 @@ function fixture({ run, synthesize, text = '修改第二段' } = {}) {
   const tts = { async synthesize(text, signal, audio) {
     spoken.push(text);
     if (synthesize) return synthesize(text, signal, audio);
-    audio(new Uint8Array([0, 0, 1, 0]));
+    await audio(new Uint8Array([0, 0, 1, 0]));
   } };
   const runner = async (input, emit, signal, trigger) => {
     inputs.push(input);
@@ -174,4 +176,97 @@ test('page changes while listening refresh this turn without accepting another m
   await f.done;
   assert.deepEqual(f.inputs[0].context.attachmentView, { materialId: 'owned', page: 3 });
   f.session.close();
+});
+
+test('playback credit waits for low water, ignores invalid/stale acknowledgements and aborts promptly', async () => {
+  const window = new PlaybackWindow(true), abort = new AbortController();
+  window.sent = 21 * 16000;
+  let ready = false;
+  const waiting = window.ready(abort.signal).then(() => { ready = true; });
+  window.acknowledge(99 * 16000); window.acknowledge(-1); window.acknowledge(NaN);
+  await flush(); assert.equal(ready, false);
+  window.acknowledge(5 * 16000); await flush(); assert.equal(ready, false);
+  window.acknowledge(13 * 16000); await waiting; assert.equal(window.played, 13 * 16000);
+  window.acknowledge(2 * 16000); assert.equal(window.played, 13 * 16000);
+  window.sent += 20 * 16000;
+  const blocked = window.ready(abort.signal); abort.abort();
+  await assert.rejects(blocked, /cancelled/);
+});
+
+test('five-minute reply stays bounded and resumes without repeating model calls or audio', async () => {
+  let modelCalls = 0;
+  const f = fixture({ run: async (_input, emit) => {
+    modelCalls++;
+    emit({ type: 'speech.completed', messageId: 'long', text: '一段完整的话。'.repeat(60) }); return response;
+  }, synthesize: async (_text, _signal, emit) => { await emit(new Uint8Array(5 * 32000)); } });
+  await f.session.listen('long', {}, true, true);
+  for (let i = 0; i < 50; i++) await flush();
+  const blockedCount = f.events.filter(e => e.type === 'audio').length;
+  assert.equal(blockedCount, 20);
+  await flush(); assert.equal(f.events.filter(e => e.type === 'audio').length, blockedCount);
+  assert.equal(f.events.some(e => e.type === 'done'), false);
+  let acknowledged = 0;
+  for (let i = 0; i < 2000 && !f.events.some(e => e.type === 'done'); i++) {
+    await flush();
+    const audio = f.events.filter(e => e.type === 'audio');
+    const sent = audio.at(-1)?.endSample ?? 0;
+    assert.ok(sent - acknowledged <= 21 * 16000);
+    if (sent) { f.session.playback('long', sent); acknowledged = sent; }
+  }
+  assert.equal((await f.done).type, 'done');
+  assert.equal(modelCalls, 1);
+  const chunks = f.events.filter(e => e.type === 'audio');
+  assert.equal(chunks.length, 300);
+  assert.equal(chunks.at(-1).endSample, 300 * 16000);
+  assert.deepEqual(chunks.map(e => e.endSample), Array.from({ length: 300 }, (_, i) => (i + 1) * 16000));
+  f.session.close();
+});
+
+test('client playback failure stops only speech; complete text and the next user turn survive', async () => {
+  let release;
+  const f = fixture({ run: async (_input, emit) => {
+    emit({ type: 'speech.completed', messageId: 'reply', text: '较长的回复。' });
+    await new Promise(resolve => { release = resolve; }); return response;
+  }, synthesize: async (_text, _signal, emit) => { await emit(new Uint8Array(30 * 32000)); } });
+  await f.session.listen('broken-audio', {}, true, true); await flush();
+  f.session.stopPlayback('broken-audio', 'invalid_audio'); release();
+  await f.done; await f.session.settled();
+  assert.ok(f.events.some(e => e.type === 'result'));
+  assert.ok(f.events.some(e => e.type === 'error' && e.recoverable));
+  await f.session.listen('next', {}); assert.equal(f.asrCallbacks.length, 1);
+  f.session.close();
+});
+
+test('a partial TTS stream is not retried and long punctuated segments stay bounded', async () => {
+  let attempts = 0;
+  const f = fixture({ synthesize: async (_text, _signal, emit) => {
+    attempts++; await emit(new Uint8Array([0, 0])); throw new Error('provider failure');
+  } });
+  await f.session.listen('partial', {}, true); await f.done;
+  assert.equal(attempts, 1); assert.equal(f.events.filter(e => e.type === 'audio').length, 1);
+  f.session.close();
+  const pieces = new SpokenSegments().push('long', '字'.repeat(330) + '。', true);
+  assert.equal(pieces.join(''), '字'.repeat(330) + '。');
+  assert.ok(pieces.every(text => text.length <= 100));
+});
+
+test('TTS waits for audio consumption credit and bounds chunks from a large provider frame', async t => {
+  const data = Buffer.alloc(64000).toString('base64');
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ code: 0, data }) + '\n' + JSON.stringify({ code: 20000000 }) + '\n'));
+  const tts = new DoubaoTts({ appId: 'test', accessKey: 'test', resourceId: 'test', speaker: 'test' });
+  let release, count = 0;
+  const task = tts.synthesize('测试', new AbortController().signal, async pcm => {
+    assert.equal(pcm.length, 32000); count++;
+    if (count === 1) await new Promise(resolve => { release = resolve; });
+  });
+  await flush(); assert.equal(count, 1);
+  release(); await task; assert.equal(count, 2);
+});
+
+test('missing playback acknowledgements time out without retaining a waiter', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const window = new PlaybackWindow(true); window.sent = 20 * 16000;
+  const failure = assert.rejects(window.ready(new AbortController().signal), /acknowledgement timeout/);
+  t.mock.timers.tick(45000); await failure;
+  window.acknowledge(window.sent); await window.ready(new AbortController().signal);
 });

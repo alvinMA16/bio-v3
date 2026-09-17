@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { Material } from '@bio/contracts';
+import type { Material, MaterialUploadResult } from '@bio/contracts';
 import './material-folder.css';
-import { ZoomImage } from './attachment-viewer';
 import { uiAsset } from './ui-asset';
 
 const ACCEPT = '.jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.ppt,.pptx,.txt,.md';
@@ -10,10 +9,11 @@ const fileSize = (size: number) => size >= 1024 * 1024 ? `${(size / 1024 / 1024)
 async function request<T>(path = '', init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1/materials${path}`, init);
   if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.message || '资料操作失败，请重试'); }
+  if (init?.method === 'DELETE') window.dispatchEvent(new CustomEvent('bio-material-deleted', { detail: path.slice(1) }));
   return response.json();
 }
 
-type Upload = { id: number; file: File; status: 'waiting' | 'uploading' | 'done' | 'failed'; error?: string | undefined; completedAt?: number | undefined };
+type Upload = { id: number; file: File; status: 'waiting' | 'uploading' | 'done' | 'failed'; error?: string | undefined; completedAt?: number | undefined; result?: MaterialUploadResult };
 function Cover({ item, large = false }: { item: Material; large?: boolean }) {
   const [failed, setFailed] = useState(false);
   const image = item.kind === 'image';
@@ -45,7 +45,7 @@ function PdfPreview({ item }: { item: Material }) {
   }, [item.id, page, retry]);
   return <figure ref={figure} className="material-pdf-preview">
 
-    <div className="material-pdf-stage">{loading ? <p className="material-pdf-status" role="status">正在展开第 {page} 页…</p> : error ? <div className="material-pdf-status" role="alert">{error}<button onClick={() => setRetry(value => value + 1)}>重试</button></div> : <ZoomImage src={image} alt={`${item.title}，第 ${page} 页`} />}</div>
+    <div className="material-pdf-stage">{loading ? <p className="material-pdf-status" role="status">正在展开第 {page} 页…</p> : error ? <div className="material-pdf-status" role="alert">{error}<button onClick={() => setRetry(value => value + 1)}>重试</button></div> : <img src={image} alt={`${item.title}，第 ${page} 页`} />}</div>
     {count > 1 && <nav className="material-pdf-pager" aria-label="PDF 翻页">
       <button aria-label="上一页" disabled={page <= 1 || loading} onClick={() => setPage(value => value - 1)}>‹</button>
       <span aria-live="polite">{page} / {count || '…'}</span>
@@ -170,9 +170,10 @@ export function MaterialFolder({ onChat, disabled, searchOpen, onCloseSearch }: 
           if (!ACCEPT.split(',').includes('.' + fileType(entry.file.name).toLowerCase())) throw new Error('暂不支持这个文件类型');
           update('uploading');
           const body = new FormData(); body.append('file', entry.file);
-          const item = await request<Material>('', { method: 'POST', body, signal: abort.current?.signal ?? null });
+          const item = await request<MaterialUploadResult>('', { method: 'POST', body, signal: abort.current?.signal ?? null });
           if (abort.current?.signal.aborted) break;
           setItems(previous => [item, ...previous.filter(value => value.id !== item.id)]); update('done');
+          setUploads(previous => previous.map(value => value.id === entry.id ? { ...value, result: item, completedAt: item.uploadOutcome === 'created' ? value.completedAt : undefined } : value));
         } catch (e) { if (!abort.current?.signal.aborted) update('failed', e instanceof Error ? e.message : '上传失败，请重试'); }
       }
     });
@@ -186,7 +187,7 @@ export function MaterialFolder({ onChat, disabled, searchOpen, onCloseSearch }: 
     <div className="material-actions-keepsake"><Cover key={actions.item.id} item={actions.item} /><p className="material-actions-title">{actions.item.title}</p></div>
     <div className="material-actions-menu">
     {error && <p role="alert">{error}</p>}
-    {actions.confirm ? <><p className="material-actions-hint">删除后无法恢复原件和缩略图。</p><button autoFocus className="material-action-danger" disabled={busy} onClick={() => void act(async () => { const id = actions.item.id; await request(`/${id}`, { method: 'DELETE', signal: abort.current?.signal ?? null }); setItems(previous => previous.filter(item => item.id !== id)); setActions(null); setNotice('资料已删除'); })}>{busy ? '正在删除…' : '确认删除'}</button><button disabled={busy} onClick={() => setActions(null)}>保留资料</button></> : <><button autoFocus onClick={() => { select(actions.item); setActions(null); onCloseSearch(); }}>预览</button><button disabled={disabled || busy} onClick={() => { onChat(actions.item); setActions(null); }}>和令狸聊聊</button><button className="material-action-danger" onClick={() => setActions({ ...actions, confirm: true })}>删除</button><button className="material-action-cancel" onClick={() => setActions(null)}>取消</button></>}
+    {actions.confirm ? <><p className="material-actions-hint">删除后将无法查看原文件或重新读取其内容，已有对话记录仍会保留。</p><button autoFocus className="material-action-danger" disabled={busy} onClick={() => void act(async () => { const id = actions.item.id; await request(`/${id}`, { method: 'DELETE', signal: abort.current?.signal ?? null }); setItems(previous => previous.filter(item => item.id !== id)); setActions(null); setNotice('资料已删除'); })}>{busy ? '正在删除…' : '确认删除'}</button><button disabled={busy} onClick={() => setActions(null)}>保留资料</button></> : <><button autoFocus onClick={() => { select(actions.item); setActions(null); onCloseSearch(); }}>预览</button><button disabled={disabled || busy} onClick={() => { onChat(actions.item); setActions(null); }}>和令狸聊聊</button><button className="material-action-danger" onClick={() => setActions({ ...actions, confirm: true })}>删除</button><button className="material-action-cancel" onClick={() => setActions(null)}>取消</button></>}
     </div>
   </section></div>;
   if (searchOpen) return <div className="material-folder"><div inert={!!actions}><MaterialSearch items={items} loading={loading} error={error} onActions={openActions} onBack={onCloseSearch} onChoose={item => { select(item); onCloseSearch(); }} /></div>{actionSheet}</div>;
@@ -199,16 +200,16 @@ export function MaterialFolder({ onChat, disabled, searchOpen, onCloseSearch }: 
       {notice && <p className="material-feedback" role="status">{notice}</p>}
       <div className={`material-preview-scroll ${selected.kind === 'image' || fileType(selected.filename) === 'PDF' ? 'material-preview-scroll--visual' : ''}`} inert={confirmDelete}>
       <div className={`material-preview-content material-preview-content--${selected.kind}`}>
-        {selected.kind === 'image' ? <ZoomImage src={selected.url} alt={selected.title} /> : fileType(selected.filename) === 'PDF' ? <PdfPreview key={selected.id} item={selected} /> : selected.text ? <article><small>文字预览</small><pre>{selected.text}</pre></article> : <div className="material-empty"><p>这份文档暂不支持页内预览</p><a href={selected.url} target="_blank" rel="noreferrer">打开原件</a></div>}
+        {selected.kind === 'image' ? <img src={selected.url} alt={selected.title} /> : fileType(selected.filename) === 'PDF' ? <PdfPreview key={selected.id} item={selected} /> : selected.text ? <article><small>文字预览</small><pre>{selected.text}</pre></article> : <div className="material-empty"><p>这份文档暂不支持页内预览</p><a href={selected.url} target="_blank" rel="noreferrer">打开原件</a></div>}
       </div>
       <div className="material-detail-meta"><span>{fileType(selected.filename)} · {fileSize(selected.size)}</span><a href={selected.url} target="_blank" rel="noreferrer">打开原件 ↗</a></div>
 
       </div>
       <div className="material-preview-footer" inert={confirmDelete}><button className="material-fox-chat" disabled={busy || disabled} onClick={() => onChat(selected)}><span>和令狸聊聊</span><span className="material-fox-portrait" aria-hidden="true"><img src="/materials/lingli-chat-wave.webp" alt="" /></span></button></div>
-      {confirmDelete && <div className="material-delete-shade"><div className="material-delete-confirm" role="alertdialog" aria-modal="true" aria-label="确认删除资料">{error && <p role="alert">{error}</p>}<p>确定删除「{selected.title}」？原件和缩略图将一起删除，无法恢复。</p><button autoFocus className="material-danger" disabled={busy} onClick={() => void act(async () => { await request(`/${selected.id}`, { method: 'DELETE', signal: abort.current?.signal ?? null }); setItems(previous => previous.filter(item => item.id !== selected.id)); select(null); setNotice('资料已删除'); })}>确认删除</button><button disabled={busy} onClick={() => setConfirmDelete(false)}>保留资料</button></div></div>}
+      {confirmDelete && <div className="material-delete-shade"><div className="material-delete-confirm" role="alertdialog" aria-modal="true" aria-label="确认删除资料">{error && <p role="alert">{error}</p>}<p>确定删除「{selected.title}」？删除后将无法查看原文件或重新读取其内容，已有对话记录仍会保留。</p><button autoFocus className="material-danger" disabled={busy} onClick={() => void act(async () => { await request(`/${selected.id}`, { method: 'DELETE', signal: abort.current?.signal ?? null }); setItems(previous => previous.filter(item => item.id !== selected.id)); select(null); setNotice('资料已删除'); })}>确认删除</button><button disabled={busy} onClick={() => setConfirmDelete(false)}>保留资料</button></div></div>}
     </section> : <>
       <input ref={input} hidden type="file" multiple disabled={busy || loading} accept={ACCEPT} onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void uploadFiles(files); }} />
-      {!!uploads.length && <div className="material-upload-queue" aria-live="polite">{uploads.map(entry => <div key={entry.id} className={`material-upload-entry material-upload-entry--${entry.status}`}><span className="material-upload-filename" title={entry.file.name}>{entry.file.name}</span><span>{entry.status === 'done' ? '已收好 ✓' : entry.status === 'uploading' ? '上传并整理中…' : entry.status === 'waiting' ? '等待上传' : '上传失败'}</span>{entry.error && <small>{entry.error}</small>}{entry.status === 'failed' && <button disabled={busy} onClick={() => void uploadFiles([entry.file], entry.id)}>重试</button>}</div>)}</div>}
+      {!!uploads.length && <div className="material-upload-queue" aria-live="polite">{uploads.map(entry => <div key={entry.id} className={`material-upload-entry material-upload-entry--${entry.status === 'done' && entry.completedAt === undefined ? 'retained' : entry.status}`}><span className="material-upload-filename" title={entry.file.name}>{entry.file.name}</span><span>{entry.status === 'done' ? entry.result?.uploadOutcome === 'duplicate' ? '这份文件已经在资料夹里了' : entry.result?.uploadOutcome === 'renamed' ? `已有同名文件，已另存为「${entry.result.filename}」` : '已收好 ✓' : entry.status === 'uploading' ? '上传并整理中…' : entry.status === 'waiting' ? '等待上传' : '上传失败'}</span>{entry.result && entry.completedAt === undefined && <><button disabled={busy} onClick={() => select(entry.result!)}>打开资料</button><button onClick={() => setUploads(previous => previous.filter(value => value.id !== entry.id))}>知道了</button></>}{entry.error && <small>{entry.error}</small>}{entry.status === 'failed' && <button disabled={busy} onClick={() => void uploadFiles([entry.file], entry.id)}>重试</button>}</div>)}</div>}
 
       <div className={`material-results ${leaving ? 'is-leaving' : ''}`} aria-busy={leaving}>
       {loading ? <p className="material-empty" role="status">正在打开资料夹…</p> : !visible.length && <div className="material-empty"><span aria-hidden="true">▱</span><strong>{items.length ? '没有找到这份资料' : '从一张照片、一封信开始'}</strong><p>{items.length ? '换个文件名，或看看其他类型。' : '放进来，等你想起它的故事时，我们慢慢聊。'}</p></div>}

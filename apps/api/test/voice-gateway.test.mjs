@@ -8,6 +8,50 @@ import { WebSocket } from 'ws';
 import { VoiceGateway } from '../dist/voice/voice.gateway.js';
 import { randomUUID } from 'node:crypto';
 
+test('authenticated reconnect drains the previous live connection before restoring the same call', { timeout: 10000 }, async t => {
+  const server = createServer(), conversation = randomUUID(), order = [];
+  let ownerConnection, opening = true, runCount = 0;
+  let started; const running = new Promise(resolve => { started = resolve; });
+  const memory = {
+    async resolveIdentity() { return 'owner'; },
+    async beginCall(_user, _call, connection) { ownerConnection = connection; return conversation; },
+    async resumeCall(_user, callId, connection) {
+      assert.ok(order.includes('archived')); assert.ok(order.includes('disconnected'));
+      ownerConnection = connection; return { callId, conversationId: conversation, resumed: true };
+    },
+    async claimCallOpening() { const claimed = opening; opening = false; return claimed; },
+    async savePlayback() {},
+    async disconnectCall(_user, _call, connection) { if (ownerConnection === connection) order.push('disconnected'); },
+  };
+  const gateway = new VoiceGateway({ httpAdapter: { getHttpServer: () => server } }, new ConfigService({
+    VOLCENGINE_ASR_APP_ID: 'fixture', VOLCENGINE_ASR_ACCESS_TOKEN: 'fixture', DOUBAO_TTS_APP_ID: 'fixture', DOUBAO_TTS_ACCESS_KEY: 'fixture',
+  }), { async run(_input, _emit, signal) {
+    runCount++; started();
+    await new Promise(resolve => signal.addEventListener('abort', resolve, { once: true }));
+    order.push('archived'); throw new Error('cancelled');
+  } }, memory);
+  gateway.asr = { async open() { return { write() {}, close() {}, async finish() { return ''; } }; } };
+  gateway.tts = { async synthesize() {} }; gateway.onApplicationBootstrap();
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(async () => { gateway.onApplicationShutdown(); await new Promise(resolve => server.close(resolve)); });
+  const url = `ws://127.0.0.1:${server.address().port}/api/v1/voice`;
+  const first = new WebSocket(url); await once(first, 'open');
+  first.send(JSON.stringify({ type: 'listen', callId: 'same-call', turnId: 'first', request: {} }));
+  await running;
+  const second = new WebSocket(url); await once(second, 'open');
+  const events = [];
+  const listening = new Promise(resolve => second.on('message', raw => {
+    const event = JSON.parse(raw); events.push(event);
+    if (event.type === 'state' && event.state === 'listening') resolve();
+  }));
+  second.send(JSON.stringify({ type: 'listen', resume: true, playbackFeedback: true, callId: 'same-call', turnId: 'second', request: {} }));
+  await listening;
+  assert.equal(events.find(e => e.type === 'connected').conversationId, conversation);
+  assert.equal(events.find(e => e.type === 'connected').resumed, true);
+  assert.equal(runCount, 1, 'resuming must not regenerate a greeting or replay the old user turn');
+  second.close(); await once(second, 'close');
+});
+
 test('voice WebSocket accepts PCM, validates context, and passes the recognized turn into Agent', async t => {
   const server = createServer();
   const inputs = [], audio = [];
@@ -20,7 +64,7 @@ test('voice WebSocket accepts PCM, validates context, and passes the recognized 
   } });
   // Replace network boundaries only: the gateway validation and voice orchestrator stay real.
   gateway.asr = { async open() { return { write(pcm) { audio.push(pcm); }, close() {}, async finish() { return '讲个故事'; } }; } };
-  gateway.tts = { async synthesize(_text, _signal, emit) { emit(new Uint8Array([0, 0])); } };
+  gateway.tts = { async synthesize(_text, _signal, emit) { await emit(new Uint8Array([0, 0])); } };
   gateway.onApplicationBootstrap();
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   t.after(async () => { gateway.onApplicationShutdown(); await new Promise(resolve => server.close(resolve)); });
@@ -64,6 +108,7 @@ test('hangup waits for Agent cleanup and ends the server-owned call, not each tu
     async resolveIdentity(auth) { assert.equal(auth, 'Bearer test'); return 'alice'; },
     async beginCall(user, call) { assert.equal(user, 'alice'); assert.equal(call, 'phone-one'); return conv; },
     async claimCallOpening() { return true; },
+    async savePlayback() {},
     async disconnectCall(user, call, _connection, explicit) { order.push('ended'); closed({ user, call, explicit }); },
   };
   const gateway = new VoiceGateway({ httpAdapter: { getHttpServer: () => server } }, new ConfigService({

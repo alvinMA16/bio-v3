@@ -8,5 +8,5 @@ export interface AsrProvider {
   open(onResult: (result: Recognition) => void, signal: AbortSignal): Promise<AsrStream>;
 }
 export interface TtsProvider {
-  synthesize(text: string, signal: AbortSignal, onAudio: (pcm: Uint8Array) => void): Promise<void>;
+  synthesize(text: string, signal: AbortSignal, onAudio: (pcm: Uint8Array) => void | Promise<void>): Promise<void>;
 }

@@ -31,7 +31,12 @@ test('materials preserve originals, edits and chat content across restart, and d
   assert.deepEqual((await restored.original(item.id)).buffer, source);
   await restored.remove(item.id);
   assert.deepEqual(await restored.list(), []);
-  await assert.rejects(restored.get(item.id), /资料不存在/);
+  await assert.rejects(restored.get(item.id), error => error.getStatus() === 410);
+  await restored.remove(item.id); // A lost deletion response may be retried.
+  const restarted = new MaterialsService(new ConfigService({ AGENT_DATA_DIR: join(service.root, '..') }));
+  await assert.rejects(restarted.original(item.id), error => error.getStatus() === 410);
+  await assert.rejects(restarted.get(item.id, 'another-user'), error => error.getStatus() === 404);
+  assert.match(attachment.text, /外婆/, 'deleting the original does not mutate a historical snapshot');
 });
 test('rejects unsupported, mismatched, oversized, empty and invalid text files', async t => {
   const service = await setup(t);
@@ -110,7 +115,8 @@ test('HTTP upload, validation, original download and deletion work through Fasti
   assert.equal(saved.json().description, 'childhood');
   const deleted = await app.inject({ method: 'DELETE', url: `/api/v1/materials/${item.id}` });
   assert.equal(deleted.statusCode, 200);
-  assert.equal((await app.inject({ method: 'GET', url: item.url })).statusCode, 404);
+  assert.equal((await app.inject({ method: 'GET', url: item.url })).statusCode, 410);
+  assert.equal((await app.inject({ method: 'GET', url: `/api/v1/materials/${item.id}` })).statusCode, 410);
 });
 test('vision success provides attributed text and failures preserve the image', async t => {
   const base = await setup(t);
@@ -126,10 +132,14 @@ test('vision success provides attributed text and failures preserve the image', 
   assert.equal(item.status, 'ready');
   assert.match((await service.attachment(item.id)).text, /机器识别内容/);
   mock.mock.mockImplementation(async () => new Response('', { status: 503 }));
-  const failed = await service.upload('another.png', buffer);
+  const duplicate = await service.upload('renamed.png', buffer);
+  assert.equal(duplicate.id, item.id);
+  assert.equal(duplicate.uploadOutcome, 'duplicate');
+  assert.equal(mock.mock.callCount(), 1, 'duplicates must not invoke vision again');
+  const failed = await service.upload('another.png', buffer, 'another-owner');
   assert.equal(failed.status, 'needs-description');
   assert.match(failed.statusMessage, /识别失败/);
-  assert.deepEqual((await service.original(failed.id)).buffer, buffer);
+  assert.deepEqual((await service.original(failed.id, 'another-owner')).buffer, buffer);
 });
 
 test('PDF preview renders distinct pages, checks bounds and isolates accounts', async t => {
