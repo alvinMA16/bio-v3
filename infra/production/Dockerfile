@@ -1,6 +1,7 @@
 FROM node:24-bookworm-slim
 ARG BIO_COMMIT
 LABEL org.opencontainers.image.revision=$BIO_COMMIT
+RUN apt-get update && apt-get install -y --no-install-recommends libreoffice-writer libreoffice-impress fonts-noto-cjk && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm@11.19.0
 WORKDIR /app
 COPY . .

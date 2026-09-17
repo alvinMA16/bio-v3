@@ -60,6 +60,7 @@ export interface Material extends PanelAttachment {
 }
 
 export interface AgentContextSnapshot {
+  attachmentView?: { materialId: string; page: number };
   materialIds?: string[];
   attachments?: PanelAttachment[];
   /** Requested mode only; actual mode and guidance follow the server's displayed content. */

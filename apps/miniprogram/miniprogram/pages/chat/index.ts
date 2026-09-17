@@ -25,6 +25,7 @@ interface ChatCompletionResponse {
 }
 
 Page({
+  attachmentView: undefined as { materialId: string; page: number } | undefined,
   materialIds: [] as string[],
   animationController: null as FoxAnimationController | null,
   frameGate: null as FoxFrameGate | null,
@@ -39,6 +40,7 @@ Page({
   callListening: false,
   requestTask: null as WechatMiniprogram.RequestTask | null,
   data: {
+    attachmentFocused: false,
     callMode: false, callDuration: '未连接', callSubtitle: '',
     actorSrc: '/assets/animations/fox-clerk/blink.webp',
     actorSheets: Object.values(FOX_ANIMATION_CLIPS), actorReady: false,
@@ -122,7 +124,8 @@ Page({
         const selected = document?.blocks.find(block => block.id === this.data.selectedBlockId);
         return {
           ...(this.data.conversationId ? { conversationId: this.data.conversationId } : {}),
-          context: { materialIds: this.materialIds, ...(document && selected ? { workspace: { documentId: document.id, version: document.version, selectedBlockId: selected.id, excerpt: selected.text } } : {}) },
+          ...(this.materialIds.length ? { provider: 'gemini' as const } : {}),
+          context: { ...(this.attachmentView ? { attachmentView: this.attachmentView } : {}), materialIds: this.materialIds, ...(this.materialIds.length ? { scene: 'attachment_conversation' as const } : {}), ...(document && selected ? { workspace: { documentId: document.id, version: document.version, selectedBlockId: selected.id, excerpt: selected.text } } : {}) },
         };
       },
       event: event => {
@@ -147,7 +150,7 @@ Page({
           if (item.type === 'run.started') this.setData({ agentWorking: true });
           if (['run.completed', 'run.cancelled', 'run.failed'].includes(item.type)) this.setData({ agentWorking: false });
           this.setData({ conversationId: item.conversationId });
-          if (item.type === 'panel.state.updated') this.setData({ panel: localPanel(item.panel), selectedBlockId: '' });
+          if (item.type === 'panel.state.updated') this.showPanel(item.panel);
           if (item.type === 'speech.delta' || item.type === 'speech.completed') {
             const existing = this.data.messages.find(message => message.id === item.messageId);
             const message: ChatMessage = { id: item.messageId, role: 'assistant', content: item.type === 'speech.completed' ? item.text : (existing?.content ?? '') + item.delta };
@@ -226,7 +229,8 @@ Page({
       header: { 'content-type': 'application/json', ...(wx.getStorageSync('bio-auth-token') ? { Authorization: `Bearer ${wx.getStorageSync('bio-auth-token')}` } : {}) },
       data: {
         message,
-        context: { materialIds: this.materialIds, ...(document && selected ? { workspace: {
+        ...(this.materialIds.length ? { provider: 'gemini' as const } : {}),
+          context: { ...(this.attachmentView ? { attachmentView: this.attachmentView } : {}), materialIds: this.materialIds, ...(this.materialIds.length ? { scene: 'attachment_conversation' as const } : {}), ...(document && selected ? { workspace: {
           documentId: document.id, version: document.version, selectedBlockId: selected.id, excerpt: selected.text,
         } } : {}) },
         conversationId: this.data.conversationId || undefined,
@@ -243,8 +247,9 @@ Page({
         for (const event of data.events ?? []) {
           if (event.type === 'panel.state.updated') panel = localPanel(event.panel);
         }
+        this.showPanel(panel);
         this.setData({
-          panel,
+          panel: this.data.panel,
           selectedBlockId: '',
           conversationId: data.conversationId,
           messages: [...this.data.messages, data.message],
@@ -253,6 +258,14 @@ Page({
       fail: () => { if (!this.unloaded) this.showRequestError('网络连接失败，请稍后重试。'); },
       complete: () => { if (!this.unloaded) this.setData({ sending: false }); },
     });
+  },
+
+  attachmentPage(event: WechatMiniprogram.CustomEvent): void { this.attachmentView = { materialId: String(event.detail.materialId), page: Number(event.detail.page) }; voiceClient?.updateAttachmentView(this.attachmentView); },
+  toggleAttachmentFocus(): void { this.setData({ attachmentFocused: !this.data.attachmentFocused }); },
+
+  showPanel(panel: PanelState): void {
+    if (panel.mode !== this.data.panel.mode || panel.attachment?.id !== this.data.panel.attachment?.id) this.setData({ attachmentFocused: false });
+    this.setData({ panel: localPanel(panel), selectedBlockId: '' });
   },
 
   showRequestError(message: string): void {

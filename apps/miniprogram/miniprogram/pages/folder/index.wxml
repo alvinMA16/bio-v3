@@ -5,16 +5,22 @@
     <button wx:if="{{selected}}" class="preview-delete" bindtap="remove" aria-label="删除这份资料" disabled="{{busy}}"><image src="/assets/materials/delete.svg" /></button>
   </view>
 </view>
-<view class="folder {{selected ? 'folder--preview' : ''}}">
+<view class="folder {{selected ? 'folder--preview' : ''}}" style="--preview-space: calc(100vh - {{statusBarHeight + navigationHeight}}px - 310rpx - env(safe-area-inset-bottom));">
   <view wx:if="{{error}}" class="error">{{error}}<button size="mini" bindtap="refresh" disabled="{{busy}}">重新加载</button></view>
   <block wx:if="{{selected}}">
     <image wx:if="{{selected.kind === 'image'}}" class="preview" src="{{previewUrl}}" mode="aspectFit" bindtap="preview" />
+    <view wx:elif="{{selected.mimeType === 'application/pdf'}}" class="pdf-preview">
+      <view class="pdf-image-stage"><view wx:if="{{pdfLoading}}" class="pdf-status">正在展开第 {{pdfPage}} 页…</view>
+      <view wx:elif="{{pdfError}}" class="pdf-status">{{pdfError}}<button bindtap="retryPdf">重试</button></view>
+      <image wx:else class="document-preview" src="{{pdfUrl}}" mode="aspectFit" /></view>
+      <view class="pdf-pager"><button data-step="-1" bindtap="turnPdf" disabled="{{pdfLoading || pdfPage <= 1}}" aria-label="上一页">‹</button><text>{{pdfPage}} / {{pdfCount || '…'}}</text><button data-step="1" bindtap="turnPdf" disabled="{{pdfLoading || !pdfCount || pdfPage >= pdfCount}}" aria-label="下一页">›</button></view>
+    </view>
     <image wx:elif="{{thumbnails[selected.id]}}" class="document-preview" src="{{thumbnails[selected.id]}}" mode="widthFix" bindtap="preview" />
     <view wx:elif="{{selected.text}}" class="document-text"><text selectable>{{selected.text}}</text></view>
     <view wx:else class="hint">这份资料暂不支持页内预览，请打开原件。</view>
     <button class="open-original" bindtap="preview">打开原件</button>
 
-    <view class="fox-chat-footer"><button class="fox-chat" bindtap="chat" disabled="{{busy}}"><view class="fox-portrait"><image src="/assets/materials/lingli-chat.webp" mode="aspectFit" /></view><text>和令狸聊聊</text><text class="chat-arrow">→</text></button></view>
+    <view class="fox-chat-footer"><button class="fox-chat" bindtap="chat" disabled="{{busy}}"><text>和令狸聊聊</text><view class="fox-portrait"><image src="/assets/materials/lingli-chat-wave.webp" mode="aspectFit" /></view></button></view>
   </block>
   <block wx:else>
     <view class="results {{leaving ? 'is-leaving' : ''}}">

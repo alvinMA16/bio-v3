@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "对话"
+  "navigationBarTitleText": "对话",
+  "usingComponents": {
+    "attachment-viewer": "../../components/attachment-viewer/index"
+  }
 }

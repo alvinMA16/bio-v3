@@ -118,6 +118,9 @@ export class BrowserVoice {
     this.callbacks.start(this.turnId, request);
     this.send({ type: 'listen', turnId: this.turnId, callId: this.callId, request });
   }
+  updateAttachmentView(view: { materialId: string; page: number }): void {
+    if (!this.closed && this.turnId) this.send({ type: 'attachment.view', turnId: this.turnId, view });
+  }
   finish(): void {
     if (!this.listening || this.finishing) return;
     this.finishing = true; this.capture?.port.postMessage('finish');

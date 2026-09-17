@@ -163,3 +163,15 @@ test('punctuation-only speech tails are not submitted to the TTS provider', () =
   assert.deepEqual(segments.push('quoted', '“你好。”', true), []);
   assert.deepEqual(segments.push('dots', '……', true), []);
 });
+
+test('page changes while listening refresh this turn without accepting another material or stale turn', async () => {
+  const f = fixture();
+  await f.session.listen('page-turn', { context: { materialIds: ['owned'], attachmentView: { materialId: 'owned', page: 1 } } });
+  f.session.updateAttachmentView('page-turn', { materialId: 'owned', page: 3 });
+  f.session.updateAttachmentView('old-turn', { materialId: 'owned', page: 8 });
+  f.session.updateAttachmentView('page-turn', { materialId: 'other', page: 9 });
+  f.session.finish('page-turn');
+  await f.done;
+  assert.deepEqual(f.inputs[0].context.attachmentView, { materialId: 'owned', page: 3 });
+  f.session.close();
+});

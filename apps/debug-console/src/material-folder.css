@@ -25,11 +25,11 @@
 .material-folder .material-empty p { font-size: 10px; }
 .material-feedback { padding: 10px; background: #e6ebdf; border-radius: 6px; font-size: 11px; }
 .material-feedback--error { background: #f3e2d9; color: #9d5340; }
-.material-upload-queue { display: grid; gap: 8px; padding: 10px; background: #eee7da; border-radius: 8px; font-size: 9px; }
-.material-upload-queue > div { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
-.material-upload-filename { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.material-upload-queue { display: grid; gap: 0; padding: 0; background: transparent; font-size: 10px; }
+.material-upload-queue > div { display: flex; flex-wrap: wrap; gap: 5px 8px; align-items: center; margin-bottom: 6px; padding: 10px 12px; border-radius: 10px; background: #dce6d9; color: #52664e; }
+.material-upload-filename { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .material-upload-queue small { width: 100%; color: #a05745; }
-.material-folder .material-upload-queue button { font-size: 9px; padding: 4px 8px; }
+.material-folder .material-upload-queue button { font-size: 10px; padding: 4px 8px; border-color: #b3c4ae; background: #eaf0e7; color: #52664e; }
 .material-folder .material-back { justify-self: start; background: transparent; border: 0; padding-left: 0; }
 .material-detail-preview { display: block; width: 78%; margin: 2px auto 10px; color: inherit; text-decoration: none; }
 .material-cover--large { max-height: 300px; }
@@ -150,10 +150,9 @@
 .material-pdf-preview img { display: block; width: 100%; height: auto; }
 .material-pdf-preview figcaption { color: #93998c; font-size: 9px; padding: 8px 0; }
 
-.material-folder .material-fox-chat { display: flex; align-items: center; gap: 9px; width: 100%; height: 55px; padding: 0 14px 0 8px; border: 1px solid #b8c2ad50; border-radius: 17px; background: #d4ddcc; color: #4f6149; box-shadow: 0 3px 8px #5663470b; font-size: 13px; font-weight: 500; transition: background 180ms ease, transform 180ms ease; }
-.material-fox-portrait { position: relative; display: block; width: 64px; height: 67px; flex-shrink: 0; overflow: hidden; align-self: flex-end; }
+.material-folder .material-fox-chat { display: flex; align-items: center; justify-content: center; gap: 14px; width: 100%; height: 55px; padding: 0 16px; border: 0; border-radius: 17px; background: linear-gradient(135deg, #eff7eac4, #c6d8bb85); color: #4f6149; backdrop-filter: blur(16px) saturate(1.35); -webkit-backdrop-filter: blur(16px) saturate(1.35); box-shadow: inset 0 1px 1px #ffffffb3, inset 0 -1px 1px #acc29b33, 0 4px 12px #53644b12; font-size: 13px; font-weight: 500; transition: background 180ms ease, transform 180ms ease; }
+.material-fox-portrait { margin-left: 0; position: relative; display: block; width: 64px; height: 67px; flex-shrink: 0; overflow: hidden; align-self: flex-end; }
 .material-fox-portrait img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
-.material-chat-arrow { margin-left: auto; flex-shrink: 0; opacity: .65; }
 .material-folder .material-fox-chat:active { transform: scale(.98); background: #c8d4c0; }
 @media (prefers-reduced-motion: reduce) { .material-folder .material-fox-chat { transition: none; } }
 
@@ -179,3 +178,25 @@
 @keyframes material-actions-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes material-keepsake-in { from { opacity: 0; transform: translateY(12px) rotate(-1deg) scale(.95); } to { opacity: 1; transform: translateY(0) rotate(-5deg) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .material-actions, .material-actions-keepsake { animation: none; } .material-folder .material-actions button { transition: none; } }
+
+.material-upload-entry--done { animation: material-upload-dismiss 2800ms ease both; }
+@keyframes material-upload-dismiss { 0%, 88% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .material-upload-entry--done { animation: none; } }
+
+.material-pdf-pager { display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 10px; padding: 4px 0; background: transparent; }
+.material-folder .material-pdf-pager button { width: 40px; min-height: 40px; padding: 0; border: 0; background: transparent; font-size: 24px; color: #596750; }
+.material-pdf-pager span { font-size: 11px; font-variant-numeric: tabular-nums; }
+.material-folder .material-pdf-status { min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #80887c; font-size: 11px; }
+
+.material-preview-content:has(.material-pdf-preview) { align-items: flex-start; min-height: 0; }
+
+/* Fit the whole visual page in the space between the header and chat footer. */
+.material-preview-scroll--visual { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
+.material-preview-scroll--visual .material-preview-content { flex: 1; min-height: 0; width: 100%; }
+.material-preview-scroll--visual .material-preview-content > img { width: 100%; height: 100%; max-height: 100%; object-fit: contain; }
+.material-preview-scroll--visual .material-detail-meta { flex-shrink: 0; margin: 10px 0 14px; }
+.material-preview-scroll--visual .material-pdf-preview { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.material-pdf-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+.material-pdf-stage > img { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+.material-pdf-preview .material-pdf-pager { flex-shrink: 0; margin-top: 8px; }
+.material-pdf-stage .material-pdf-status { min-height: 0; }

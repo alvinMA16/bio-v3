@@ -7,7 +7,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'node:http';
 import type { VoiceClientMessage } from '@bio/contracts';
 import { AgentService } from '../agent/agent.service.js';
-import { CompleteChatDto } from '../chat/dto/complete-chat.dto.js';
+import { AttachmentViewDto, CompleteChatDto } from '../chat/dto/complete-chat.dto.js';
 import { VolcengineAsr } from './volcengine-asr.js';
 import { DoubaoTts } from './doubao-tts.js';
 import { randomUUID } from 'node:crypto';
@@ -102,6 +102,10 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
               }
               void session.listen(message.turnId, input, opening).catch(() => ws.close(1011, 'Voice session failed'));
             } finally { validating = false; }
+          } else if (message.type === 'attachment.view') {
+            const view = plainToInstance(AttachmentViewDto, message.view);
+            if (!view || (await validate(view, { whitelist: true, forbidNonWhitelisted: true })).length) throw new Error('Invalid attachment view');
+            session.updateAttachmentView(message.turnId, view);
           } else if (message.type === 'finish') session.finish(message.turnId);
           else if (message.type === 'cancel') session.cancel(message.turnId);
           else if (message.type === 'hangup') { ended = true; session.close('user_hangup'); ws.close(1000, 'Call ended'); }

@@ -11,9 +11,11 @@ function request<T extends object = Record<string, unknown>>(path = '', method: 
 Page({
   unloaded: false,
   thumbnailGeneration: 0,
+  pdfGeneration: 0,
+  pdfPath: '',
   suppressTapUntil: 0,
   filterTimer: null as ReturnType<typeof setTimeout> | null,
-  data: { actionItem: null as MaterialCard | null, statusBarHeight: 24, navigationHeight: 44, navigationRight: 100, searchOpen: false, leaving: false, tabIndex: 0, renderedFilter: 'all', renderedQuery: '', query: '', filter: 'all', visibleItems: [] as MaterialCard[], imageCount: 0, documentCount: 0, items: [] as MaterialCard[], thumbnails: {} as Record<string, string>, selected: null as Material | null, busy: false, loading: true, error: '', previewUrl: '' },
+  data: { pdfPage: 1, pdfCount: 0, pdfLoading: false, pdfError: '', pdfUrl: '', actionItem: null as MaterialCard | null, statusBarHeight: 24, navigationHeight: 44, navigationRight: 100, searchOpen: false, leaving: false, tabIndex: 0, renderedFilter: 'all', renderedQuery: '', query: '', filter: 'all', visibleItems: [] as MaterialCard[], imageCount: 0, documentCount: 0, items: [] as MaterialCard[], thumbnails: {} as Record<string, string>, selected: null as Material | null, busy: false, loading: true, error: '', previewUrl: '' },
   async onLoad() {
     const window = wx.getWindowInfo();
     const capsule = wx.getMenuButtonBoundingClientRect();
@@ -22,7 +24,7 @@ Page({
     if (await requireAccount()) void this.refresh();
   },
   exitFolder() { if (this.data.busy) return; if (this.data.selected) { this.back(); return; } if (this.data.searchOpen) { this.toggleSearch(); return; } wx.navigateBack({ fail: () => wx.reLaunch({ url: '/pages/character/index' }) }); },
-  onUnload() { this.unloaded = true; if (this.filterTimer) clearTimeout(this.filterTimer); },
+  onUnload() { this.unloaded = true; this.clearPdf(); if (this.filterTimer) clearTimeout(this.filterTimer); },
   async refresh() {
     this.setData({ loading: true, error: '' });
     try {
@@ -94,7 +96,7 @@ Page({
     this.dismissActions();
     const action = event.currentTarget.dataset.action;
     if (action === 'preview') { if (this.data.searchOpen) this.toggleSearch(); this.showItem(item); }
-    else if (action === 'chat') wx.navigateTo({ url: `/pages/chat/index?materialId=${item.id}&title=${encodeURIComponent(item.title)}` });
+    else if (action === 'chat') wx.navigateTo({ url: `/pages/chat/index?mode=call&materialId=${item.id}&title=${encodeURIComponent(item.title)}` });
     else if (action === 'delete') this.removeItem(item);
   },
   select(event: WechatMiniprogram.TouchEvent) {
@@ -103,20 +105,50 @@ Page({
     if (item) { if (this.data.searchOpen) this.toggleSearch(); this.showItem(item); }
   },
   showItem(item: Material) {
-    this.setData({ selected: item, previewUrl: '', error: '' });
+    this.clearPdf();
+    this.setData({ selected: item, previewUrl: '', error: '', pdfPage: 1, pdfCount: item.pageCount || 0, pdfUrl: '', pdfError: '' });
+    if (item.mimeType === 'application/pdf') void this.loadPdfPage(1);
     if (item.kind === 'image') wx.downloadFile({ url: `${base()}/materials/${item.id}/file`, header: authHeader(), success: result => {
       handleUnauthorized(result.statusCode);
       if (!this.unloaded && this.data.selected?.id === item.id && result.statusCode === 200) this.setData({ previewUrl: result.tempFilePath });
     } });
   },
-  back() { if (!this.data.busy) this.setData({ selected: null, error: '' }); },
+  clearPdf() {
+    this.pdfGeneration++;
+    if (this.pdfPath) wx.getFileSystemManager().unlink({ filePath: this.pdfPath });
+    this.pdfPath = '';
+  },
+  async loadPdfPage(page: number) {
+    const item = this.data.selected;
+    if (!item || item.mimeType !== 'application/pdf') return;
+    const generation = ++this.pdfGeneration;
+    this.setData({ pdfPage: page, pdfLoading: true, pdfError: '', pdfUrl: '' });
+    wx.pageScrollTo({ scrollTop: 0, duration: 0 });
+    try {
+      const result = await request<{ image: string; pageCount: number }>(`/${item.id}/pages/${page}`);
+      if (this.unloaded || generation !== this.pdfGeneration) return;
+      const path = `${wx.env.USER_DATA_PATH}/pdf-preview-${Date.now()}-${generation}.webp`;
+      await new Promise<void>((resolve, reject) => wx.getFileSystemManager().writeFile({ filePath: path, data: result.image.split(',')[1]!, encoding: 'base64', success: () => resolve(), fail: reject }));
+      if (this.unloaded || generation !== this.pdfGeneration) { wx.getFileSystemManager().unlink({ filePath: path }); return; }
+      if (this.pdfPath) wx.getFileSystemManager().unlink({ filePath: this.pdfPath });
+      this.pdfPath = path;
+      this.setData({ pdfUrl: path, pdfCount: result.pageCount });
+    } catch { if (!this.unloaded && generation === this.pdfGeneration) this.setData({ pdfError: '这一页暂时未能加载' }); }
+    finally { if (!this.unloaded && generation === this.pdfGeneration) this.setData({ pdfLoading: false }); }
+  },
+  turnPdf(event: WechatMiniprogram.TouchEvent) {
+    const page = this.data.pdfPage + Number(event.currentTarget.dataset.step);
+    if (!this.data.pdfLoading && page >= 1 && page <= this.data.pdfCount) void this.loadPdfPage(page);
+  },
+  retryPdf() { if (!this.data.pdfLoading) void this.loadPdfPage(this.data.pdfPage); },
+  back() { if (!this.data.busy) { this.clearPdf(); this.setData({ selected: null, error: '' }); } },
   add() {
     if (this.data.busy) return;
     wx.showActionSheet({ itemList: ['从相册选择照片', '从微信聊天选择文件'], success: result => {
       if (result.tapIndex === 0) wx.chooseMedia({ count: 1, mediaType: ['image'], sourceType: ['album', 'camera'], success: result => {
         const file = result.tempFiles[0]; if (file) this.upload(file.tempFilePath, file.size);
       } });
-      else wx.chooseMessageFile({ count: 1, type: 'file', extension: ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'doc', 'docx', 'txt', 'md'], success: result => {
+      else wx.chooseMessageFile({ count: 1, type: 'file', extension: ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'doc', 'docx', 'ppt', 'pptx', 'txt', 'md'], success: result => {
         const file = result.tempFiles[0]; if (file) this.upload(file.path, file.size, file.name);
       } });
     } });
@@ -154,7 +186,7 @@ Page({
   },
   chat() {
     const item = this.data.selected; if (!item || this.data.busy) return;
-    wx.navigateTo({ url: `/pages/chat/index?materialId=${item.id}&title=${encodeURIComponent(item.title)}` });
+    wx.navigateTo({ url: `/pages/chat/index?mode=call&materialId=${item.id}&title=${encodeURIComponent(item.title)}` });
   },
   remove() {
     const item = this.data.selected; if (item) this.removeItem(item);

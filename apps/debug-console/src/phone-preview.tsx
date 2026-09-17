@@ -1,8 +1,9 @@
+import { AttachmentViewer } from './attachment-viewer';
 import { MaterialFolder } from './material-folder';
 import { uiAsset } from './ui-asset';
 import { ManuscriptFolder } from './manuscript-folder';
 import { ReceiptPrinter } from './receipt-printer';
-import type { Material } from '@bio/contracts';
+import type { Material, PanelAttachment } from '@bio/contracts';
 import type { SessionReceipt } from './session-receipt';
 import type { FoxActivity } from '../../miniprogram/miniprogram/lib/fox-behavior';
 import { FoxAnimationController, type FoxAnimationState } from '../../miniprogram/miniprogram/lib/fox-animation-controller';
@@ -19,13 +20,16 @@ interface Manifest {
   animations: Animation[];
 }
 
-export function PhonePreview({ children, subtitle, activity, running, microphone, callOpen, callStartedAt, status, mode, startDisabled, onStart, speakerEnabled, onSpeakerToggle, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
+export function PhonePreview({ attachment, onAttachmentPage, children, subtitle, activity, running, microphone, callOpen, callStartedAt, status, mode, startDisabled, onStart, speakerEnabled, onSpeakerToggle, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
+  attachment?: PanelAttachment | undefined; onAttachmentPage?: ((materialId: string, page: number) => void) | undefined;
   onMaterialChat: (item: Material) => void;
   receipt: SessionReceipt | null; receiptVisible: boolean; onReceiptClose: () => void;
   children: ReactNode; subtitle: string; activity: FoxActivity; running: boolean; microphone?: ReactNode;
   callOpen: boolean; callStartedAt: number | null; status: string; mode: 'conversation' | 'attachment' | 'editor';
   startDisabled: boolean; onStart: () => void; speakerEnabled: boolean; onSpeakerToggle: () => void; onEnd: () => void;
 }) {
+  const [focused, setFocused] = useState(false);
+  useEffect(() => setFocused(false), [callOpen, attachment?.id, mode]);
   const { phase, notebook, speech } = activity;
   const speaking = speech !== 'silent' && phase !== 'listening';
   const [manifest, setManifest] = useState<Manifest>();
@@ -101,7 +105,7 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
       {!manifest && <div className="phone-art-fallback">令狸<span>{assetError ? '场景素材加载失败' : '正在加载场景…'}</span></div>}
     </>;
   return <div className="phone-preview" aria-label="手机用户界面预览">
-    <div className={`phone-screen ${callOpen ? 'phone-screen--call' : ''}`} style={{ aspectRatio: '320/692' }}>
+    <div className={`phone-screen ${callOpen ? 'phone-screen--call' : ''} ${mode === 'attachment' ? 'phone-screen--attachment' : ''} ${focused && mode === 'attachment' ? 'phone-screen--focused' : ''}`} style={{ aspectRatio: '320/692' }}>
       {!callOpen ? <>
         {artwork}
         <section className={`phone-desk ${receiptVisible ? 'phone-desk--printing' : ''}`} inert={receiptVisible || !!drawer} aria-label="令狸的书桌">
@@ -121,6 +125,7 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
         </div>}
 
       </> : <>
+        {focused && mode === 'attachment' && <div className="attachment-focus-status">通话继续 · {callDuration}</div>}
         <header className="phone-call-header">
           <div><h2>令狸</h2><p className="phone-call-duration" aria-label="通话时长">{callStartedAt === null ? '未连接' : callDuration}</p></div>
           <div className="phone-video" role="img" aria-label={`令狸 · ${speaking ? '正在说话' : phase === 'listening' ? '正在听' : '陪伴中'}`}>
@@ -128,7 +133,7 @@ export function PhonePreview({ children, subtitle, activity, running, microphone
           </div>
         </header>
         <section className={`phone-content-panel ${mode !== 'conversation' ? 'phone-content-panel--document' : ''}`} aria-label={mode === 'conversation' ? '对话内容' : mode === 'attachment' ? '附件内容' : '编辑内容'}>
-          {mode === 'conversation' ? <div className="phone-panel-scroll phone-dialogue" ref={subtitleRef}>
+          {mode === 'attachment' && attachment ? <AttachmentViewer key={attachment.id} attachment={attachment} focused={focused} onFocus={() => setFocused(value => !value)} onPage={onAttachmentPage} /> : mode === 'conversation' ? <div className="phone-panel-scroll phone-dialogue" ref={subtitleRef}>
             <p>{subtitle || (running && phase !== 'listening' ? '让我想一想…' : '我在这里，慢慢讲。')}</p>
           </div> : <div className="phone-panel-scroll">{mode === 'editor' && <p className="document-progress" role="status">{running ? '正在整理文稿，完成后会保存到文稿集…' : '本轮已结束；已写入的草稿可在文稿集中查看。若正文为空，说明尚未生成成功。'}</p>}{children}</div>}
         </section>

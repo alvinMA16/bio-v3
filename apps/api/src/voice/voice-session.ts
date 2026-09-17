@@ -78,6 +78,13 @@ export class VoiceSession {
   }
   close(reason = 'connection_closed'): void { this.closed = true; ++this.generation; this.cancel(undefined, reason); }
 
+  updateAttachmentView(id: string, view: { materialId: string; page: number }): void {
+    const turn = this.current;
+    if (!turn || turn.id !== id || !['connecting', 'listening', 'finalizing'].includes(turn.state)) return;
+    if (!turn.request.context?.materialIds?.includes(view.materialId)) return;
+    turn.request = { ...turn.request, context: { ...turn.request.context, attachmentView: view } };
+  }
+
   async settled(): Promise<void> { await this.lastTask.catch(() => undefined); }
 
   private async complete(turn: Turn, opening = false): Promise<void> {

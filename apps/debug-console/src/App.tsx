@@ -122,7 +122,9 @@ export function App() {
   const voiceRef = useRef<BrowserVoice | null>(null);
   const voiceTurn = useRef<{ record: RunRecord; saved: boolean } | null>(null);
   const voiceContext = useRef<VoiceRequest>({});
+  const attachmentView = useRef<{ materialId: string; page: number } | undefined>(undefined);
   const [materialTitle, setMaterialTitle] = useState('');
+  const [pendingMaterialPanel, setPendingMaterialPanel] = useState<PanelState | null>(null);
   const [materialIds, setMaterialIds] = useState<string[]>([]);
   const busy = running || voiceEnabled;
   const [view, setView] = useState<View>('result');
@@ -141,7 +143,7 @@ export function App() {
     [history, selectedRunId],
   );
 
-  const shownPanel = running ? live.panel : panelOf(selectedRun);
+  const shownPanel = pendingMaterialPanel ?? (running ? live.panel : panelOf(selectedRun));
   const shownLive = running ? live : selectedRun?.live;
   const turns = conversationThrough(history, selectedRun);
   const latestSpeech = shownLive?.messages.at(-1);
@@ -174,6 +176,7 @@ export function App() {
       message: text,
       context: {
         materialIds,
+        ...(attachmentView.current ? { attachmentView: attachmentView.current } : {}),
         ...(scene ? { scene } : {}),
         ...(attachmentId.trim() ? { attachments: [{
           id: attachmentId.trim(), kind: attachmentKind, title: attachmentTitle.trim(),
@@ -235,6 +238,7 @@ export function App() {
       setLive(record.live);
       if (event.event.type === 'speech.delta') timings.firstText ??= event.elapsedMs;
       if (event.event.type === 'panel.state.updated') {
+        setPendingMaterialPanel(null);
         setSelectedBlockId(''); setDocumentId(''); setDocumentVersion(0); setExcerpt('');
       }
     }
@@ -341,6 +345,7 @@ export function App() {
           setConversationId(item.event.conversationId);
           if (item.event.type === 'panel.state.updated') {
             const panel = item.event.panel;
+            setPendingMaterialPanel(null);
             if (panel.mode !== 'editor' || panel.document?.id !== documentId || panel.document?.version !== documentVersion) {
               setSelectedBlockId('');
               setDocumentId('');
@@ -416,6 +421,7 @@ export function App() {
   }
 
   function startNewConversation(): void {
+    setPendingMaterialPanel(null);
     setMaterialIds([]); setMaterialTitle('');
     setConversationId(''); setSelectedRunId(null); setDocumentId(''); setDocumentVersion(0);
     setSelectedBlockId(''); setExcerpt(''); setAttachmentId(''); setAttachmentTitle('');
@@ -480,9 +486,9 @@ export function App() {
         <div className="lab-main" ref={resultRef}>
           <section className="lab-preview-column">
             <header className="lab-section-heading"><h1>用户界面预览</h1><span>手机 · 实时状态</span></header>
-            <PhonePreview subtitle={subtitle} running={running} activity={foxActivityOf({ running, live, panel: shownPanel, ...(callOpen ? { audioPlaying, ...(voiceEnabled ? { voiceState } : {}), userSpeaking: micEnabled && micListening && userSpeaking } : {}) })}
+            <PhonePreview onAttachmentPage={(materialId, page) => { attachmentView.current = { materialId, page }; voiceRef.current?.updateAttachmentView({ materialId, page }); voiceContext.current = { ...voiceContext.current, context: { ...voiceContext.current.context, attachmentView: { materialId, page } } }; }} attachment={shownPanel?.attachment} subtitle={subtitle} running={running} activity={foxActivityOf({ running, live, panel: shownPanel, ...(callOpen ? { audioPlaying, ...(voiceEnabled ? { voiceState } : {}), userSpeaking: micEnabled && micListening && userSpeaking } : {}) })}
               callOpen={callOpen} callStartedAt={callStartedAt} status={voiceStatus} mode={shownPanel?.mode ?? 'conversation'}
-              onMaterialChat={item => { setMaterialTitle(item.title); setMaterialIds([item.id]); setScene('attachment_conversation'); setMessage(`我们聊聊《${item.title}》这份资料吧。`); inputRef.current?.focus(); }}
+              onMaterialChat={item => { setProvider('gemini'); setPendingMaterialPanel({ mode: 'attachment', revision: 0, attachment: { id: item.id, kind: item.kind, title: item.title, url: item.url, text: item.text || item.statusMessage } }); setMaterialTitle(item.title); setMaterialIds([item.id]); setScene('attachment_conversation'); setMessage(`我们聊聊《${item.title}》这份资料吧。`); voiceContext.current = { ...voiceContext.current, provider: 'gemini', context: { materialIds: [item.id], scene: 'attachment_conversation' } }; startVoice(); }}
               startDisabled={busy} onStart={startVoice} speakerEnabled={speakerEnabled}
               onSpeakerToggle={() => { const enabled = !speakerEnabled; voiceRef.current?.setSpeaker(enabled); setSpeakerEnabled(enabled); }}
               onEnd={endCall}

@@ -31,6 +31,11 @@ export class MaterialsController {
     const buffer = await this.materials.thumbnail(id, await this.fileUser(request));
     return reply.header('X-Content-Type-Options', 'nosniff').header('Cache-Control', 'private, no-store').type('image/webp').send(buffer);
   }
+  @Get(':id/pages/:page') async pdfPage(@Param('id') id: string, @Param('page') page: string, @Req() request: FastifyRequest, @Res() reply: FastifyReply) {
+    if (!/^[1-9]\d{0,5}$/.test(page)) throw new BadRequestException('无效的页码');
+    const result = await this.materials.pdfPage(id, Number(page), await this.fileUser(request));
+    return reply.header('Cache-Control', 'private, no-store').header('X-Content-Type-Options', 'nosniff').send(result);
+  }
   @Get(':id/file') async file(@Param('id') id: string, @Req() request: FastifyRequest, @Res() reply: FastifyReply) {
     const user = await this.fileUser(request);
     const { item, buffer } = await this.materials.original(id, user);

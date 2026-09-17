@@ -3,6 +3,7 @@ import type { AgentEvent, ChatCompletionRequest, ChatCompletionResponse } from '
 export type VoiceRequest = Omit<ChatCompletionRequest, 'message'>;
 export type VoiceClientMessage =
   | { type: 'listen'; turnId: string; callId?: string; request: VoiceRequest }
+  | { type: 'attachment.view'; turnId: string; view: { materialId: string; page: number } }
   | { type: 'finish'; turnId: string }
   | { type: 'cancel'; turnId: string }
   | { type: 'hangup'; turnId: string }

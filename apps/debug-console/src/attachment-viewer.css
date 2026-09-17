@@ -1,0 +1,29 @@
+.attachment-viewer { height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+.attachment-viewer-stage { flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.attachment-viewer-stage > pre { max-height: 100%; overflow: auto; font-size: 14px; white-space: pre-wrap; }
+.attachment-viewer-stage > p, .attachment-viewer-stage > div[role="alert"] { font-size: 13px; text-align: center; }
+.attachment-zoom { width: 100%; height: 100%; min-height: 0; position: relative; overflow: hidden; touch-action: none; user-select: none; }
+.attachment-zoom img { display: block; width: 100%; height: 100%; object-fit: contain; transform-origin: center; pointer-events: none; }
+.attachment-zoom-reset { position: absolute; bottom: 8px; right: 8px; min-height: 36px; border: 0; border-radius: 18px; padding: 0 12px; background: #e9efeadb; backdrop-filter: blur(16px); color: #3e4a43; font-size: 12px; }
+.attachment-pages { display: flex; align-items: center; justify-content: center; gap: 12px; flex: 0 0 44px; }
+.attachment-pages button, .attachment-filebar button { border: 0; background: transparent; color: inherit; min-width: 44px; min-height: 44px; cursor: pointer; }
+.attachment-pages button { font-size: 26px; }
+.attachment-pages button:disabled { opacity: .3; }
+.attachment-pages span { font-size: 12px; font-variant-numeric: tabular-nums; }
+.attachment-filebar { display: flex; align-items: center; gap: 8px; flex: 0 0 44px; font-size: 12px; }
+.attachment-filebar > span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .75; }
+.attachment-filebar button { padding: 0 14px; border-radius: 22px; background: #d9e7dc80; backdrop-filter: blur(16px); box-shadow: inset 0 1px 0 #ffffff70; }
+.phone-screen.phone-screen--attachment .phone-call-header { padding: 14px 18px 8px; }
+.phone-screen.phone-screen--attachment .phone-video { flex-basis: 64px; width: 64px; height: 76px; }
+.phone-screen.phone-screen--attachment .phone-call-header h2 { font-size: 19px; }
+.phone-screen.phone-screen--attachment .phone-content-panel { padding: 0; border: 0; background: transparent; }
+.phone-screen--focused .phone-call-header, .phone-screen--focused .phone-call-controls, .phone-screen--focused .phone-call-status { display: none; }
+.phone-screen--focused .phone-content-panel { margin-top: 12px; margin-bottom: max(12px, env(safe-area-inset-bottom)); }
+.attachment-focus-status { padding: 14px 18px 0; font-size: 12px; opacity: .7; }
+
+.phone-screen.phone-screen--attachment .phone-video-scene { width: 107px; height: 231px; left: -21px; top: -44px; }
+.phone-screen.phone-screen--attachment { color: #424b46; background: linear-gradient(#e9ece9d9,#e9ece9d9), url('/api/v1/ui-assets/felt-oat.webp') center / 280px; background-blend-mode: normal, luminosity; }
+.phone-screen.phone-screen--attachment .phone-call-duration, .phone-screen.phone-screen--attachment .phone-call-status, .phone-screen.phone-screen--attachment .phone-call-control > span { color: #65716a; }
+.phone-screen.phone-screen--attachment .phone-control-button, .phone-screen.phone-screen--attachment .felt-mic__button { color: #42534a; background: #dbe6df80; backdrop-filter: blur(14px); box-shadow: inset 0 1px 0 #ffffffa0; }
+.phone-screen.phone-screen--attachment .phone-control-button::before, .phone-screen.phone-screen--attachment .felt-mic__button::before { border: 0; }
+.phone-screen.phone-screen--attachment .phone-control-button--end { background: #bb6969; color: #fff; }

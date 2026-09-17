@@ -98,6 +98,9 @@ export class MiniVoiceClient {
     if (this.finishing || (!expected && this.wantRecording)) { this.finishing = false; this.wantRecording = false; this.send({ type: 'finish', turnId: this.turnId }); }
   };
   private onRecorderError = (): void => this.fail('录音失败，请检查麦克风权限。');
+  updateAttachmentView(view: { materialId: string; page: number }): void {
+    if (!this.closed && this.turnId) this.send({ type: 'attachment.view', turnId: this.turnId, view });
+  }
   finish(): void {
     if (!this.recording || this.finishing) return;
     this.finishing = true; this.wantRecording = false; stopRecorder();

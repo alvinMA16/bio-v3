@@ -15,3 +15,9 @@
   `infra/production/README.md` before asking for its location again.
 - Keep credentials out of output and Git. Read the deployment README before
   changing production; do not overwrite bio2 while deploying bio-v3.
+
+# Visual language
+
+- Scene and background elements use handmade felt / stop-motion textures.
+- Core CTA buttons use frosted glass with a subtle pale sage-green tint, soft optical highlights and translucent depth. Avoid opaque beige panels or conspicuous outline-button borders.
+- Keep related CTA text and character art grouped and centered; distribute actions rather than crowding the top of the screen.

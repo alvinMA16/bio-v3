@@ -54,7 +54,13 @@ export class PanelAttachmentDto {
   text?: string;
 }
 
+export class AttachmentViewDto {
+  @IsUUID('4') materialId!: string;
+  @IsInt() @Min(1) page!: number;
+}
 export class ContextSnapshotDto implements AgentContextSnapshot {
+  @IsOptional() @ValidateNested() @Type(() => AttachmentViewDto)
+  attachmentView?: AttachmentViewDto;
   @IsOptional() @IsArray() @ArrayMaxSize(10) @IsUUID('4', { each: true })
   materialIds?: string[];
 

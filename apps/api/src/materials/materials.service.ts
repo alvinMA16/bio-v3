@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join, resolve, extname } from 'node:path';
+import { documentToPdf } from './document-converter.js';
 import mammoth from 'mammoth';
 import { PDFParse } from 'pdf-parse';
 import sharp from 'sharp';
@@ -11,7 +12,7 @@ import { MaterialObjectStore } from './material-object-store.js';
 import type { Material, PanelAttachment } from '@bio/contracts';
 
 export const MAX_FILE_SIZE = 20 * 1024 * 1024;
-const types: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', txt: 'text/plain', md: 'text/plain' };
+const types: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', txt: 'text/plain', md: 'text/plain' };
 @Injectable()
 export class MaterialsService {
   readonly root: string;
@@ -63,6 +64,41 @@ export class MaterialsService {
     try { return await readFile(join(this.directory(id, user), 'thumbnail.webp')); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new NotFoundException('缩略图不存在'); throw error; }
   }
+  private conversions = new Map<string, Promise<Buffer>>();
+  async modelFile(id: string, user?: string) {
+    const original = await this.original(id, user);
+    if (original.item.kind === 'image' || original.item.mimeType === 'application/pdf' || original.item.mimeType === 'text/plain') return { ...original, mimeType: original.item.mimeType };
+    const path = join(this.directory(id, user), 'converted.pdf');
+    try { return { item: original.item, buffer: await readFile(path), mimeType: 'application/pdf' }; }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    let pending = this.conversions.get(path);
+    if (!pending) {
+      pending = (async () => {
+        const pdf = await documentToPdf(original.buffer, extname(original.item.filename).slice(1).toLowerCase(), this.config.get<string>('LIBREOFFICE_BIN', 'libreoffice'));
+        const temp = `${path}.${randomUUID()}.tmp`;
+        try { await writeFile(temp, pdf, { mode: 0o600 }); await rename(temp, path); }
+        finally { await rm(temp, { force: true }); }
+        return pdf;
+      })();
+      this.conversions.set(path, pending);
+    }
+    try { return { item: original.item, buffer: await pending, mimeType: 'application/pdf' }; }
+    finally { if (this.conversions.get(path) === pending) this.conversions.delete(path); }
+  }
+  async pdfPage(id: string, page: number, user?: string) {
+    if (!Number.isSafeInteger(page) || page < 1) throw new BadRequestException('无效的页码');
+    const { mimeType, buffer } = await this.modelFile(id, user);
+    if (mimeType !== 'application/pdf') throw new BadRequestException('仅 PDF 支持翻页');
+    const parser = new PDFParse({ data: buffer });
+    try {
+      const info = await parser.getInfo();
+      if (page > info.total) throw new BadRequestException('页码超出范围');
+      const result = await parser.getScreenshot({ partial: [page], desiredWidth: 1000, imageBuffer: true, imageDataUrl: false });
+      if (!result.pages[0]) throw new ServiceUnavailableException('这一页暂时无法预览');
+      const image = await sharp(result.pages[0].data).webp({ quality: 85 }).toBuffer();
+      return { page, pageCount: info.total, image: `data:image/webp;base64,${image.toString('base64')}` };
+    } finally { await parser.destroy(); }
+  }
   async update(id: string, title: string, description: string, user?: string) {
     const item = { ...await this.get(id, user), title: title.trim(), description: description.trim() };
     if (!item.title || item.title.length > 300 || item.description.length > 2000) throw new BadRequestException('标题或说明长度不正确');
@@ -107,11 +143,12 @@ export class MaterialsService {
     if (this.objectStore && !user) throw new UnauthorizedException('请先登录');
     const extension = extname(filename).slice(1).toLowerCase();
     const mimeType = types[extension];
-    if (!mimeType) throw new BadRequestException('支持 JPG、PNG、WebP、PDF、DOC、DOCX、TXT 和 MD');
+    if (!mimeType) throw new BadRequestException('支持 JPG、PNG、WebP、PDF、DOC、DOCX、PPT、PPTX、TXT 和 MD');
     if (!buffer.length || buffer.length > MAX_FILE_SIZE) throw new BadRequestException('文件不能为空，且不能超过 20 MB');
     const kind = mimeType.startsWith('image/') ? 'image' : 'document';
     let text = '', statusMessage = '';
     let thumbnail: Buffer | undefined;
+    let converted: Buffer | undefined;
     let pageCount: number | undefined;
     try {
       if (kind === 'image') {
@@ -121,9 +158,10 @@ export class MaterialsService {
         const preview = await sharp(buffer).rotate().resize(1800, 1800, { fit: 'inside', withoutEnlargement: true }).jpeg().toBuffer();
         try { text = await this.recognize([`data:image/jpeg;base64,${preview.toString('base64')}`]); } catch { statusMessage = '图片识别失败，原件已保存，可补充说明后聊天。'; }
         if (!text && !statusMessage) statusMessage = '图片尚未识别，可补充说明后聊天。';
-      } else if (extension === 'pdf') {
-        if (!buffer.subarray(0, 5).equals(Buffer.from('%PDF-'))) throw new Error('PDF 格式不正确');
-        const parser = new PDFParse({ data: buffer });
+      } else if (['pdf', 'ppt', 'pptx'].includes(extension)) {
+        if (extension === 'pdf' && !buffer.subarray(0, 5).equals(Buffer.from('%PDF-'))) throw new Error('PDF 格式不正确');
+        if (extension !== 'pdf') converted = await documentToPdf(buffer, extension, this.config.get<string>('LIBREOFFICE_BIN', 'libreoffice'));
+        const parser = new PDFParse({ data: converted ?? buffer });
         try {
           const result = await parser.getText();
           pageCount = result.total;
@@ -149,7 +187,7 @@ export class MaterialsService {
         text = new TextDecoder('utf-8', { fatal: true }).decode(buffer).trim();
         if (text.includes('\0')) throw new Error('不是有效的文本文件');
       }
-    } catch { throw new BadRequestException('文件无法读取，请检查格式、是否损坏或加密；文本请使用 UTF-8 编码。'); }
+    } catch (error) { if (error instanceof ServiceUnavailableException) throw error; throw new BadRequestException('文件无法读取，请检查格式、是否损坏或加密；文本请使用 UTF-8 编码。'); }
     if (text.length > 100000) { text = text.slice(0, 100000); statusMessage = '已提取前 10 万字，完整内容请查看原件。'; }
     if (!text && !statusMessage) statusMessage = '未提取到正文，可补充说明。';
     const id = randomUUID();
@@ -168,6 +206,7 @@ export class MaterialsService {
         await writeFile(join(temp, 'original'), buffer, { mode: 0o600 });
         if (thumbnail) await writeFile(join(temp, 'thumbnail.webp'), thumbnail, { mode: 0o600 });
       }
+      if (converted) await writeFile(join(temp, 'converted.pdf'), converted, { mode: 0o600 });
       await writeFile(join(temp, 'metadata.json'), JSON.stringify(item), { mode: 0o600 });
       await rename(temp, this.directory(id, user));
     } catch (error) {

@@ -475,3 +475,37 @@ test('material IDs load server originals and edits create immutable conversation
   const invalid = await fetch(`${baseUrl}/api/v1/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: 'hello', context: { materialIds: ['../bad'] } }) });
   assert.equal(invalid.status, 400);
 });
+
+test('selected material opens attachment mode and persists readable content once in model history', async () => {
+  const materials = new MaterialsService(config);
+  const item = await materials.upload('attachment.txt', Buffer.from('ATTACHMENT_CONTENT_EVIDENCE: Grandma planted jasmine.'));
+  const input = { message: '聊聊这份资料', context: { materialIds: [item.id], scene: 'attachment_conversation' } };
+  const result = await service.run(input);
+  const payload = requests.at(-1);
+  assert.ok(payload.messages.some(message => textOf(message).includes('ATTACHMENT_CONTENT_EVIDENCE')));
+  assert.equal(JSON.parse(textOf(snapshots(payload)[0])).scene, 'attachment_conversation');
+  assert.equal(result.events.find(event => event.type === 'panel.state.updated').panel.attachment.title, 'attachment.txt');
+  await service.run({ ...input, conversationId: result.conversationId, message: '接着聊' });
+  const entries = (await readFile(join(root, 'conversations', result.conversationId, 'session.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+  const attachments = entries.filter(entry => entry.type === 'custom_message' && entry.customType === 'bio_material_attachment');
+  assert.equal(attachments.length, 1);
+  assert.equal(attachments[0].details.materialId, item.id);
+  assert.match(JSON.stringify(attachments[0].content), /ATTACHMENT_CONTENT_EVIDENCE/);
+});
+
+test('vision-capable model receives real private image pixels, text-only model receives explicit fallback', async () => {
+  const { default: sharp } = await import('sharp');
+  const materials = new MaterialsService(config);
+  const pixels = await sharp({ create: { width: 20, height: 10, channels: 3, background: '#80aa60' } }).png().toBuffer();
+  const item = await materials.upload('private-photo.png', pixels);
+  config.set('QWEN_SUPPORTS_IMAGES', 'true');
+  try {
+    await service.run({ provider: 'qwen', message: '看看这张图片', context: { materialIds: [item.id] } });
+    const image = requests.at(-1).messages.flatMap(message => Array.isArray(message.content) ? message.content : []).find(part => part.type === 'image_url');
+    assert.match(image.image_url.url, /^data:image\/jpeg;base64,/);
+    assert.equal((await sharp(Buffer.from(image.image_url.url.split(',')[1], 'base64')).metadata()).width, 20);
+  } finally { config.set('QWEN_SUPPORTS_IMAGES', 'false'); }
+  await service.run({ provider: 'deepseek', message: '看看这张图片', context: { materialIds: [item.id] } });
+  assert.ok(requests.at(-1).messages.some(message => textOf(message).includes('图片尚未识别')));
+  assert.ok(!requests.at(-1).messages.flatMap(message => Array.isArray(message.content) ? message.content : []).some(part => part.type === 'image_url'));
+});

@@ -131,3 +131,58 @@ test('vision success provides attributed text and failures preserve the image', 
   assert.match(failed.statusMessage, /识别失败/);
   assert.deepEqual((await service.original(failed.id)).buffer, buffer);
 });
+
+test('PDF preview renders distinct pages, checks bounds and isolates accounts', async t => {
+  const service = await setup(t);
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    ...['First page: the garden.', 'Second page: the family.'].map(text => {
+      const stream = `BT /F1 18 Tf 30 300 Td (${text}) Tj ET`;
+      return `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
+    }),
+  ];
+  let pdf = '%PDF-1.4\n'; const offsets = [0];
+  objects.forEach((object, index) => { offsets.push(Buffer.byteLength(pdf)); pdf += `${index + 1} 0 obj\n${object}\nendobj\n`; });
+  const xref = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n` + offsets.slice(1).map(offset => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  const item = await service.upload('two-pages.pdf', Buffer.from(pdf), 'alice');
+  const first = await service.pdfPage(item.id, 1, 'alice');
+  const second = await service.pdfPage(item.id, 2, 'alice');
+  assert.equal(first.pageCount, 2); assert.equal(second.page, 2);
+  assert.notEqual(first.image, second.image);
+  assert.equal((await sharp(Buffer.from(second.image.split(',')[1], 'base64')).metadata()).width, 1000);
+  for (const page of [0, -1, 1.5, 3, NaN]) await assert.rejects(service.pdfPage(item.id, page, 'alice'));
+  await assert.rejects(service.pdfPage(item.id, 1, 'bob'), /资料不存在/);
+  const text = await service.upload('note.txt', Buffer.from('hello'), 'alice');
+  await assert.rejects(service.pdfPage(text.id, 1, 'alice'), /仅 PDF/);
+});
+
+test('office PDF conversion is reused by model input and page preview; unavailable converter is explicit', async t => {
+  const { readFile, writeFile } = await import('node:fs/promises');
+  const root = await mkdtemp(join(tmpdir(), 'bio-conversion-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const executable = join(root, 'converter'), count = join(root, 'count');
+  const pdf = new URL('./fixtures/letter.pdf', import.meta.url).pathname;
+  const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
+  // Stub the external converter only; exercise real persistence and PDF rendering.
+  await writeFile(executable, `#!/bin/sh\nprintf x >> ${quote(count)}\ncp ${quote(pdf)} "$6/document.pdf"\n`, { mode: 0o700 });
+  const service = new MaterialsService(new ConfigService({ AGENT_DATA_DIR: root, LIBREOFFICE_BIN: executable }));
+  const office = await service.upload('letter.docx', await readFile(new URL('./fixtures/letter.docx', import.meta.url)), 'owner');
+  const converted = await service.modelFile(office.id, 'owner');
+  assert.equal(converted.mimeType, 'application/pdf');
+  assert.equal((await service.pdfPage(office.id, 1, 'owner')).pageCount, 1);
+  assert.equal((await readFile(count, 'utf8')).length, 1);
+  await assert.rejects(service.modelFile(office.id, 'other'), /资料不存在/);
+  const broken = new MaterialsService(new ConfigService({ AGENT_DATA_DIR: root, LIBREOFFICE_BIN: join(root, 'missing') }));
+  const doc = await broken.upload('letter.doc', await readFile(new URL('./fixtures/letter.doc', import.meta.url)), 'owner');
+  await assert.rejects(broken.modelFile(doc.id, 'owner'), /无法转换/);
+  const deck = await service.upload('slides.pptx', Buffer.from('mock office converter input'), 'owner');
+  assert.equal(deck.pageCount, 1); assert.ok(deck.thumbnailUrl);
+  await service.modelFile(deck.id, 'owner');
+  assert.equal((await readFile(count, 'utf8')).length, 2);
+});

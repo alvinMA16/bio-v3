@@ -1,0 +1,15 @@
+<view class="viewer">
+  <view class="stage">
+    <view wx:if="{{loading}}" class="status">正在展开资料…</view>
+    <view wx:elif="{{error}}" class="status">{{error}}<button bindtap="load">重试</button></view>
+    <movable-area wx:elif="{{image}}" class="zoom" scale-area>
+      <movable-view class="sheet" style="width: {{width || '100%'}}{{width ? 'px' : ''}}; height: {{height || '100%'}}{{height ? 'px' : ''}};" direction="all" scale scale-min="1" scale-max="4" scale-value="{{scale}}" x="{{x}}" y="{{y}}" bindscale="onScale" bindtap="tap" animation="{{false}}" out-of-bounds="{{false}}">
+        <image src="{{image}}" mode="aspectFit" bindload="imageLoaded" />
+      </movable-view>
+    </movable-area>
+    <scroll-view wx:else class="text" scroll-y><text selectable>{{text}}</text></scroll-view>
+    <button wx:if="{{image && !loading}}" class="zoom-button" bindtap="zoom">缩放 / 整页</button>
+  </view>
+  <view wx:if="{{count > 1}}" class="pager"><button data-step="-1" bindtap="turn" disabled="{{page === 1 || loading}}">‹</button><text>{{page}} / {{count}}</text><button data-step="1" bindtap="turn" disabled="{{page === count || loading}}">›</button></view>
+  <view class="filebar"><text>{{attachment.title}}</text><button bindtap="toggleFocus">{{focused ? '退出专注' : '专注查看'}}</button></view>
+</view>

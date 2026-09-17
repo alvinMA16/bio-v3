@@ -29,7 +29,7 @@ export async function createModelRuntime(config: ConfigService, cwd: string, req
   modelRuntime.registerProvider(providerId, {
     api: selected === 'gemini' ? 'google-generative-ai' : 'openai-completions', baseUrl,
     models: [{
-      id: modelId, name: modelId, reasoning: selected === 'gemini' || !!profile.thinkingFormat, input: ['text'],
+      id: modelId, name: modelId, reasoning: selected === 'gemini' || !!profile.thinkingFormat, input: config.get<string>(`${profile.prefix}_SUPPORTS_IMAGES`, selected === 'gemini' ? 'true' : 'false') === 'true' ? ['text', 'image'] : ['text'],
       contextWindow: profile.contextWindow, maxTokens: 8192,
       cost: { input: price?.cacheMissInput ?? 0, output: price?.output ?? 0, cacheRead: price?.cacheHitInput ?? 0, cacheWrite: 0 },
       ...(selected === 'gemini' ? {} : { compat: { supportsDeveloperRole: false, supportsReasoningEffort: false, maxTokensField: 'max_tokens' as const, thinkingFormat: profile.thinkingFormat } }),

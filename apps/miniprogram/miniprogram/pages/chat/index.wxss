@@ -137,3 +137,16 @@
 
 .material-selection { font-size: 24rpx; color: #796349; padding: 12rpx; }
 .material-selection button { margin-left: 16rpx; }
+
+.attachment-container { flex: 1; min-height: 0; margin: 0 24rpx; }
+.page--attachment .call-header { padding: 24rpx 36rpx 16rpx; }
+.page--attachment .call-video { width: 128rpx; height: 152rpx; }
+.page--attachment .call-name { font-size: 38rpx; }
+.page--focused .call-header, .page--focused .call-controls { display: none; }
+.focus-status { padding: 24rpx 36rpx; font-size: 24rpx; color: #a9afb9; }
+.page--focused .attachment-container { margin-bottom: env(safe-area-inset-bottom); }
+.page--attachment { color: #424b46; background: #e9ece9; }
+.page--attachment .call-duration, .page--attachment .call-status, .page--attachment .focus-status { color: #65716a; }
+.page--attachment .call-buttons button { color: #42534a; background: #dbe6dfb0; backdrop-filter: blur(14px); }
+.page--attachment .call-buttons .call-end { background: #bb6969; color: #fff; }
+.page--attachment .call-scene { width: 214rpx; height: 462rpx; left: -42rpx; top: -88rpx; }
