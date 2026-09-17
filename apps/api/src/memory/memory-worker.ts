@@ -74,7 +74,12 @@ export class MemoryWorker implements OnModuleInit, OnModuleDestroy {
           this.logger.warn('Memory job failed; inspect authenticated memory status');
         }
         return;
-      } finally { if (locked) await c.query('SELECT pg_advisory_unlock(hashtext($1))', [key]); c.release(); }
+      } finally {
+        let destroy = false;
+        try { if (locked) await c.query('SELECT pg_advisory_unlock(hashtext($1))', [key]); }
+        catch (error) { destroy = true; throw error; }
+        finally { c.release(destroy); }
+      }
     }
   }
   async organize(user: string, callId: string, overview: unknown, messageIds: string[]): Promise<{ batch?: MemoryBatch; usage: unknown; callSummary: CallSummary }> {

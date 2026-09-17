@@ -165,7 +165,10 @@ export class AgentService {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
       unsubscribe?.();
-      try { await archiveQueue; session?.dispose(); await release?.(); }
+      try {
+        try { await archiveQueue; session?.dispose(); }
+        finally { await release?.(); }
+      }
       finally { this.active.delete(conversationId); }
     }
   }

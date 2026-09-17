@@ -1,4 +1,4 @@
-import { Injectable, Optional, UnauthorizedException, NotFoundException, ConflictException, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Optional, UnauthorizedException, NotFoundException, ConflictException, ServiceUnavailableException, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service.js';
 import { ConfigService } from '@nestjs/config';
 import { Pool, type PoolClient } from 'pg';
@@ -9,12 +9,18 @@ import { MEMORY_SCHEMA } from './schema.js';
 import { beijingTime, isCalendarDate, validateCallSummary, type CallSummary } from './call-history.js';
 import { EMPTY_OVERVIEW, validateBatch, type MemoryBatch, type Overview, type MemoryScope } from './memory-types.js';
 
+const POOL_SIZE = 12;
+// At most eight long-lived SDK locks + one worker connection. Keep three
+// connections available for archival, tools, call heartbeats and short queries.
+const MAX_SESSION_CONNECTIONS = 8;
+
 @Injectable()
 export class MemoryService implements OnModuleInit, OnModuleDestroy {
   readonly pool?: Pool;
+  private activeSessions = 0;
   constructor(private readonly config: ConfigService, @Optional() private readonly auth?: AuthService) {
     const url = config.get<string>('MEMORY_DATABASE_URL');
-    if (url) this.pool = new Pool({ connectionString: url, max: 12, connectionTimeoutMillis: 5000 });
+    if (url) this.pool = new Pool({ connectionString: url, max: POOL_SIZE, connectionTimeoutMillis: 5000 });
   }
   get enabled(): boolean { return !!this.pool; }
   async onModuleInit(): Promise<void> {
@@ -156,9 +162,28 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
   }
   /** Database is the durable SDK snapshot; local files are only a namespaced adapter. */
   async acquireSession(user: string, id: string, run: string, directory: string): Promise<() => Promise<void>> {
+    // Reserve before the first await, including callers still acquiring their lock.
+    // Fail fast rather than queueing more model work behind a saturated pool.
+    if (this.activeSessions >= MAX_SESSION_CONNECTIONS) throw new ServiceUnavailableException('服务繁忙，请稍后重试');
+    this.activeSessions++;
+    try {
+      const save = await this.openSession(user, id, run, directory);
+      let saving: Promise<void> | undefined;
+      return () => saving ??= save().finally(() => { this.activeSessions--; });
+    } catch (error) { this.activeSessions--; throw error; }
+  }
+
+  private async openSession(user: string, id: string, run: string, directory: string): Promise<() => Promise<void>> {
     await this.ensureUser(user);
     const c = await this.pool!.connect();
     let locked = false;
+    const unlockAndRelease = async () => {
+      let destroy = false;
+      try { if (locked) await c.query('SELECT pg_advisory_unlock(hashtext($1))', [`session:${id}`]); }
+      catch (error) { destroy = true; throw error; }
+      // Never reuse a client whose session lock may still be held.
+      finally { c.release(destroy); }
+    };
     try {
       locked = (await c.query('SELECT pg_try_advisory_lock(hashtext($1)) AS ok', [`session:${id}`])).rows[0].ok;
       if (!locked) throw new ConflictException('Conversation already running');
@@ -179,9 +204,9 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
             catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
           }
           await c.query('UPDATE bio_memory_sessions SET snapshot=$3 WHERE id=$1 AND user_id=$2', [id, user, snapshot]);
-        } finally { await c.query('SELECT pg_advisory_unlock(hashtext($1))', [`session:${id}`]); c.release(); }
+        } finally { await unlockAndRelease(); }
       };
-    } catch (e) { if (locked) await c.query('SELECT pg_advisory_unlock(hashtext($1))', [`session:${id}`]); c.release(); throw e; }
+    } catch (e) { await unlockAndRelease(); throw e; }
   }
   async assertRun(user: string, id: string): Promise<void> {
     if (!(await this.pool!.query('SELECT 1 FROM bio_memory_runs WHERE user_id=$1 AND id=$2', [user, id])).rowCount) throw new NotFoundException('Run not found');
