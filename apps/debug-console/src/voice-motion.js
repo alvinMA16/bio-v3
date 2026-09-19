@@ -13,10 +13,11 @@ const designs = [
   ['双侧玻璃','04C · 中央留白','文字固定居中，两边各一摞玻璃片，随声音起伏，外侧对齐附件边缘。'],
   ['柔光涟漪','04B+ · 精修对照','主波牵引轻微余波，玻璃随波面倾斜，光泽沿折面流转；保留密度与通栏布局。'],
   ['息光玻璃','04D · 静时收拢','说话时舒展成通栏涟漪；停声后缓缓收成文字后的一点微光，短暂停顿保持连贯。'],
+  ['棱光玻璃','04E · 光的开合','玻璃留在原位，亮光从两端收向中心；说话保留行进波，思考改为从中间向外点亮再回落。'],
 ];
-const designLabels=['01','02','02B','03A','03B','04','04A','04B','04C','04B+','04D'];
+const designLabels=['01','02','02B','03A','03B','04','04A','04B','04C','04B+','04D','04E'];
 const states = { listen: ['正在听你说','轮到你了，慢慢讲','LISTENING'], speak: ['令狸正在说','听一听，也可以打断','SPEAKING'], think: ['令狸在思考','稍等，正在整理思绪','THINKING'] };
-let state = 'listen', selected = 10, source = 'demo', stream, context, analyser, micNode, audioNode, objectUrl, generation = 0, level = 0, gain = 1;
+let state = 'listen', selected = 11, source = 'demo', stream, context, analyser, micNode, audioNode, objectUrl, generation = 0, level = 0, gain = 1;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 $('options').innerHTML = designs.map(([name,tag,description],i) => `<button class="option" data-design="${i}" aria-pressed="${i === selected}"><div class="option-top"><span class="number">${designLabels[i]}</span><h2>${name}</h2><span class="tag">${tag}</span></div><div class="motion-stage"><canvas aria-hidden="true"></canvas><div class="caption"><strong>正在听你说</strong><small>LISTENING</small></div></div><p class="description">${description}</p></button>`).join('');
 const surfaces = [...document.querySelectorAll('.option canvas'), $('phone-motion')].map((canvas,i) => ({canvas, ctx:canvas.getContext('2d'), design:i, w:0,h:0}));

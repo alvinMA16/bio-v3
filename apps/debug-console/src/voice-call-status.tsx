@@ -3,7 +3,7 @@ import './voice-call-status.css';
 
 type Props = { state: 'listen' | 'speak' | 'think' | 'idle'; label: string; getLevel: () => number };
 
-/** Shares the approved 04D renderer with the motion study, loaded only in a call. */
+/** Shares the 04E renderer with the motion study, loaded only in a call. */
 export function VoiceCallStatus(props: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const current = useRef(props);
@@ -37,7 +37,7 @@ export function VoiceCallStatus(props: Props) {
         thinking += ((state === 'think' ? 1 : 0) - thinking) * (1 - Math.exp(-dt / .32));
         renderer.drawGlassStack({ ctx, w: width, h: height }, {
           time: now / 1000, level, bands: [0, 0, 0], state,
-          thinkingMix: thinking, reduced: reduced.matches, index: 10,
+          thinkingMix: thinking, reduced: reduced.matches, index: 11,
         });
       };
       frame = requestAnimationFrame(render);

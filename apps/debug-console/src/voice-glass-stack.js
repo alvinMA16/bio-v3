@@ -1,3 +1,4 @@
+import { GlassLightField } from './glass-light-field.js';
 import { GlassTravelingWave } from './glass-traveling-wave.js';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -28,6 +29,10 @@ function createScene() {
   const geometry=new THREE.BoxGeometry(.055,.92,.92);
   const edgeGeometry=new THREE.EdgesGeometry(geometry);
   const softGeometry=new RoundedBoxGeometry(.055,.92,.92,2,.023);
+  const crystalGeometry=new RoundedBoxGeometry(.065,.92,.92,2,.012);
+  const crystalEdgeBox=new THREE.BoxGeometry(.065,.896,.896);
+  const crystalEdges=new THREE.EdgesGeometry(crystalEdgeBox);
+  crystalEdgeBox.dispose();
   const plates=[];
   for(let i=0;i<40;i++){
     const color=new THREE.Color(colors[Math.round(i/39*(colors.length-1))]);
@@ -39,7 +44,7 @@ function createScene() {
   scene.add(new THREE.HemisphereLight(0xffffff,0xc7d9d6,2.3));
   const key=new THREE.DirectionalLight(0xffffff,4);key.position.set(-3,6,5);scene.add(key);
   const rim=new THREE.DirectionalLight(0xc7ddff,2);rim.position.set(4,1,-4);scene.add(rim);
-  return {renderer,scene,camera,wideCamera,group,plates,geometry,softGeometry,edgeGeometry,environmentTarget,lastTime:-1,lastVariant:-1,travelingWave:new GlassTravelingWave(),crop:[0,960],projected:new THREE.Vector3(),tint:new THREE.Color()};
+  return {renderer,scene,camera,wideCamera,group,plates,geometry,softGeometry,crystalGeometry,crystalEdges,edgeGeometry,lightField:new GlassLightField(),environmentTarget,lastTime:-1,lastVariant:-1,travelingWave:new GlassTravelingWave(),crop:[0,960],projected:new THREE.Vector3(),tint:new THREE.Color()};
 }
 
 export function drawGlassStack(surface,input) {
@@ -63,6 +68,7 @@ export function drawGlassStack(surface,input) {
       openness+=(target-openness)*(1-Math.exp(-dt/(target>openness?.20:.85)));
       restTime=input.time;
     }
+    if(variant===6)s.lightField.update(input.time,voice*(1-thinking),thinking);
     const unfold=input.reduced?.65:openness;
     const count=variant===0?15:(variant===2||variant>=4)?40:20;
     for(let i=0;i<s.plates.length;i++){
@@ -100,6 +106,11 @@ export function drawGlassStack(surface,input) {
         // gently instead of simply scaling every face about a rigid baseline.
         wave=(main-echo)*.11;
       }
+      if(variant===6){
+        response*=1-thinking; slope*=1-thinking; echo*=1-thinking;
+        scale=.36+response*.82;
+        wave*=1-thinking;
+      }
       if(variant===3){
         const side=i<10?-1:1, j=i%10;
         x=side*(1.72+j*.145);
@@ -110,7 +121,13 @@ export function drawGlassStack(surface,input) {
       plate.scale.set(1,scale,scale);
       plate.rotation.set(.10+response*.06*Math.sin(t*2-u*5),.05*Math.sin(u*3+t*.45)*response,.025+traveling*response*.11);
       plate.geometry=variant>=4?s.softGeometry:s.geometry;
-      plate.children[0].visible=variant<4;
+      plate.children[0].visible=variant<4||variant===6;
+      plate.children[0].geometry=variant===6?s.crystalEdges:s.edgeGeometry;
+      plate.children[0].material.color.setHex(variant===6?0x87a8af:0xf3ffff);
+      // Reset shared materials so the saved studies remain visually unchanged.
+      plate.material.roughness=.08;plate.material.transmission=.32;
+      plate.material.thickness=.14;plate.material.ior=1.46;
+      plate.material.emissive.setHex(0x000000);plate.material.emissiveIntensity=0;
       plate.material.envMapIntensity=variant>=4?1.25+response*.5:1.45;
       if(variant>=4){
         plate.rotation.set(.10+slope*.17,slope*.18,.025+slope*.24);
@@ -140,6 +157,21 @@ export function drawGlassStack(surface,input) {
         plate.material.color.setHex(colors[lo]).lerp(s.tint.setHex(colors[hi]),position-lo);
         plate.material.attenuationColor.copy(plate.material.color);
       }
+      if(variant===6){
+        const light=s.lightField.at(u,thinking,input.reduced);
+        plate.geometry=s.crystalGeometry;
+        plate.material.color.lerp(s.tint.setHex(0xb7c8c5),.78*(1-light));
+        plate.material.attenuationColor.copy(plate.material.color);
+        plate.material.opacity=.04+.46*light;
+        plate.material.roughness=.04;plate.material.transmission=.36;
+        plate.material.thickness=.24;plate.material.ior=1.5;
+        plate.material.envMapIntensity=.7+light*1.3;
+        plate.material.emissive.copy(plate.material.color);
+        plate.material.emissiveIntensity=light*.025;
+        plate.children[0].material.opacity=.006+.075*light;
+        // Slight bevels and a clear, lit rim reveal each face without a glow blur.
+        plate.rotation.y=.12+slope*.14;
+      }
     }
 
     s.group.rotation.z=0;
@@ -156,7 +188,7 @@ export function drawGlassStack(surface,input) {
       }
       s.crop=[Math.max(0,lo),Math.min(960,hi)];
     }
-    if(variant===5){
+    if(variant>=5){
       s.projected.set(-2.85,0,0).project(camera);
       const left=(s.projected.x+1)*480;
       s.projected.set(2.85,0,0).project(camera);
@@ -177,5 +209,5 @@ export function disposeGlassStack(){
   if(!sceneState)return;
   const s=sceneState;
   s.plates.forEach(p=>{p.material.dispose();p.children[0].material.dispose();});
-  s.geometry.dispose();s.softGeometry.dispose();s.edgeGeometry.dispose();s.environmentTarget.dispose();s.renderer.dispose();sceneState=undefined;restTime=-1;openness=0;lastSound=-10;
+  s.geometry.dispose();s.softGeometry.dispose();s.crystalGeometry.dispose();s.crystalEdges.dispose();s.edgeGeometry.dispose();s.environmentTarget.dispose();s.renderer.dispose();sceneState=undefined;restTime=-1;openness=0;lastSound=-10;
 }

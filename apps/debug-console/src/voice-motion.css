@@ -38,3 +38,5 @@
 .option:nth-child(8){order:-6}.option:nth-child(10){order:-5}
 
 .option:nth-child(10){order:-8}.option:nth-child(11){order:-7}
+
+.option:nth-child(11){order:-10}.option:nth-child(12){order:-9}
