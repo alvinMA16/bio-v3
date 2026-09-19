@@ -13,6 +13,7 @@
   See `infra/oss/README.md`; never disable the bucket's public-access block.
 - The user has supplied the bio2 host repeatedly. Consult this file and
   `infra/production/README.md` before asking for its location again.
+- **Host storage**: the 100 GiB `/dev/nvme1n1` disk is initialized and mounted at `/data`. `/data/docker` and `/data/containerd` are bind-mounted to `/var/lib/docker` and `/var/lib/containerd`; both services require these mounts. This disk is in active use, not an empty spare. See `docs/storage-assessment-2026-09-17.md`.
 - Keep credentials out of output and Git. Read the deployment README before
   changing production; do not overwrite bio2 while deploying bio-v3.
 
