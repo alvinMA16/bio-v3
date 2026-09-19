@@ -9,7 +9,9 @@
     "dev:api": "pnpm --filter @bio/contracts build && pnpm --filter @bio/api dev",
     "dev:web": "pnpm --filter @bio/contracts build && pnpm --filter @bio/debug-console dev",
     "typecheck": "pnpm --filter @bio/contracts build && pnpm -r typecheck",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test && pnpm test:deploy",
+    "test:deploy": "node --test infra/production/test/*.test.mjs",
+    "test:release": "node infra/production/test-release.mjs"
   },
   "engines": {
     "node": ">=22.19.0"

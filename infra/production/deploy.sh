@@ -20,11 +20,14 @@ fi
 candidate=$base/shared/compose-$sha.env
 sed "s/^BIO_RELEASE=.*/BIO_RELEASE=$sha/" "$base/shared/compose.env" > "$candidate"
 compose=(docker compose --env-file "$candidate" -f "$release/infra/production/compose.yml")
+build_started=$SECONDS
 "${compose[@]}" build api
-# Test the exact image without production credentials or network access.
-docker run --rm --network none --user root --workdir /app "bio-v3:$sha" \
-    sh -c 'pnpm typecheck && pnpm test'
+printf 'Image build completed in %s seconds\n' "$((SECONDS-build_started))"
+# Test the exact image on an isolated network with a disposable database.
+checks_started=$SECONDS
+bash "$release/infra/production/test-image.sh" "bio-v3:$sha"
 docker run --rm --network none "bio-v3:$sha" node /app/infra/production/runtime-smoke.mjs
+printf 'Release checks completed in %s seconds\n' "$((SECONDS-checks_started))"
 mkdir -p "$base/web/$sha"
 chmod 755 "$base/web" "$base/web/$sha"
 extract=bio-v3-extract-$sha

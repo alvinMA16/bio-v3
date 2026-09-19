@@ -11,7 +11,8 @@ let exited = false;
 child.once('exit', () => { exited = true; });
 try {
   let healthy = false;
-  for (let attempt = 0; attempt < 30; attempt++) {
+  // Allow cold starts under CPU pressure; ready services still pass immediately.
+  for (let attempt = 0; attempt < 150; attempt++) {
     if (exited) throw new Error('Production process exited before becoming healthy');
     try {
       const response = await fetch('http://127.0.0.1:3000/api/v1/health', { signal: AbortSignal.timeout(1000) });
