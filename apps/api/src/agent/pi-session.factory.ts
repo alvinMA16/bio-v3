@@ -18,6 +18,7 @@ import { PanelWorkspace } from './panel-workspace.js';
 import { AgentStorage } from './agent-storage.js';
 import { createPresentationTools } from './presentation-tools.js';
 import { createModelRuntime } from '../models/model-provider.js';
+import { geminiSearch, GEMINI_SEARCH_RULES } from '../models/gemini-search.js';
 import { buildRuntimeContext, buildSystemPrompt, createContextExtension, DEFAULT_PERSONA } from './agent-context.js';
 import type { AgentContextSnapshot, ModelProvider } from '@bio/contracts';
 
@@ -74,6 +75,7 @@ export class PiSessionFactory {
     emit({ type: 'panel.state.updated', panel: workspace.state() });
     const { modelRuntime, model, thinkingLevel } = await createModelRuntime(this.config, cwd, provider);
     const nativeGemini = model.api === 'google-generative-ai';
+    const searchEnabled = nativeGemini && this.config.get<string>('GEMINI_GOOGLE_SEARCH_ENABLED', 'true') === 'true';
     this.nativeFiles ??= new GeminiFiles(this.config, this.materials);
     // Deletion must not break chat; transient provider/storage failures still fail closed.
     if (nativeGemini) for (const item of nativeAttachments) {
@@ -93,9 +95,10 @@ export class PiSessionFactory {
       cwd, agentDir: cwd, settingsManager,
       noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
       systemPromptOverride: () => buildSystemPrompt(persona)
+        + (searchEnabled ? GEMINI_SEARCH_RULES : '')
         + `\n当前能力：内容工具可用；长期记忆${memoryContext ? '已启用，依据下方概要与只读工具检索' : '未启用，没有跨通话检索工具；可以使用本通可见消息，但不能声称保存或记得上一通内容'}。`
         + (memoryContext ? `\n${MEMORY_RULES}\n${CALL_HISTORY_RULES}\n${memoryContext}` : ''),
-      extensionFactories: [materialHistoryContext(nativeAttachments, refreshAttachments), createContextExtension(() => {
+      extensionFactories: [...(searchEnabled ? [geminiSearch] : []), materialHistoryContext(nativeAttachments, refreshAttachments), createContextExtension(() => {
         const view = workspace.context();
         if (nativeGemini && view.attachment && nativeAttachments.some(item => item.attachmentId === view.attachment!.id)) {
           view.attachment.text = undefined;

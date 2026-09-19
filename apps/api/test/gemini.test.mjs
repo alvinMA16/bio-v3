@@ -21,8 +21,8 @@ test('Gemini is accepted by request validation and requires its own key', async 
   await assert.rejects(createModelRuntime(new ConfigService({ GEMINI_API_KEY: ' ' }), tmpdir(), 'gemini'), /GEMINI_API_KEY is not configured/);
 });
 
-for (const [modelId, thinkingLevel] of [['gemini-3.8-flash', 'LOW'], ['gemini-3-flash-preview', 'MINIMAL']]) {
-test(`${modelId} native streaming uses supported thinking and executes tools`, { timeout: 20000 }, async () => {
+for (const [modelId, thinkingLevel, searchEnabled] of [['gemini-3.8-flash', 'LOW', true], ['gemini-3-flash-preview', 'MINIMAL', true], ['gemini-3.8-flash', 'LOW', false]]) {
+test(`${modelId} native streaming executes tools with search=${searchEnabled}`, { timeout: 20000 }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'bio-gemini-'));
   const requests = [];
   const mock = createServer(async (req, res) => {
@@ -39,7 +39,7 @@ test(`${modelId} native streaming uses supported thinking and executes tools`, {
   try {
     mock.listen(0, '127.0.0.1');
     await once(mock, 'listening');
-    const config = new ConfigService({ GEMINI_MODEL: modelId, GEMINI_API_KEY: 'gemini-local-test-key', GEMINI_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1beta`, AGENT_DATA_DIR: root });
+    const config = new ConfigService({ GEMINI_MODEL: modelId, ...(!searchEnabled ? { GEMINI_GOOGLE_SEARCH_ENABLED: 'false' } : {}), GEMINI_API_KEY: 'gemini-local-test-key', GEMINI_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1beta`, AGENT_DATA_DIR: root });
     const factory = new PiSessionFactory(config, new AgentStorage(config), {});
     session = await factory.create(randomUUID(), '请使用工具读取内容。', () => {});
     await session.prompt('请读取内容');
@@ -49,6 +49,10 @@ test(`${modelId} native streaming uses supported thinking and executes tools`, {
     assert.equal(requests[0].headers['x-goog-api-key'], 'gemini-local-test-key');
     assert.ok(requests[0].body.systemInstruction);
     assert.ok(requests[0].body.tools[0].functionDeclarations.some(tool => tool.name === 'get_content'));
+    for (const request of requests) {
+      assert.equal(request.body.tools.filter(tool => tool.googleSearch).length, searchEnabled ? 1 : 0);
+      assert.equal(request.body.toolConfig?.includeServerSideToolInvocations, searchEnabled ? true : undefined);
+    }
     assert.ok(requests[1].body.contents.some(content => content.parts.some(part => part.functionResponse?.name === 'get_content')));
     const reply = session.messages.at(-1);
     assert.equal(reply.role, 'assistant');

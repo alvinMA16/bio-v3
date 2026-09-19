@@ -90,6 +90,7 @@ API 集成测试使用真实 Pi SDK 和本地模拟 OpenAI 兼容服务，不需
 - `.env` 设置 `MODEL_PROVIDER=qwen` 并填写 `QWEN_API_KEY`，使用 `qwen3.8-flash`。
 - `MODEL_PROVIDER=deepseek` 使用原有 `DEEPSEEK_*` 配置。
 - `MODEL_PROVIDER=gemini` 配合 `GEMINI_API_KEY` 使用 Gemini 原生 API，默认模型为 `gemini-3.8-flash`；可通过 `GEMINI_MODEL` 指定其他支持文本和工具调用的型号。`GEMINI_BASE_URL` 默认是 `https://generativelanguage.googleapis.com/v1beta`，可配置兼容原生协议的网关地址（包含 API 版本路径）。服务端需要能访问该地址；密钥只配置在服务端。调试台也可单独选择 Gemini。
+- Gemini 对话默认启用内置 Google Search，由模型按需联网查询，与内容和记忆工具同时可用。设置 `GEMINI_GOOGLE_SEARCH_ENABLED=false` 可关闭；切换到不支持组合工具的旧型号或网关时应关闭。搜索不会用于后台记忆整理。Gemini 3 按实际执行的搜索查询单独计费，现有 token 费用统计不包含该项。当前 Pi 适配器不暴露 Google grounding 元数据，因此暂不展示结构化来源和 Google 搜索建议卡片。参考 [Google 官方搜索文档](https://ai.google.dev/gemini-api/docs/google-search)。
 - `MODEL_PROVIDER=openai-compatible` 配合 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL` 接入其他兼容服务。
 - HTTP 请求可添加 `provider` 覆盖服务端默认值；省略时每次使用服务端默认配置。配置变更后重启 API。
 
