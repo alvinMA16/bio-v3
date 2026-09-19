@@ -36,3 +36,35 @@ test('brief pauses retain illumination and reduced motion is time-independent', 
   assert.equal(light.at(.25,1,true),still);
   assert.equal(light.at(.05),0, 'background gaps do not replay stale speech');
 });
+
+
+test('idle clears every plate including the centre, then speech lights it again', () => {
+  const light = new GlassLightField();
+  const empty = () => {
+    for (const u of [.5, ...Array.from({ length: 40 }, (_, i) => i / 39)]) {
+      assert.equal(light.at(u), 0);
+      assert.equal(light.at(u, 0, true), 0, 'reduced motion also clears silence');
+    }
+  };
+  light.update(0, 0, 0); empty();
+  for (let i=1;i<120;i++) light.update(i/60,.5,0);
+  assert.ok(light.at(.5) > .9);
+  for (let i=120;i<420;i++) light.update(i/60,0,0);
+  empty();
+  for (let i=420;i<450;i++) light.update(i/60,.5,0);
+  assert.ok(light.at(.5) > .9);
+});
+
+test('thinking starts empty and clears the centre at the end of every cycle', () => {
+  const light = new GlassLightField();
+  light.update(0,0,1);
+  assert.equal(light.at(.5,1),0);
+  for(let i=1;i<=456;i++) {
+    light.update(i/60,0,1);
+    if(i===114 || i===342) assert.ok(light.at(.05,1)>.9);
+    if(i===228 || i===456) {
+      for(let j=0;j<40;j++) assert.equal(light.at(j/39,1),0);
+      assert.equal(light.at(.5,1),0);
+    }
+  }
+});

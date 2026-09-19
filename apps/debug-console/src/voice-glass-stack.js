@@ -68,7 +68,7 @@ export function drawGlassStack(surface,input) {
       openness+=(target-openness)*(1-Math.exp(-dt/(target>openness?.20:.85)));
       restTime=input.time;
     }
-    if(variant===6)s.lightField.update(input.time,voice*(1-thinking),thinking);
+    if(variant===6)s.lightField.update(input.time,input.level*(1-thinking),thinking);
     const unfold=input.reduced?.65:openness;
     const count=variant===0?15:(variant===2||variant>=4)?40:20;
     for(let i=0;i<s.plates.length;i++){
@@ -159,16 +159,17 @@ export function drawGlassStack(surface,input) {
       }
       if(variant===6){
         const light=s.lightField.at(u,thinking,input.reduced);
+        plate.visible=light>0;
         plate.geometry=s.crystalGeometry;
         plate.material.color.lerp(s.tint.setHex(0xb7c8c5),.78*(1-light));
         plate.material.attenuationColor.copy(plate.material.color);
-        plate.material.opacity=.04+.46*light;
+        plate.material.opacity=.50*light;
         plate.material.roughness=.04;plate.material.transmission=.36;
         plate.material.thickness=.24;plate.material.ior=1.5;
         plate.material.envMapIntensity=.7+light*1.3;
         plate.material.emissive.copy(plate.material.color);
         plate.material.emissiveIntensity=light*.025;
-        plate.children[0].material.opacity=.006+.075*light;
+        plate.children[0].material.opacity=.081*light;
         // Slight bevels and a clear, lit rim reveal each face without a glow blur.
         plate.rotation.y=.12+slope*.14;
       }
