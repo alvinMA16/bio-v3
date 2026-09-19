@@ -8,5 +8,4 @@
     <scroll-view wx:else class="text" scroll-y bindtap="tap"><text selectable>{{text}}</text></scroll-view>
   </view>
   <view wx:if="{{!originalStatus && count > 1}}" class="pager"><button data-step="-1" bindtap="turn" disabled="{{page === 1 || loading}}">‹</button><text>{{page}} / {{count}}</text><button data-step="1" bindtap="turn" disabled="{{page === count || loading}}">›</button></view>
-  <view class="filebar"><text>{{attachment.title}}</text></view>
 </view>

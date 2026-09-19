@@ -39,6 +39,7 @@ function environment(t, pendingMic, moduleError) {
   class Context {
     currentTime = 0; destination = {}; audioWorklet = { async addModule() { if (moduleError) throw moduleError; } };
     async resume() {} async close() {}
+    createAnalyser() { return { amplitude: 0, connect(destination) { this.destination = destination; }, disconnect() {}, getFloatTimeDomainData(samples) { samples.fill(this.amplitude); } }; }
     createGain() { const node = { gain: {}, connect() {}, disconnect() {} }; gains.push(node); return node; }
     createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
     createBuffer(_channels, length, rate) { return { getChannelData: () => new Float32Array(length), duration: length / rate }; }
@@ -174,14 +175,15 @@ test('speaker mute silences current and future audio without stopping playback o
   await f.client.start(); const ws = f.sockets[0]; ws.onopen(); const id = f.starts[0];
   const audio = segmentId => ws.onmessage({ data: JSON.stringify({ type: 'audio', turnId: id, sampleRate: 16000, data: 'AAA=', text: '你好', segmentId }) });
   audio(1);
-  const output = f.nodes[0].destination;
+  const analyser = f.nodes[0].destination;
+  const output = analyser.destination;
   assert.equal(output.gain.value, 1);
   f.client.setSpeaker(false);
   assert.equal(output.gain.value, 0);
   assert.equal(f.stopped(), 0);
   assert.equal(f.nodes[0].stopped, undefined);
   audio(2);
-  assert.equal(f.nodes[1].destination, output);
+  assert.equal(f.nodes[1].destination, analyser);
   f.client.setSpeaker(true);
   assert.equal(output.gain.value, 1);
 });
@@ -264,4 +266,28 @@ test('recoverable recognition failure pauses microphone instead of looping and a
   ws.onmessage({ data: JSON.stringify({ type: 'done', turnId }) });
   t.mock.timers.tick(2000); assert.equal(f.starts.length, 1); assert.equal(f.ended(), 0);
   await f.client.setMicrophone(true); assert.equal(f.starts.length, 2);
+});
+
+
+test('motion level follows accepted microphone PCM and clears when listening stops', async t => {
+  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen();
+  const turnId = f.starts[0];
+  ws.onmessage({ data: JSON.stringify({ type: 'state', state: 'listening', turnId }) });
+  const pcm = value => f.captures[0].port.onmessage({ data: new Int16Array(320).fill(value).buffer });
+  pcm(1000); const quiet = f.client.getMotionLevel();
+  pcm(4000); assert.ok(f.client.getMotionLevel() > quiet * 3);
+  pcm(0); assert.equal(f.client.getMotionLevel(), 0);
+  pcm(4000); await f.client.setMicrophone(false); assert.equal(f.client.getMotionLevel(), 0);
+});
+
+test('motion samples playback as it sounds and clears on mute, interruption and close', async t => {
+  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen();
+  ws.onmessage({ data: JSON.stringify({ type: 'audio', turnId: f.starts[0], sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1 }) });
+  const analyser = f.nodes[0].destination;
+  assert.equal(f.client.getMotionLevel(), 0, 'queued silent audio does not animate');
+  analyser.amplitude = .1; assert.ok(f.client.getMotionLevel() > .4);
+  f.client.setSpeaker(false); assert.equal(f.client.getMotionLevel(), 0);
+  f.client.setSpeaker(true); assert.ok(f.client.getMotionLevel() > .4);
+  f.client.interrupt(); assert.equal(f.client.getMotionLevel(), 0);
+  f.client.close(); assert.equal(f.client.getMotionLevel(), 0);
 });

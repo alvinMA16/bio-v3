@@ -51,6 +51,5 @@ export function AttachmentViewer({ attachment, focused, onFocus, onPage }: { att
       }} /> : <pre>{material?.text || '暂无预览内容'}</pre>}
     </div>
     {!originalStatus && count > 1 && <nav className="attachment-pages" aria-label="文件翻页"><button aria-label="上一页" disabled={page === 1 || loading} onClick={() => setPage(value => value - 1)}>‹</button><span aria-live="polite">{page} / {count}</span><button aria-label="下一页" disabled={page === count || loading} onClick={() => setPage(value => value + 1)}>›</button></nav>}
-    <div className="attachment-filebar"><span title={attachment.title}>{attachment.title}</span></div>
   </section>;
 }

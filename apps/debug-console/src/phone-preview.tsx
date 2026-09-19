@@ -1,3 +1,4 @@
+import { VoiceCallStatus } from './voice-call-status';
 import { AttachmentViewer } from './attachment-viewer';
 import { MaterialFolder } from './material-folder';
 import { uiAsset } from './ui-asset';
@@ -20,12 +21,13 @@ interface Manifest {
   animations: Animation[];
 }
 
-export function PhonePreview({ attachment, onAttachmentPage, children, subtitle, activity, running, microphone, callOpen, callStartedAt, status, mode, startDisabled, onStart, speakerEnabled, onSpeakerToggle, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
+export function PhonePreview({ attachment, onAttachmentPage, children, subtitle, activity, running, microphone, callOpen, callStartedAt, status, motionState, getMotionLevel, mode, startDisabled, onStart, speakerEnabled, onSpeakerToggle, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
   attachment?: PanelAttachment | undefined; onAttachmentPage?: ((materialId: string, page: number) => void) | undefined;
   onMaterialChat: (item: Material) => void;
   receipt: SessionReceipt | null; receiptVisible: boolean; onReceiptClose: () => void;
   children: ReactNode; subtitle: string; activity: FoxActivity; running: boolean; microphone?: ReactNode;
   callOpen: boolean; callStartedAt: number | null; status: string; mode: 'conversation' | 'attachment' | 'editor';
+  motionState: 'listen' | 'speak' | 'think' | 'idle'; getMotionLevel: () => number;
   startDisabled: boolean; onStart: () => void; speakerEnabled: boolean; onSpeakerToggle: () => void; onEnd: () => void;
 }) {
   const [focused, setFocused] = useState(false);
@@ -137,7 +139,7 @@ export function PhonePreview({ attachment, onAttachmentPage, children, subtitle,
             <p>{subtitle || (running && phase !== 'listening' ? '让我想一想…' : '我在这里，慢慢讲。')}</p>
           </div> : <div className="phone-panel-scroll">{mode === 'editor' && <p className="document-progress" role="status">{running ? '正在整理文稿，完成后会保存到文稿集…' : '本轮已结束；已写入的草稿可在文稿集中查看。若正文为空，说明尚未生成成功。'}</p>}{children}</div>}
         </section>
-        <p className="phone-call-status" role="status">{status || (running ? speaking ? '正在回应' : '正在思考' : '等待连接')}</p>
+        <VoiceCallStatus state={motionState} getLevel={getMotionLevel} label={status || (running ? speaking ? '正在回应' : '正在思考' : '等待连接')} />
         <footer className="phone-call-controls" aria-label="通话控制">
           <div className="phone-call-control">{microphone}<span>麦克风</span></div>
           <div className="phone-call-control"><button type="button" className="phone-control-button phone-control-button--end" aria-label="结束通话" onClick={onEnd}>

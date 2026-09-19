@@ -8,7 +8,5 @@
 button { margin: 0; padding: 0 24rpx; border: 0; background: transparent; color: inherit; line-height: 88rpx; }
 button::after { border: 0; }
 button[disabled] { background: transparent; color: #7e8589; }
-.filebar { flex: 0 0 88rpx; display: flex; align-items: center; gap: 12rpx; font-size: 24rpx; }
-.filebar text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .7; }
 .focus-back { align-self: flex-start; flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 88rpx; height: 88rpx; }
 .back-chevron { width: 18rpx; height: 18rpx; border-left: 4rpx solid currentColor; border-bottom: 4rpx solid currentColor; transform: rotate(45deg); }

@@ -7,8 +7,6 @@
 .attachment-pages button { font-size: 26px; }
 .attachment-pages button:disabled { opacity: .3; }
 .attachment-pages span { font-size: 12px; font-variant-numeric: tabular-nums; }
-.attachment-filebar { display: flex; align-items: center; gap: 8px; flex: 0 0 44px; font-size: 12px; }
-.attachment-filebar > span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .75; }
 .phone-screen.phone-screen--attachment .phone-call-header { padding: 14px 18px 8px; }
 .phone-screen.phone-screen--attachment .phone-video { flex-basis: 64px; width: 64px; height: 76px; }
 .phone-screen.phone-screen--attachment .phone-call-header h2 { font-size: 19px; }

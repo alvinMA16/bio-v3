@@ -27,6 +27,10 @@ export class BrowserVoice {
   private source?: MediaStreamAudioSourceNode;
   private muted?: GainNode;
   private output?: GainNode;
+  private playbackAnalyser?: AnalyserNode;
+  private playbackSamples = new Float32Array(512);
+  private inputAmplitude = 0;
+  private inputMeasuredAt = 0;
   private speakerEnabled = true;
   private sources = new Set<AudioBufferSourceNode>();
   private timers = new Set<ReturnType<typeof setTimeout>>();
@@ -72,6 +76,9 @@ export class BrowserVoice {
       this.output = this.context.createGain();
       this.output.gain.value = this.speakerEnabled ? 1 : 0;
       this.output.connect(this.context.destination);
+      this.playbackAnalyser = this.context.createAnalyser();
+      this.playbackAnalyser.fftSize = 512;
+      this.playbackAnalyser.connect(this.output);
       await this.context.resume();
       if (this.closed) return;
       const generation = this.micGeneration;
@@ -104,6 +111,8 @@ export class BrowserVoice {
         let energy = 0;
         for (const sample of samples) energy += (sample / 32768) ** 2;
         const rms = samples.length ? Math.sqrt(energy / samples.length) : 0;
+        this.inputAmplitude = rms < .008 ? 0 : Math.min(1, rms * 5);
+        this.inputMeasuredAt = performance.now();
         this.speechSignal.update(rms, samples.length / 16);
         this.callbacks.inputLevel?.(rms < 0.008 ? 0 : Math.min(4, Math.ceil(rms * 24)));
         ws.send(event.data as ArrayBuffer);
@@ -258,6 +267,16 @@ export class BrowserVoice {
     this.callbacks.listening?.(value);
     this.listening = value; this.capture?.port.postMessage(value ? 'start' : 'stop');
   }
+  /** Sample the currently audible PCM, not queued audio or a synthetic pulse. */
+  getMotionLevel(): number {
+    if (this.closed) return 0;
+    if (this.sources.size && this.playbackAnalyser && this.speakerEnabled) {
+      this.playbackAnalyser.getFloatTimeDomainData(this.playbackSamples);
+      const rms = Math.sqrt(this.playbackSamples.reduce((sum, value) => sum + value * value, 0) / this.playbackSamples.length);
+      return Math.min(1, Math.max(0, rms - .005) * 5);
+    }
+    return this.listening && performance.now() - this.inputMeasuredAt < 250 ? this.inputAmplitude : 0;
+  }
   setSpeaker(enabled: boolean): void {
     this.speakerEnabled = enabled;
     if (this.output) this.output.gain.value = enabled ? 1 : 0;
@@ -277,7 +296,7 @@ export class BrowserVoice {
     this.receivedSamples += bytes.length / 2;
     const endSample = event.endSample ?? this.receivedSamples;
     this.nextTime = start + buffer.duration;
-    const source = context.createBufferSource(); source.buffer = buffer; source.connect(this.output!);
+    const source = context.createBufferSource(); source.buffer = buffer; source.connect(this.playbackAnalyser!);
     this.sources.add(source);
     const turnId = this.turnId;
     const timer = setTimeout(() => {
@@ -324,6 +343,7 @@ export class BrowserVoice {
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.closed = true; ++this.micGeneration; this.callbacks.microphone?.(false); this.setListening(false); this.stopAudio();
     this.capture?.disconnect(); this.source?.disconnect(); this.muted?.disconnect();
+    this.playbackAnalyser?.disconnect();
     this.output?.disconnect();
     this.stream?.getTracks().forEach(track => track.stop());
     this.socket?.close(1000, hangup ? 'user_hangup' : reason); void this.context?.close().catch(() => undefined);
