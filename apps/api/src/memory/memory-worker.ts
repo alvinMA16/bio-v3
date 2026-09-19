@@ -48,8 +48,13 @@ export class MemoryWorker implements OnModuleInit, OnModuleDestroy {
   async tick(): Promise<void> {
     await this.memory.expireCalls();
     const pool = this.memory.pool!;
-    const candidates = (await pool.query(`SELECT user_id FROM bio_memory_jobs WHERE status IN ('pending','running')
-      AND available_at<=now() GROUP BY user_id ORDER BY min(created_at) LIMIT 20`)).rows;
+    // Filter eligibility only after finding each user's oldest unfinished job.
+    // Failed or delayed heads block their own queue, not the candidate window.
+    const candidates = (await pool.query(`SELECT user_id FROM (
+      SELECT DISTINCT ON (user_id) user_id,status,available_at,created_at,call_id
+      FROM bio_memory_jobs WHERE status<>'done' ORDER BY user_id,created_at,call_id
+    ) heads WHERE status IN ('pending','running') AND available_at<=now()
+      ORDER BY created_at,call_id LIMIT 20`)).rows;
     for (const candidate of candidates) {
       const c = await pool.connect();
       const key = `memory-worker:${candidate.user_id}`;
