@@ -1,3 +1,4 @@
+import { SlideToEnd } from './slide-to-end';
 import { VoiceCallStatus } from './voice-call-status';
 import { AttachmentViewer } from './attachment-viewer';
 import { MaterialFolder } from './material-folder';
@@ -95,13 +96,14 @@ export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, c
   const artwork = <>
       {manifest && <>
         <div className="phone-art phone-art--background" style={{ backgroundImage: `url(${manifest.layers.environment.src})` }} />
-        {manifest.animations.map(sheet => <img key={sheet.id} src={sheet.src} alt=""
+        <div className="phone-art-actors">{manifest.animations.map(sheet => <img key={sheet.id} src={sheet.src} alt=""
           onLoad={() => setAnimationState(frameGate.current.loaded(sheet.id as FoxActionId))}
           style={{ position: 'absolute', maxWidth: 'none', pointerEvents: 'none', zIndex: 1,
             width: `${sheet.columns * 100}%`, height: `${sheet.rows * 100}%`,
             left: `${sheet.id === animation?.id ? -column * 100 : 0}%`, top: `${sheet.id === animation?.id ? -row * 100 : 0}%`,
             visibility: animationState && sheet.id === animation?.id ? 'visible' : 'hidden',
           }} />)}
+        </div>
         <div className="phone-art phone-art--board" style={{ backgroundImage: `url(${manifest.layers.innerPanel.src})` }} />
       </>}
       {!manifest && <div className="phone-art-fallback">令狸<span>{assetError ? '场景素材加载失败' : '正在加载场景…'}</span></div>}
@@ -129,28 +131,21 @@ export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, c
       </> : <>
         {dialing ? <section className="phone-dialing" aria-label="呼叫令狸" aria-busy={!callFailed}>
           <div className="phone-video"><div className="phone-video-scene">{artwork}</div></div>
-          <h2>令狸</h2>
           <p role="status">{callFailed ? '暂时未能接通' : '正在呼叫，等待接通…'}</p>
           <small>{callFailed ? status : status === '正在申请麦克风权限' ? '请允许使用麦克风，以便与令狸通话' : '接通后就可以开始聊了'}</small>
           {callFailed && <button type="button" className="phone-redial" disabled={startDisabled} onClick={onStart}>重新呼叫</button>}
         </section> : <>
-          {mode === 'conversation' && <header className="phone-call-header">
-            <div className="phone-video" role="img" aria-label="令狸"><div className="phone-video-scene">{artwork}</div></div><h2>令狸</h2>
-          </header>}
+          {mode === 'conversation' && <div className="phone-conversation-scene" role="img" aria-label="令狸在书房里">{artwork}</div>}
           <section className={`phone-content-panel ${mode !== 'conversation' ? 'phone-content-panel--document' : ''}`} aria-label={mode === 'conversation' ? '对话内容' : mode === 'attachment' ? '附件内容' : '编辑内容'}>
             {mode === 'attachment' && attachment ? <AttachmentViewer key={attachment.id} attachment={attachment} onPage={onAttachmentPage} /> : mode === 'conversation' ? <div className="phone-panel-scroll phone-dialogue" ref={subtitleRef}>
               <p>{subtitle || (running && phase !== 'listening' ? '让我想一想…' : '我在这里，慢慢讲。')}</p>
             </div> : <div className="phone-panel-scroll">{children}</div>}
           </section>
         </>}
+        {!dialing && <VoiceCallStatus state={motionState} getLevel={getMotionLevel} label="我在听" />}
         <footer className="phone-call-controls" aria-label="通话控制">
-          <div className="document-call-state">
-            {dialing ? <span role="status">{callFailed ? '未接通' : '正在呼叫令狸…'}</span> : <VoiceCallStatus state={motionState} getLevel={getMotionLevel} label="我在听" />}
-            <small>{dialing ? callFailed ? '可重新呼叫' : '等待接通' : callDuration}</small>
-          </div>
-          <button type="button" className="phone-control-button phone-control-button--end" aria-label={dialing ? '取消呼叫' : '结束通话'} onClick={onEnd}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15v-4c5-5 13-5 18 0v4l-5-1v-3a14 14 0 0 0-8 0v3Z" /></svg>
-          </button>
+          <div className="document-call-state"><span>令狸</span><small>{dialing ? callFailed ? '未接通' : '等待接通' : callDuration}</small></div>
+          <SlideToEnd key={`${mode}:${dialing}`} dialing={dialing} onEnd={onEnd} />
         </footer>
       </>}
       {receiptVisible && receipt && !callOpen && <ReceiptPrinter key={receipt.id} receipt={receipt} onClose={onReceiptClose} />}
