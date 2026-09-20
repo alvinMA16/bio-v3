@@ -7,6 +7,8 @@ node_modules
 .bio-agent
 .deploy-private
 .bench-private
-bench
+bench/**
+!bench/voice/
+!bench/voice/agent-cases.json
 apps/miniprogram/tools
 **/__pycache__
