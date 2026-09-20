@@ -1,4 +1,3 @@
-import { VoiceCallStatus } from './voice-call-status';
 import { AttachmentViewer } from './attachment-viewer';
 import { MaterialFolder } from './material-folder';
 import { uiAsset } from './ui-asset';
@@ -21,18 +20,17 @@ interface Manifest {
   animations: Animation[];
 }
 
-export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, microphone, callOpen, callStartedAt, status, motionState, getMotionLevel, mode, startDisabled, onStart, speakerEnabled, onSpeakerToggle, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
+export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, callOpen, callStartedAt, status, callFailed = false, mode, startDisabled, onStart, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
   onManuscriptChat?: ((document: import('@bio/contracts').PanelDocument) => void) | undefined;
   attachment?: PanelAttachment | undefined; onAttachmentPage?: ((materialId: string, page: number) => void) | undefined;
   onMaterialChat: (item: Material) => void;
   receipt: SessionReceipt | null; receiptVisible: boolean; onReceiptClose: () => void;
-  children: ReactNode; subtitle: string; activity: FoxActivity; running: boolean; microphone?: ReactNode;
+  children: ReactNode; subtitle: string; activity: FoxActivity; running: boolean;
   callOpen: boolean; callStartedAt: number | null; status: string; mode: 'conversation' | 'attachment' | 'editor';
-  motionState: 'listen' | 'speak' | 'think' | 'idle'; getMotionLevel: () => number;
-  startDisabled: boolean; onStart: () => void; speakerEnabled: boolean; onSpeakerToggle: () => void; onEnd: () => void;
+  callFailed?: boolean;
+  startDisabled: boolean; onStart: () => void; onEnd: () => void;
 }) {
-  const [focused, setFocused] = useState(false);
-  useEffect(() => setFocused(false), [callOpen, attachment?.id, mode]);
+  const dialing = callOpen && callStartedAt === null;
   const { phase, notebook, speech } = activity;
   const speaking = speech !== 'silent' && phase !== 'listening';
   const [manifest, setManifest] = useState<Manifest>();
@@ -108,7 +106,7 @@ export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, c
       {!manifest && <div className="phone-art-fallback">令狸<span>{assetError ? '场景素材加载失败' : '正在加载场景…'}</span></div>}
     </>;
   return <div className="phone-preview" aria-label="手机用户界面预览">
-    <div className={`phone-screen ${callOpen ? 'phone-screen--call' : ''} ${mode === 'attachment' ? 'phone-screen--attachment' : ''} ${mode === 'editor' ? 'phone-screen--editor' : ''} ${focused && mode === 'attachment' ? 'phone-screen--focused' : ''}`} style={{ aspectRatio: '320/692' }}>
+    <div className={`phone-screen ${callOpen ? 'phone-screen--call' : ''} ${mode === 'attachment' ? 'phone-screen--attachment' : ''} ${mode === 'editor' ? 'phone-screen--editor' : ''} ${callOpen && mode === 'conversation' ? 'phone-screen--conversation' : ''} ${dialing ? 'phone-screen--dialing' : ''}`} style={{ aspectRatio: '320/692' }}>
       {!callOpen ? <>
         {artwork}
         <section className={`phone-desk ${receiptVisible ? 'phone-desk--printing' : ''}`} inert={receiptVisible || !!drawer} aria-label="令狸的书桌">
@@ -128,35 +126,29 @@ export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, c
         </div>}
 
       </> : <>
-        {focused && mode === 'attachment' && <div className="attachment-focus-status">通话继续 · {callDuration}</div>}
-        {mode !== 'editor' && <header className="phone-call-header">
-          <div><h2>令狸</h2><p className="phone-call-duration" aria-label="通话时长">{callStartedAt === null ? '未连接' : callDuration}</p></div>
-          <div className="phone-video" role="img" aria-label={`令狸 · ${speaking ? '正在说话' : phase === 'listening' ? '正在听' : '陪伴中'}`}>
-            <div className="phone-video-scene">{artwork}</div>
-          </div>
-        </header>}
-        <section className={`phone-content-panel ${mode !== 'conversation' ? 'phone-content-panel--document' : ''}`} aria-label={mode === 'conversation' ? '对话内容' : mode === 'attachment' ? '附件内容' : '编辑内容'}>
-          {mode === 'attachment' && attachment ? <AttachmentViewer key={attachment.id} attachment={attachment} focused={focused} onFocus={() => setFocused(value => !value)} onPage={onAttachmentPage} /> : mode === 'conversation' ? <div className="phone-panel-scroll phone-dialogue" ref={subtitleRef}>
-            <p>{subtitle || (running && phase !== 'listening' ? '让我想一想…' : '我在这里，慢慢讲。')}</p>
-          </div> : <div className="phone-panel-scroll">
-            {mode === 'editor' && <div className="document-companion" aria-label="令狸陪伴">
-              <div className="phone-video"><div className="phone-video-scene">{artwork}</div></div>
-              <span>令狸 · {speaking ? '正在说' : phase === 'listening' ? '在听' : '陪伴中'}</span>
-            </div>}
-            {children}
-          </div>}
-        </section>
-        {mode === 'editor' && subtitle && <div className="document-call-subtitle" ref={subtitleRef}><span>令狸：</span>{subtitle}</div>}
-        {mode !== 'editor' && <VoiceCallStatus state={motionState} getLevel={getMotionLevel} label={status || (running ? speaking ? '正在回应' : '正在思考' : '等待连接')} />}
+        {dialing ? <section className="phone-dialing" aria-label="呼叫令狸" aria-busy={!callFailed}>
+          <div className="phone-video"><div className="phone-video-scene">{artwork}</div></div>
+          <h2>令狸</h2>
+          <p role="status">{callFailed ? '暂时未能接通' : '正在呼叫，等待接通…'}</p>
+          <small>{callFailed ? status : status === '正在申请麦克风权限' ? '请允许使用麦克风，以便与令狸通话' : '接通后就可以开始聊了'}</small>
+          {callFailed && <button type="button" className="phone-redial" disabled={startDisabled} onClick={onStart}>重新呼叫</button>}
+        </section> : <>
+          {mode === 'conversation' && <header className="phone-call-header">
+            <div className="phone-video" role="img" aria-label="令狸"><div className="phone-video-scene">{artwork}</div></div><h2>令狸</h2>
+          </header>}
+          <section className={`phone-content-panel ${mode !== 'conversation' ? 'phone-content-panel--document' : ''}`} aria-label={mode === 'conversation' ? '对话内容' : mode === 'attachment' ? '附件内容' : '编辑内容'}>
+            {mode === 'attachment' && attachment ? <AttachmentViewer key={attachment.id} attachment={attachment} onPage={onAttachmentPage} /> : mode === 'conversation' ? <div className="phone-panel-scroll phone-dialogue" ref={subtitleRef}>
+              <p>{subtitle || (running && phase !== 'listening' ? '让我想一想…' : '我在这里，慢慢讲。')}</p>
+            </div> : <div className="phone-panel-scroll">{children}</div>}
+          </section>
+          {mode !== 'conversation' && subtitle && <div className="document-call-subtitle" ref={subtitleRef}><span>令狸：</span>{subtitle}</div>}
+        </>}
         <footer className="phone-call-controls" aria-label="通话控制">
-          {mode === 'editor' && <div className="document-call-state"><span role="status">{status || (speaking ? '令狸正在说' : running ? '令狸在思考' : '与令狸通话中')}</span><small>{callStartedAt === null ? '正在连接' : callDuration}</small></div>}
-          <div className="phone-call-control">{microphone}<span>麦克风</span></div>
-          <div className="phone-call-control"><button type="button" className="phone-control-button phone-control-button--end" aria-label="结束通话" onClick={onEnd}>
+          <div className="phone-dock-avatar" aria-hidden="true"><div className="phone-video-scene">{artwork}</div></div>
+          <div className="document-call-state"><span role="status">{dialing ? callFailed ? '未接通' : '正在呼叫令狸…' : status || (speaking ? '令狸正在说' : running ? '令狸在思考' : '与令狸通话中')}</span><small>{dialing ? callFailed ? '可重新呼叫' : '等待接通' : callDuration}</small></div>
+          <button type="button" className="phone-control-button phone-control-button--end" aria-label={dialing ? '取消呼叫' : '结束通话'} onClick={onEnd}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15v-4c5-5 13-5 18 0v4l-5-1v-3a14 14 0 0 0-8 0v3Z" /></svg>
-          </button><span>结束</span></div>
-          <div className="phone-call-control"><button type="button" className="phone-control-button" aria-label="扬声器" aria-pressed={speakerEnabled} onClick={onSpeakerToggle}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4 6 8H3v8h3l5 4Z" />{speakerEnabled ? <path d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" /> : <path d="m16 9 6 6m0-6-6 6" />}</svg>
-          </button><span>{speakerEnabled ? '扬声器' : '扬声器已关'}</span></div>
+          </button>
         </footer>
       </>}
       {receiptVisible && receipt && !callOpen && <ReceiptPrinter key={receipt.id} receipt={receipt} onClose={onReceiptClose} />}

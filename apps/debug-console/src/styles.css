@@ -498,14 +498,9 @@ body { min-width: 320px; }
 .phone-screen--editor .phone-content-panel.phone-content-panel--document { margin: 0; padding: 0; background: transparent; border: 0; }
 .phone-screen--editor .phone-content-panel .phone-panel-scroll { padding: 22px 20px 12px; border-radius: 0; background: transparent; color: inherit; }
 .phone-screen--editor .phone-content-panel .work-panel { padding: 0; }
-.document-companion { position: relative; z-index: 1; float: right; display: flex; align-items: center; flex-direction: column; gap: 4px; margin: 0 0 12px 12px; padding: 0; border: 0; background: transparent; color: #6b786e; font: inherit; font-size: 10px; }
-.document-companion .phone-video { display: block; width: 64px; height: 72px; flex: none; border-radius: 12px; }
-.document-companion .phone-video-scene { width: 107px; height: 231px; left: -21px; top: -44px; }
-.document-companion .phone-art-fallback span { display: none; }
 .document-heading { margin-bottom: 20px; }
 .document-heading small { font-size: 11px; color: #768277; }
-.phone-screen--editor .document-heading { min-height: 90px; }
-.phone-screen--editor .document-heading h3 { font-family: Georgia, 'Songti SC', serif; font-size: 23px; font-weight: 500; line-height: 1.5; margin: 0 0 8px; }
+.phone-screen--editor .document-heading h3 { font-family: Georgia, 'Songti SC', serif; font-size: 18px; font-weight: 500; line-height: 1.55; margin: 0 0 8px; }
 .document-reader .panel-block { position: relative; }
 .phone-screen--editor .phone-content-panel .panel-block { clear: both; padding: 7px 0; margin-bottom: 10px; border: 0; font-family: Georgia, 'Songti SC', serif; font-size: 16px; line-height: 1.95; }
 .phone-screen--editor .panel-block--selected { background: #eaf0e6; box-shadow: -3px 0 0 #8b9e87; border-radius: 3px; }
@@ -530,3 +525,33 @@ body { min-width: 320px; }
 .phone-screen--editor .phone-call-control:has(.phone-control-button--end) { order: 2; }
 .phone-screen--editor .phone-control-button--end::before { inset: 2px; background: #a75e61; }
 .phone-screen--editor .phone-control-button[aria-pressed="false"] { color: #7b857c; }
+
+/* All call modes share one quiet dock. Content modes devote the canvas to the file. */
+.phone-screen.phone-screen--call { background: #fcfcf9; color: #303a32; }
+.phone-screen.phone-screen--call .phone-call-controls { align-items: center; gap: 10px; margin: 0 12px 14px; padding: 7px 10px; border-radius: 28px; background: linear-gradient(130deg,#eef5eddf,#d5e3d6af); box-shadow: inset 0 1px 0 #ffffffef, 0 3px 14px #233b2910; backdrop-filter: blur(18px); }
+.phone-screen--call .phone-call-controls > .phone-control-button--end { width: 44px; height: 44px; flex: 0 0 44px; color: white; }
+.phone-screen--call .phone-control-button--end::before { inset: 0; border: 0; background: #a75e61; }
+.phone-dock-avatar { position: relative; width: 36px; height: 36px; flex: 0 0 36px; overflow: hidden; border-radius: 12px; background: #d8c5a8; }
+.phone-dock-avatar .phone-video-scene { width: 60px; height: 130px; top: -25px; left: -12px; }
+.phone-dock-avatar .phone-art-fallback { inset: 0; font-size: 10px; }
+.phone-dock-avatar .phone-art-fallback span { display: none; }
+.phone-screen--conversation .phone-call-header { flex-direction: column; justify-content: center; gap: 14px; padding: 30px 20px 14px; }
+.phone-screen--conversation .phone-call-header .phone-video { width: 160px; height: 192px; flex: none; border-radius: 70px 70px 32px 32px; }
+.phone-screen--conversation .phone-call-header .phone-video-scene { width: 267px; height: 577px; top: -110px; left: -53px; }
+.phone-screen--conversation .phone-call-header h2 { font-size: 22px; margin: 0; }
+.phone-screen--conversation .phone-content-panel { background: transparent; border: 0; margin: 0 20px 16px; padding: 12px 8px; }
+.phone-screen--conversation .phone-dialogue p { text-align: center; font-family: Georgia,'Songti SC',serif; font-size: 19px; }
+.phone-screen.phone-screen--attachment .phone-content-panel { margin: 0; padding: 22px 20px 12px; }
+.attachment-heading { flex: 0 0 auto; margin-bottom: 12px; }
+.phone-content-panel .attachment-heading h3 { font-size: 18px; font-weight: 500; line-height: 1.55; margin: 0 0 8px; overflow-wrap: anywhere; }
+.attachment-heading small { font-size: 11px; color: #768277; }
+.phone-dialing { flex: 1; min-height: 0; overflow-y: auto; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 24px; text-align: center; }
+.phone-dialing .phone-video { width: 124px; height: 124px; flex: 0 0 124px; border-radius: 50%; outline: 1px solid #dce5da; outline-offset: 12px; margin-bottom: 24px; }
+.phone-dialing .phone-video-scene { width: 207px; height: 447px; left: -41px; top: -85px; }
+.phone-dialing h2 { font-size: 23px; font-weight: 500; margin: 0 0 12px; }
+.phone-dialing p { font-size: 14px; color: #647168; margin: 0 0 12px; }
+.phone-dialing small { font-size: 12px; line-height: 1.8; color: #748074; overflow-wrap: anywhere; }
+.phone-redial { margin-top: 20px; padding: 10px 22px; min-height: 44px; border: 0; border-radius: 22px; background: linear-gradient(130deg,#eef5ed,#d5e3d6); color: #405c48; cursor: pointer; }
+.phone-dialing[aria-busy="true"] .phone-video { animation: phone-dial-ring 2.4s ease-out infinite; }
+@keyframes phone-dial-ring { from { box-shadow: 0 0 0 0 #82997b26; } to { box-shadow: 0 0 0 22px #82997b00; } }
+@media (prefers-reduced-motion: reduce) { .phone-dialing[aria-busy="true"] .phone-video { animation: none; } }

@@ -37,6 +37,7 @@ export class BrowserVoice {
   private turnId = '';
   private closed = false;
   private listening = false;
+  private callReady = false;
   private speechSignal = new FoxSpeechSignal(value => this.callbacks.speaking?.(value));
   private finishing = false;
   private drained = false;
@@ -135,7 +136,7 @@ export class BrowserVoice {
     this.connectionTimer = setTimeout(() => this.reconnect(ws), 10000);
     ws.onopen = () => {
       if (this.closed || this.socket !== ws) return;
-      clearTimeout(this.connectionTimer); this.callbacks.connected?.(); this.listen();
+      clearTimeout(this.connectionTimer); this.listen();
     };
     ws.onmessage = event => {
       if (this.closed || this.socket !== ws) return;
@@ -212,7 +213,10 @@ export class BrowserVoice {
     }
     if (event.type === 'error' && event.code === 'CALL_BUSY') { if (this.socket) this.reconnect(this.socket); return; }
     if (event.type === 'asr' && this.listening) this.speechSignal.recognize(event.text);
-    if (event.type === 'state') this.setListening(this.micEnabled && event.state === 'listening');
+    if (event.type === 'state') {
+      this.setListening(this.micEnabled && event.state === 'listening');
+      if (event.state === 'listening' && !this.callReady) { this.callReady = true; this.callbacks.connected?.(); }
+    }
     if (event.type === 'transcript' || event.type === 'audio' || event.type === 'agent') this.submitted = true;
     if (event.type === 'agent') this.conversationId = event.event.conversationId;
     if (event.type === 'result') this.conversationId = event.result.conversationId;

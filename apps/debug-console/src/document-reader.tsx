@@ -20,7 +20,7 @@ export function DocumentReader({ document, view, navigationKey = 0, onView, onSe
   }, [document.id, document.version, page]);
   return <section className="document-reader" ref={content} aria-label="文稿阅读">
     <header className="document-heading"><h3>{document.title}</h3><small>已保存 · 版本 {document.version}</small></header>
-    {pages[page - 1]!.fragments.map((fragment, index) => <section key={`${fragment.blockId}:${fragment.start}`} className={`panel-block ${activeBlockId === fragment.blockId ? 'panel-block--selected' : ''}`}>
+    {pages[page - 1]!.fragments.filter(fragment => !(fragment.kind === 'heading' && fragment.blockId === document.blocks[0]?.id && fragment.text.trim() === document.title.trim())).map((fragment, index) => <section key={`${fragment.blockId}:${fragment.start}`} className={`panel-block ${activeBlockId === fragment.blockId ? 'panel-block--selected' : ''}`}>
       {fragment.kind === 'heading' ? <h4>{fragment.text}</h4>
         : fragment.kind === 'quote' ? <blockquote>{fragment.text}</blockquote>
         : fragment.kind === 'list' ? <ul>{fragment.text.split('\n').map((line, index) => <li key={index}>{line}</li>)}</ul>

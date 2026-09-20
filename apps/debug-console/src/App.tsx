@@ -4,7 +4,6 @@ import type { DocumentView } from '@bio/contracts';
 import { useMaterialOriginal } from './use-material-original';
 import { accountCacheKey } from './account-cache';
 import { collectReceiptMessage, createReceipt, readReceipt, saveReceipt, type CallMessages } from './session-receipt';
-import { FeltMicrophone } from './felt-microphone';
 import { BrowserVoice } from './voice/browser-voice';
 import type { VoiceRequest, VoiceServerMessage } from '@bio/contracts';
 import { foxActivityOf } from './fox-activity';
@@ -113,11 +112,9 @@ export function App() {
   const [receiptVisible, setReceiptVisible] = useState(false);
   const receiptCall = useRef<{ startedAt: number; endedAt?: number; messages: CallMessages } | null>(null);
   const [callStartedAt, setCallStartedAt] = useState<number | null>(null);
-  const [speakerEnabled, setSpeakerEnabled] = useState(true);
   const [micEnabled, setMicEnabled] = useState(false);
   const [micListening, setMicListening] = useState(false);
   const [userSpeaking, setUserSpeaking] = useState(false);
-  const [micLevel, setMicLevel] = useState(0);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState('');
   const [voiceState, setVoiceState] = useState<Extract<VoiceServerMessage, { type: 'state' }>['state']>('connecting');
@@ -255,7 +252,11 @@ export function App() {
     if (event.type === 'result') { record.response = event.result; timings.agentDone = event.elapsedMs; }
     if (event.type === 'done') { timings.synthesisDone = event.elapsedMs; setVoiceStatus('等待播放结束'); saveVoiceTurn(); }
     if (event.type === 'cancelled') { setVoiceState('connecting'); saveVoiceTurn('语音已打断'); }
-    if (event.type === 'error') { setVoiceStatus(event.message); saveVoiceTurn(event.message); }
+    if (event.type === 'error') {
+      setVoiceStatus(event.message); saveVoiceTurn(event.message);
+      // With no manual mic switch, offer a fresh call after ASR stops accepting speech.
+      if (event.stage === 'asr' && event.recoverable) voiceRef.current?.close(false);
+    }
     if (turn.saved && (event.type === 'result' || event.type === 'done')) {
       setHistory(items => items.map(item => item.id === record.id ? { ...record } : item));
     }
@@ -266,12 +267,12 @@ export function App() {
     if (!receiptCall.current) receiptCall.current = { startedAt: Date.now(), messages: new Map() };
     delete receiptCall.current.endedAt;
     setReceiptVisible(false);
-    setCallOpen(true); setSpeakerEnabled(true); setCallStartedAt(null);
+    setCallOpen(true); setCallStartedAt(null);
     setVoiceState('connecting');
     voiceTurn.current = null;
     setMicEnabled(true); setVoiceEnabled(true); setVoiceStatus('正在申请麦克风权限');
     const client = new BrowserVoice({
-      connected: () => setCallStartedAt(Date.now()),
+      connected: () => { setCallStartedAt(value => value ?? Date.now()); if (receiptCall.current) receiptCall.current.startedAt = Date.now(); },
       request: () => ({ ...voiceContext.current }),
       start: (id, request) => {
         startedRef.current = performance.now(); followThread.current = true;
@@ -283,7 +284,6 @@ export function App() {
       microphone: enabled => { setMicEnabled(enabled); if (!enabled) setVoiceStatus(value => value === '正在听你说' ? '麦克风已关' : value); },
       microphoneError: setVoiceStatus,
       status: setVoiceStatus,
-      inputLevel: setMicLevel,
       listening: setMicListening,
       speaking: setUserSpeaking,
       playback: (playing, text) => {
@@ -508,9 +508,7 @@ export function App() {
           <section className="lab-preview-column">
             <header className="lab-section-heading"><h1>用户界面预览</h1><span>手机 · 实时状态</span></header>
             <PhonePreview onAttachmentPage={(materialId, page) => { attachmentView.current = { materialId, page }; voiceRef.current?.updateAttachmentView({ materialId, page }); voiceContext.current = { ...voiceContext.current, context: { ...voiceContext.current.context, attachmentView: { materialId, page } } }; }} attachment={shownPanel?.attachment} subtitle={subtitle} running={running} activity={foxActivityOf({ running, live, panel: shownPanel, ...(callOpen ? { audioPlaying, ...(voiceEnabled ? { voiceState } : {}), userSpeaking: micEnabled && micListening && userSpeaking } : {}) })}
-              motionState={audioPlaying ? 'speak' : voiceEnabled && micListening ? 'listen' : running && (!voiceEnabled || voiceState === 'agent' || voiceState === 'synthesizing' || voiceState === 'finalizing') ? 'think' : 'idle'}
-              getMotionLevel={() => voiceRef.current?.getMotionLevel() ?? 0}
-              callOpen={callOpen} callStartedAt={callStartedAt} status={voiceStatus} mode={shownPanel?.mode ?? 'conversation'}
+              callOpen={callOpen} callFailed={!voiceEnabled} callStartedAt={callStartedAt} status={voiceStatus} mode={shownPanel?.mode ?? 'conversation'}
               onManuscriptChat={document => {
                 const view = { documentId: document.id, version: document.version, page: 1 };
                 documentView.current = view; attachmentView.current = undefined;
@@ -520,19 +518,9 @@ export function App() {
                 startVoice();
               }}
               onMaterialChat={item => { setProvider('gemini'); setPendingMaterialPanel({ mode: 'attachment', revision: 0, attachment: { id: item.id, kind: item.kind, title: item.title, url: item.url, text: item.text || item.statusMessage } }); setMaterialTitle(item.title); setMaterialIds([item.id]); setScene('attachment_conversation'); setMessage(`我们聊聊《${item.title}》这份资料吧。`); voiceContext.current = { ...voiceContext.current, provider: 'gemini', context: { materialIds: [item.id], scene: 'attachment_conversation' } }; startVoice(); }}
-              startDisabled={busy} onStart={startVoice} speakerEnabled={speakerEnabled}
-              onSpeakerToggle={() => { const enabled = !speakerEnabled; voiceRef.current?.setSpeaker(enabled); setSpeakerEnabled(enabled); }}
+              startDisabled={busy} onStart={startVoice}
               onEnd={endCall}
-              receipt={receipt} receiptVisible={receiptVisible} onReceiptClose={() => setReceiptVisible(false)}
-              microphone={<FeltMicrophone enabled={micEnabled} listening={micEnabled && micListening} level={micLevel}
-                replying={audioPlaying || (running && voiceStatus !== '正在听你说' && voiceStatus !== '正在申请麦克风权限' && voiceStatus !== '正在连接语音识别')}
-                disabled={!voiceEnabled && running} onToggle={() => {
-                  if (!voiceRef.current) startVoice();
-                  else {
-                    if (!micEnabled) setVoiceStatus('正在准备麦克风');
-                    void voiceRef.current.setMicrophone(!micEnabled);
-                  }
-                }} />}>
+              receipt={receipt} receiptVisible={receiptVisible} onReceiptClose={() => setReceiptVisible(false)}>
               {shownPanel ? <WorkspacePanel panel={shownPanel} selectedBlockId={selectedBlockId}
                 onDocumentView={(view, manual) => {
                   documentView.current = view;

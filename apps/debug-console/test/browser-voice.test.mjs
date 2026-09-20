@@ -27,7 +27,7 @@ test('transport failure leaves call completion to the server grace period', asyn
 function environment(t, pendingMic, moduleError) {
   const cache = new Map();
   const sockets = [], nodes = [], messages = [], events = [], starts = [], playback = [], captures = [], levels = [], gains = [];
-  let stopped = 0, ended = 0;
+  let stopped = 0, ended = 0, connected = 0;
   const stream = { getTracks: () => [{ stop() { stopped++; } }] };
   class Socket {
     static OPEN = 1;
@@ -60,10 +60,10 @@ function environment(t, pendingMic, moduleError) {
     Object.defineProperty(globalThis, key, { configurable: true, value });
     restore.push(() => original ? Object.defineProperty(globalThis, key, original) : delete globalThis[key]);
   }
-  const client = new BrowserVoice({ request: () => ({}), start: id => starts.push(id), event: event => events.push(event),
+  const client = new BrowserVoice({ connected: () => connected++, request: () => ({}), start: id => starts.push(id), event: event => events.push(event),
     inputLevel: level => levels.push(level), playback: (...args) => playback.push(args), error: message => events.push({ type: 'local.error', message }), ended: () => ended++ });
   t.after(() => { client.close(); restore.forEach(fn => fn()); });
-  return { client, cache, sockets, nodes, captures, levels, gains, starts, messages, events, playback, stream, stopped: () => stopped, ended: () => ended };
+  return { client, cache, sockets, nodes, captures, levels, gains, starts, messages, events, playback, stream, connected: () => connected, stopped: () => stopped, ended: () => ended };
 }
 
 test('interruption clears scheduled audio and rejects old turn callbacks', async t => {
@@ -290,4 +290,23 @@ test('motion samples playback as it sounds and clears on mute, interruption and 
   f.client.setSpeaker(true); assert.ok(f.client.getMotionLevel() > .4);
   f.client.interrupt(); assert.equal(f.client.getMotionLevel(), 0);
   f.client.close(); assert.equal(f.client.getMotionLevel(), 0);
+});
+
+
+test('call connects only when listening is ready, once across subsequent turns', async t => {
+  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen();
+  assert.equal(f.connected(), 0);
+  const emit = (turnId, state) => ws.onmessage({ data: JSON.stringify({ type: 'state', turnId, state, elapsedMs: 0 }) });
+  emit(f.starts[0], 'connecting'); assert.equal(f.connected(), 0);
+  emit(f.starts[0], 'listening'); assert.equal(f.connected(), 1);
+  f.client.interrupt();
+  emit(f.starts[0], 'listening'); emit(f.starts[1], 'listening');
+  assert.equal(f.connected(), 1);
+});
+
+test('cancel during dialing ignores late readiness', async t => {
+  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen();
+  f.client.close();
+  ws.onmessage({ data: JSON.stringify({ type: 'state', turnId: f.starts[0], state: 'listening', elapsedMs: 0 }) });
+  assert.equal(f.connected(), 0);
 });
