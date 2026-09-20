@@ -447,7 +447,14 @@ export function App() {
     if (selectedRun) setConversationId(conversationOf(selectedRun) ?? '');
     setDocumentId(panel.document.id); setDocumentVersion(panel.document.version);
     setSelectedBlockId(block.id); setExcerpt(block.text);
-    inputRef.current?.focus();
+    if (voiceEnabled) {
+      // interrupt() starts listening synchronously, before React applies the selection.
+      voiceContext.current = { ...voiceContext.current, context: { ...voiceContext.current.context,
+        workspace: { documentId: panel.document.id, version: panel.document.version, selectedBlockId: block.id, excerpt: block.text },
+      } };
+      voiceRef.current?.interrupt();
+    }
+    else inputRef.current?.focus();
   }
 
   function clearHistory(): void {
@@ -533,7 +540,7 @@ export function App() {
                   voiceContext.current = { ...voiceContext.current, context: { ...voiceContext.current.context, documentView: view } };
                   if (manual && (audioPlaying || running)) voiceRef.current?.interrupt();
                 }}
-                {...(!busy ? { onSelectBlock: selectBlock } : {})} />
+                {...(!running || voiceEnabled ? { onSelectBlock: selectBlock } : {})} />
                 : <div className="phone-empty"><strong>今天想聊点什么？</strong><p>我在这里，陪你慢慢讲。</p></div>}
             </PhonePreview>
             <p className="lab-preview-note">{voiceEnabled ? '语音模式 · 动作跟随实际播放' : '文字模式 · 动作跟随文本生成'}</p>
@@ -1035,7 +1042,7 @@ function WorkspacePanel({ panel, onSelectBlock, selectedBlockId, onDocumentView 
 }) {
   const modes = { conversation: '纯对话', attachment: '附件查看', editor: '共同编辑' };
   return <article className="answer-card work-panel">
-    <div className="answer-label">{modes[panel.mode]}</div>
+    {panel.mode !== 'editor' && <div className="answer-label">{modes[panel.mode]}</div>}
     {panel.mode === 'conversation' && <div className="phone-empty"><strong>慢慢讲，我在听。</strong><p>今天想从哪里聊起？</p></div>}
     {panel.mode === 'attachment' && panel.attachment && <HistoricalAttachment key={panel.attachment.id} attachment={panel.attachment} />}
     {panel.mode === 'editor' && !panel.document && <p>还没有文档内容。</p>}
@@ -1046,7 +1053,6 @@ function WorkspacePanel({ panel, onSelectBlock, selectedBlockId, onDocumentView 
         {panel.lastChange.before.map(block => <p className="panel-removed" key={`before-${block.id}`}>修改前：{block.text}</p>)}
         {panel.lastChange.after.map(block => <p className="panel-added" key={`after-${block.id}`}>修改后：{block.text}</p>)}
       </details>}
-      <small>文稿已保存 · 版本 {panel.document.version} · 可以请令狸修改或恢复旧版本</small>
     </>}
   </article>;
 }

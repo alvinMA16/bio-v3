@@ -487,9 +487,46 @@ body { min-width: 320px; }
 .manuscript-folder button { position: static; width: 100%; height: auto; border-radius: 8px; padding: 12px; text-align: left; }
 .manuscript-folder small { display: block; margin-top: 6px; color: #796349; font-size: 11px; }
 .manuscript-folder article { overflow-wrap: anywhere; line-height: 1.7; }
-.document-progress { font-size: 12px; color: #796349; padding: 8px; background: #f5efe5; border-radius: 6px; }
 .document-reader { min-width: 0; overflow-wrap: anywhere; }
 .document-pagination { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 18px; font-size: 13px; }
 .document-pagination button { border: 0; border-radius: 16px; padding: 9px 12px; color: #344639; background: linear-gradient(140deg, rgba(255,255,255,.82), rgba(207,225,211,.45)); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 2px 8px rgba(35,59,41,.07); backdrop-filter: blur(12px); }
 .document-pagination button:disabled { opacity: .4; }
 .document-reader pre { white-space: pre-wrap; }
+
+/* The manuscript is the call canvas; only the reading area scrolls. */
+.phone-screen.phone-screen--editor { background: #fcfcf9; color: #303a32; }
+.phone-screen--editor .phone-content-panel.phone-content-panel--document { margin: 0; padding: 0; background: transparent; border: 0; }
+.phone-screen--editor .phone-content-panel .phone-panel-scroll { padding: 22px 20px 12px; border-radius: 0; background: transparent; color: inherit; }
+.phone-screen--editor .phone-content-panel .work-panel { padding: 0; }
+.document-companion { position: relative; z-index: 1; float: right; display: flex; align-items: center; flex-direction: column; gap: 4px; margin: 0 0 12px 12px; padding: 0; border: 0; background: transparent; color: #6b786e; font: inherit; font-size: 10px; }
+.document-companion .phone-video { display: block; width: 64px; height: 72px; flex: none; border-radius: 12px; }
+.document-companion .phone-video-scene { width: 107px; height: 231px; left: -21px; top: -44px; }
+.document-companion .phone-art-fallback span { display: none; }
+.document-heading { margin-bottom: 20px; }
+.document-heading small { font-size: 11px; color: #768277; }
+.phone-screen--editor .document-heading { min-height: 90px; }
+.phone-screen--editor .document-heading h3 { font-family: Georgia, 'Songti SC', serif; font-size: 23px; font-weight: 500; line-height: 1.5; margin: 0 0 8px; }
+.document-reader .panel-block { position: relative; }
+.phone-screen--editor .phone-content-panel .panel-block { clear: both; padding: 7px 0; margin-bottom: 10px; border: 0; font-family: Georgia, 'Songti SC', serif; font-size: 16px; line-height: 1.95; }
+.phone-screen--editor .panel-block--selected { background: #eaf0e6; box-shadow: -3px 0 0 #8b9e87; border-radius: 3px; }
+.document-reader .panel-block .document-select-block { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 3px; background: transparent; cursor: pointer; }
+.document-select-block:focus-visible { outline: 2px solid #7d967b; outline-offset: 3px; }
+.document-block-action { position: relative; z-index: 1; display: flex; align-items: flex-start; flex-direction: column; gap: 6px; padding: 8px 4px; }
+.phone-content-panel .document-block-action button { min-height: 36px; padding: 6px 12px; border-radius: 18px; background: linear-gradient(140deg,#ffffffd9,#cfe1d373); box-shadow: inset 0 1px 0 #ffffffef, 0 2px 8px #233b2912; color: #344c3d; font-family: inherit; font-size: 12px; }
+.document-block-action small { font-family: sans-serif; font-size: 11px; }
+.phone-screen--editor .document-pagination { justify-content: center; gap: 12px; margin: 12px 0 0; color: #6c786e; font-size: 11px; }
+.phone-screen--editor .document-pagination button { min-height: 44px; padding: 8px; background: transparent; box-shadow: none; font-size: 12px; }
+.document-call-subtitle { flex: 0 0 auto; max-height: 44px; overflow-y: auto; margin: 0 20px 6px; font-size: 11px; line-height: 1.7; color: #6c786e; overflow-wrap: anywhere; scrollbar-width: thin; }
+.document-call-subtitle > span { color: #425b49; }
+.phone-screen--editor .phone-call-controls { align-items: center; justify-content: flex-end; gap: 2px; margin: 0 12px 14px; padding: 6px 8px 6px 12px; border-radius: 26px; background: linear-gradient(130deg,#eef5eddf,#d5e3d6af); box-shadow: inset 0 1px 0 #ffffffef, 0 3px 14px #233b2910; backdrop-filter: blur(18px); }
+.document-call-state { flex: 1; min-width: 0; font-size: 11px; line-height: 1.5; }
+.document-call-state > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.document-call-state small { color: #748074; font-size: 10px; font-variant-numeric: tabular-nums; }
+.phone-screen--editor .phone-call-control { flex: 0 0 44px; }
+.phone-screen--editor .phone-call-control > span { display: none; }
+.phone-screen--editor .phone-control-button,.phone-screen--editor .phone-call-control .felt-mic__button { width: 44px; height: 44px; color: #405c48; }
+.phone-screen--editor .phone-control-button::before,.phone-screen--editor .felt-mic__button::before { border: 0; }
+.phone-screen--editor .phone-control-button--end { color: #fff; order: 1; }
+.phone-screen--editor .phone-call-control:has(.phone-control-button--end) { order: 2; }
+.phone-screen--editor .phone-control-button--end::before { inset: 2px; background: #a75e61; }
+.phone-screen--editor .phone-control-button[aria-pressed="false"] { color: #7b857c; }

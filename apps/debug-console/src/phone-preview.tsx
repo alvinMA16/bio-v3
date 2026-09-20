@@ -108,7 +108,7 @@ export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, c
       {!manifest && <div className="phone-art-fallback">令狸<span>{assetError ? '场景素材加载失败' : '正在加载场景…'}</span></div>}
     </>;
   return <div className="phone-preview" aria-label="手机用户界面预览">
-    <div className={`phone-screen ${callOpen ? 'phone-screen--call' : ''} ${mode === 'attachment' ? 'phone-screen--attachment' : ''} ${focused && mode === 'attachment' ? 'phone-screen--focused' : ''}`} style={{ aspectRatio: '320/692' }}>
+    <div className={`phone-screen ${callOpen ? 'phone-screen--call' : ''} ${mode === 'attachment' ? 'phone-screen--attachment' : ''} ${mode === 'editor' ? 'phone-screen--editor' : ''} ${focused && mode === 'attachment' ? 'phone-screen--focused' : ''}`} style={{ aspectRatio: '320/692' }}>
       {!callOpen ? <>
         {artwork}
         <section className={`phone-desk ${receiptVisible ? 'phone-desk--printing' : ''}`} inert={receiptVisible || !!drawer} aria-label="令狸的书桌">
@@ -129,19 +129,27 @@ export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, c
 
       </> : <>
         {focused && mode === 'attachment' && <div className="attachment-focus-status">通话继续 · {callDuration}</div>}
-        <header className="phone-call-header">
+        {mode !== 'editor' && <header className="phone-call-header">
           <div><h2>令狸</h2><p className="phone-call-duration" aria-label="通话时长">{callStartedAt === null ? '未连接' : callDuration}</p></div>
           <div className="phone-video" role="img" aria-label={`令狸 · ${speaking ? '正在说话' : phase === 'listening' ? '正在听' : '陪伴中'}`}>
             <div className="phone-video-scene">{artwork}</div>
           </div>
-        </header>
+        </header>}
         <section className={`phone-content-panel ${mode !== 'conversation' ? 'phone-content-panel--document' : ''}`} aria-label={mode === 'conversation' ? '对话内容' : mode === 'attachment' ? '附件内容' : '编辑内容'}>
           {mode === 'attachment' && attachment ? <AttachmentViewer key={attachment.id} attachment={attachment} focused={focused} onFocus={() => setFocused(value => !value)} onPage={onAttachmentPage} /> : mode === 'conversation' ? <div className="phone-panel-scroll phone-dialogue" ref={subtitleRef}>
             <p>{subtitle || (running && phase !== 'listening' ? '让我想一想…' : '我在这里，慢慢讲。')}</p>
-          </div> : <div className="phone-panel-scroll">{mode === 'editor' && <p className="document-progress" role="status">{running ? '正在整理文稿，完成后会保存到文稿集…' : '本轮已结束；已写入的草稿可在文稿集中查看。若正文为空，说明尚未生成成功。'}</p>}{children}</div>}
+          </div> : <div className="phone-panel-scroll">
+            {mode === 'editor' && <div className="document-companion" aria-label="令狸陪伴">
+              <div className="phone-video"><div className="phone-video-scene">{artwork}</div></div>
+              <span>令狸 · {speaking ? '正在说' : phase === 'listening' ? '在听' : '陪伴中'}</span>
+            </div>}
+            {children}
+          </div>}
         </section>
-        <VoiceCallStatus state={motionState} getLevel={getMotionLevel} label={status || (running ? speaking ? '正在回应' : '正在思考' : '等待连接')} />
+        {mode === 'editor' && subtitle && <div className="document-call-subtitle" ref={subtitleRef}><span>令狸：</span>{subtitle}</div>}
+        {mode !== 'editor' && <VoiceCallStatus state={motionState} getLevel={getMotionLevel} label={status || (running ? speaking ? '正在回应' : '正在思考' : '等待连接')} />}
         <footer className="phone-call-controls" aria-label="通话控制">
+          {mode === 'editor' && <div className="document-call-state"><span role="status">{status || (speaking ? '令狸正在说' : running ? '令狸在思考' : '与令狸通话中')}</span><small>{callStartedAt === null ? '正在连接' : callDuration}</small></div>}
           <div className="phone-call-control">{microphone}<span>麦克风</span></div>
           <div className="phone-call-control"><button type="button" className="phone-control-button phone-control-button--end" aria-label="结束通话" onClick={onEnd}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15v-4c5-5 13-5 18 0v4l-5-1v-3a14 14 0 0 0-8 0v3Z" /></svg>
