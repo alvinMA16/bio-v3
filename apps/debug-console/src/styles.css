@@ -551,9 +551,7 @@ body { min-width: 320px; }
 /* Conversation lives in the room; the status strip and call controls are separate. */
 .phone-art-actors { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 .phone-conversation-scene { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
-.phone-conversation-scene .phone-art--board { display: none; }
-.phone-conversation-scene .phone-art-actors { clip-path: inset(0 0 54% 0); }
-.phone-screen--conversation:not(.phone-screen--dialing) .phone-content-panel { margin: 101% 20px 0; padding: 10px 2px 0; }
-.phone-screen.phone-screen--call .phone-call-controls { position: relative; z-index: 4; justify-content: space-between; margin: 0 12px 14px; padding: 6px 8px 6px 18px; gap: 12px; }
-.phone-call-controls .document-call-state { text-align: left; font-size: 14px; }
+.phone-screen--conversation:not(.phone-screen--dialing) .phone-content-panel { margin: 112% 20px 0; padding: 10px 2px 0; }
+.phone-screen.phone-screen--call .phone-call-controls { position: relative; z-index: 4; display: grid; grid-template-columns: minmax(52px, 1fr) 92px; align-items: center; margin: 0 12px 14px; padding: 6px 10px; gap: 8px; }
+.phone-call-controls .document-call-state { min-width: 52px; text-align: left; font-size: 14px; }
 .phone-call-controls .document-call-state small { display: block; font-size: 11px; margin-top: 4px; }
