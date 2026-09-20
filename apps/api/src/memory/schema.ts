@@ -60,4 +60,17 @@ CREATE TABLE IF NOT EXISTS bio_voice_playback (
  data jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(call_id,turn_id)
 );
+CREATE TABLE IF NOT EXISTS bio_documents (
+ user_id text NOT NULL REFERENCES bio_memory_users(id) ON DELETE CASCADE,
+ id text NOT NULL, origin_conversation_id uuid NOT NULL,
+ version integer NOT NULL CHECK(version >= 1), body jsonb NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(user_id,id), CHECK(body->>'id'=id), CHECK((body->>'version')::integer=version)
+);
+CREATE TABLE IF NOT EXISTS bio_document_revisions (
+ user_id text NOT NULL, document_id text NOT NULL, version integer NOT NULL,
+ body jsonb NOT NULL, conversation_id uuid NOT NULL, summary text NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(user_id,document_id,version),
+ FOREIGN KEY(user_id,document_id) REFERENCES bio_documents(user_id,id) ON DELETE CASCADE
+);
 `;

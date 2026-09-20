@@ -25,4 +25,25 @@ export class PlaybackWindow {
       signal.addEventListener('abort', abort, { once: true });
     });
   }
+
+  /** A tool may advance the page only after all previously sent PCM was played. */
+  async drained(signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted();
+    if (this.sent === this.played) return;
+    if (!this.feedback) throw new Error('Page reading requires playback acknowledgements');
+    await new Promise<void>((resolve, reject) => {
+      let lastPlayed = this.played, progressAt = Date.now();
+      const finish = (error?: Error) => {
+        clearInterval(timer); signal.removeEventListener('abort', abort);
+        if (error) reject(error); else resolve();
+      };
+      const abort = () => finish(new Error('Speech cancelled'));
+      const timer = setInterval(() => {
+        if (this.played >= this.sent) { finish(); return; }
+        if (this.played > lastPlayed) { lastPlayed = this.played; progressAt = Date.now(); }
+        if (Date.now() - progressAt >= 45000) finish(new Error('Playback acknowledgement timeout'));
+      }, 50);
+      signal.addEventListener('abort', abort, { once: true });
+    });
+  }
 }

@@ -10,6 +10,7 @@ import { MemoryService } from '../memory/memory.service.js';
 import type { MemoryScope } from '../memory/memory-types.js';
 import { PiSessionFactory } from './pi-session.factory.js';
 import { beijingTime } from '../memory/call-history.js';
+import type { DocumentRuntime } from './document-runtime.js';
 
 const CALL_OPENING_GUIDANCE = `服务端事件：一通新电话刚接通，用户尚未发言。请由令狸先开口，然后等待用户。
 默认一句，最多两句，通常不超过40个汉字。像熟人接电话一样自然，不长篇介绍、总结往事或连续提问。
@@ -26,7 +27,7 @@ export class AgentService {
 
   constructor(private readonly factory: PiSessionFactory, private readonly storage: AgentStorage, private readonly config: ConfigService, @Optional() private readonly memory?: MemoryService) {}
 
-  async run(input: ChatCompletionRequest, onEvent?: (event: AgentEvent) => void, signal?: AbortSignal, scope?: MemoryScope, trigger?: 'call_opening'): Promise<ChatCompletionResponse> {
+  async run(input: ChatCompletionRequest, onEvent?: (event: AgentEvent) => void, signal?: AbortSignal, scope?: MemoryScope, trigger?: 'call_opening', runtime?: DocumentRuntime): Promise<ChatCompletionResponse> {
     if (this.memory?.enabled && !scope) throw new UnauthorizedException('User identity required');
     const conversationId = input.conversationId ?? randomUUID();
     this.storage.assertId(conversationId);
@@ -70,8 +71,8 @@ export class AgentService {
     };
     const abort = () => { void session?.abort().catch(() => undefined); };
     const timeoutMs = Number(this.config.get('AGENT_TIMEOUT_MS', 120000));
-    const timer = setTimeout(() => { timedOut = true; abort(); },
-      Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 120000);
+    const armTimer = () => setTimeout(() => { timedOut = true; abort(); }, Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 120000);
+    let timer = armTimer();
     signal?.addEventListener('abort', abort, { once: true });
 
     try {
@@ -82,7 +83,15 @@ export class AgentService {
       emit({ type: 'run.started' });
       trace('input', 'request', input);
       if (signal?.aborted) throw new Error('Run cancelled');
-      session = await this.factory.create(conversationId, input.systemPrompt, emit, input.provider, input.context, scope);
+      session = await this.factory.create(conversationId, input.systemPrompt, emit, input.provider, input.context, scope, runtime && {
+        ...runtime,
+        beforeShow: async toolSignal => {
+          // Human playback time is not model execution time; playback has its own stall timeout.
+          clearTimeout(timer);
+          try { await runtime.beforeShow?.(toolSignal); }
+          finally { timer = armTimer(); }
+        },
+      });
       if (signal?.aborted || timedOut) throw new Error('Run cancelled');
       unsubscribe = session.subscribe((event: AgentSessionEvent) => {
         try {

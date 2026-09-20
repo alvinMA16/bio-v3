@@ -32,8 +32,8 @@ test('native files: original bytes, multi-turn references, restart, expiry, owne
       res.end(`data: ${JSON.stringify({ id: 'mock', object: 'chat.completion.chunk', model: 'mock-files', choices: [{ index: 0, delta: { role: 'assistant', content: '可以继续聊已有的内容。' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`);
       return;
     }
-    const parts = readDeleted ? [{ functionCall: { name: 'get_content', args: { attachmentId: readDeleted } } }]
-      : requests.length === 1 ? [{ functionCall: { name: 'get_content', args: {} } }] : [{ text: '我看到这份资料。' }];
+    const parts = readDeleted ? [{ functionCall: { name: 'read_attachment', args: { attachmentId: readDeleted } } }]
+      : requests.length === 1 ? [{ functionCall: { name: 'read_document', args: {} } }] : [{ text: '我看到这份资料。' }];
     readDeleted = undefined;
     res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end(`data: ${JSON.stringify({ candidates: [{ content: { role: 'model', parts }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5, totalTokenCount: 15 } })}\n\n`);
   });

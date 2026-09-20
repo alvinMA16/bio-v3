@@ -4,15 +4,19 @@ import { CompleteChatDto } from '../chat/dto/complete-chat.dto.js';
 import { AgentService } from './agent.service.js';
 import { MemoryService } from '../memory/memory.service.js';
 import { AgentStorage } from './agent-storage.js';
+import { DocumentStore, legacyDocumentId } from './document-store.js';
 
 @Controller('agent')
 export class AgentController {
-  constructor(private readonly agent: AgentService, private readonly storage: AgentStorage, @Optional() private readonly memory?: MemoryService) {}
+  constructor(private readonly agent: AgentService, private readonly storage: AgentStorage, @Optional() private readonly memory?: MemoryService, @Optional() private readonly documents?: DocumentStore) {}
+
+  private get documentStore() { return this.documents ?? new DocumentStore(this.storage, this.memory); }
 
   @Get('manuscripts')
   async manuscripts(@Req() request: FastifyRequest) {
     const user = await this.memory?.resolveIdentity(request.headers.authorization);
-    const items = user ? await this.memory!.manuscripts(user) : this.storage.localManuscripts();
+    await this.documentStore.importLegacy(user);
+    const items = await this.documentStore.list(user);
     return items.map(({ conversationId, document }) => ({ conversationId, id: document.id, title: document.title, version: document.version }));
   }
 
@@ -20,10 +24,24 @@ export class AgentController {
   async manuscript(@Param('conversationId') conversationId: string, @Param('documentId') documentId: string, @Req() request: FastifyRequest) {
     this.storage.assertId(conversationId);
     const user = await this.memory?.resolveIdentity(request.headers.authorization);
-    const items = user ? await this.memory!.manuscripts(user, conversationId) : this.storage.localManuscripts();
-    const item = items.find(item => item.conversationId === conversationId && item.document.id === documentId);
+    await this.documentStore.importLegacy(user);
+    const items = await this.documentStore.list(user);
+    const item = items.find(item => item.conversationId === conversationId && (item.document.id === documentId || item.document.id === legacyDocumentId(conversationId, documentId)));
     if (!item) throw new NotFoundException('文稿不存在');
     return item.document;
+  }
+
+  @Get('documents/:documentId')
+  async document(@Param('documentId') id: string, @Req() request: FastifyRequest) {
+    const user = await this.memory?.resolveIdentity(request.headers.authorization);
+    await this.documentStore.importLegacy(user);
+    return this.documentStore.get(user, id);
+  }
+
+  @Get('documents/:documentId/history')
+  async history(@Param('documentId') id: string, @Req() request: FastifyRequest) {
+    const user = await this.memory?.resolveIdentity(request.headers.authorization);
+    return this.documentStore.history(user, id);
   }
 
   @Get('runs/:runId/trace')

@@ -1,4 +1,6 @@
 import { MemoryInspector } from './memory-inspector';
+import { DocumentReader } from './document-reader';
+import type { DocumentView } from '@bio/contracts';
 import { useMaterialOriginal } from './use-material-original';
 import { accountCacheKey } from './account-cache';
 import { collectReceiptMessage, createReceipt, readReceipt, saveReceipt, type CallMessages } from './session-receipt';
@@ -125,6 +127,7 @@ export function App() {
   const voiceTurn = useRef<{ record: RunRecord; saved: boolean } | null>(null);
   const voiceContext = useRef<VoiceRequest>({});
   const attachmentView = useRef<{ materialId: string; page: number } | undefined>(undefined);
+  const documentView = useRef<DocumentView | undefined>(undefined);
   const [materialTitle, setMaterialTitle] = useState('');
   const [pendingMaterialPanel, setPendingMaterialPanel] = useState<PanelState | null>(null);
   const [materialIds, setMaterialIds] = useState<string[]>([]);
@@ -146,6 +149,9 @@ export function App() {
   );
 
   const shownPanel = pendingMaterialPanel ?? (running ? live.panel : panelOf(selectedRun));
+  useEffect(() => {
+    if (shownPanel?.mode !== 'editor') documentView.current = undefined;
+  }, [shownPanel?.mode]);
   const shownLive = running ? live : selectedRun?.live;
   const turns = conversationThrough(history, selectedRun);
   const latestSpeech = shownLive?.messages.at(-1);
@@ -179,6 +185,7 @@ export function App() {
       context: {
         materialIds,
         ...(attachmentView.current ? { attachmentView: attachmentView.current } : {}),
+        ...(shownPanel?.mode === 'editor' && documentView.current ? { documentView: documentView.current } : {}),
         ...(scene ? { scene } : {}),
         ...(attachmentId.trim() ? { attachments: [{
           id: attachmentId.trim(), kind: attachmentKind, title: attachmentTitle.trim(),
@@ -427,6 +434,7 @@ export function App() {
   }
 
   function startNewConversation(): void {
+    documentView.current = undefined;
     setPendingMaterialPanel(null);
     setMaterialIds([]); setMaterialTitle('');
     setConversationId(''); setSelectedRunId(null); setDocumentId(''); setDocumentVersion(0);
@@ -496,6 +504,14 @@ export function App() {
               motionState={audioPlaying ? 'speak' : voiceEnabled && micListening ? 'listen' : running && (!voiceEnabled || voiceState === 'agent' || voiceState === 'synthesizing' || voiceState === 'finalizing') ? 'think' : 'idle'}
               getMotionLevel={() => voiceRef.current?.getMotionLevel() ?? 0}
               callOpen={callOpen} callStartedAt={callStartedAt} status={voiceStatus} mode={shownPanel?.mode ?? 'conversation'}
+              onManuscriptChat={document => {
+                const view = { documentId: document.id, version: document.version, page: 1 };
+                documentView.current = view; attachmentView.current = undefined;
+                setPendingMaterialPanel({ mode: 'editor', revision: 0, document, documentView: view });
+                setMaterialIds([]); setScene('revision'); setDocumentId(''); setSelectedBlockId(''); setExcerpt('');
+                voiceContext.current = { ...voiceContext.current, context: { scene: 'revision', documentView: view } };
+                startVoice();
+              }}
               onMaterialChat={item => { setProvider('gemini'); setPendingMaterialPanel({ mode: 'attachment', revision: 0, attachment: { id: item.id, kind: item.kind, title: item.title, url: item.url, text: item.text || item.statusMessage } }); setMaterialTitle(item.title); setMaterialIds([item.id]); setScene('attachment_conversation'); setMessage(`我们聊聊《${item.title}》这份资料吧。`); voiceContext.current = { ...voiceContext.current, provider: 'gemini', context: { materialIds: [item.id], scene: 'attachment_conversation' } }; startVoice(); }}
               startDisabled={busy} onStart={startVoice} speakerEnabled={speakerEnabled}
               onSpeakerToggle={() => { const enabled = !speakerEnabled; voiceRef.current?.setSpeaker(enabled); setSpeakerEnabled(enabled); }}
@@ -511,6 +527,12 @@ export function App() {
                   }
                 }} />}>
               {shownPanel ? <WorkspacePanel panel={shownPanel} selectedBlockId={selectedBlockId}
+                onDocumentView={(view, manual) => {
+                  documentView.current = view;
+                  voiceRef.current?.updateDocumentView(view);
+                  voiceContext.current = { ...voiceContext.current, context: { ...voiceContext.current.context, documentView: view } };
+                  if (manual && (audioPlaying || running)) voiceRef.current?.interrupt();
+                }}
                 {...(!busy ? { onSelectBlock: selectBlock } : {})} />
                 : <div className="phone-empty"><strong>今天想聊点什么？</strong><p>我在这里，陪你慢慢讲。</p></div>}
             </PhonePreview>
@@ -1005,10 +1027,11 @@ function HistoricalAttachment({ attachment }: { attachment: PanelAttachment }) {
   </>;
 }
 
-function WorkspacePanel({ panel, onSelectBlock, selectedBlockId }: {
+function WorkspacePanel({ panel, onSelectBlock, selectedBlockId, onDocumentView }: {
   panel: PanelState;
   selectedBlockId?: string;
   onSelectBlock?: (panel: PanelState, block: PanelBlock) => void;
+  onDocumentView?: (view: DocumentView, manual: boolean) => void;
 }) {
   const modes = { conversation: '纯对话', attachment: '附件查看', editor: '共同编辑' };
   return <article className="answer-card work-panel">
@@ -1017,20 +1040,13 @@ function WorkspacePanel({ panel, onSelectBlock, selectedBlockId }: {
     {panel.mode === 'attachment' && panel.attachment && <HistoricalAttachment key={panel.attachment.id} attachment={panel.attachment} />}
     {panel.mode === 'editor' && !panel.document && <p>还没有文档内容。</p>}
     {panel.mode === 'editor' && panel.document && <>
-      <h3>{panel.document.title} <small>版本 {panel.document.version}</small></h3>
-      {panel.document.blocks.map(block => <section className={`panel-block ${selectedBlockId === block.id ? 'panel-block--selected' : ''}`} key={block.id}>
-        {block.kind === 'heading' ? <h4>{block.text}</h4>
-          : block.kind === 'list' ? <ul>{block.text.split('\n').map((text, index) => <li key={index}>{text}</li>)}</ul>
-          : block.kind === 'quote' ? <blockquote>{block.text}</blockquote>
-          : block.kind === 'code' ? <pre><code>{block.text}</code></pre>
-          : <p>{block.text}</p>}
-        {onSelectBlock && <button type="button" onClick={() => onSelectBlock(panel, block)} aria-pressed={selectedBlockId === block.id}>{selectedBlockId === block.id ? '已选中' : '选中这段'}</button>}
-      </section>)}
+      <DocumentReader document={panel.document} view={panel.documentView} navigationKey={panel.revision} onView={onDocumentView}
+        selectedBlockId={selectedBlockId} onSelectBlock={onSelectBlock ? block => onSelectBlock(panel, block) : undefined} />
       {panel.lastChange && <details><summary>查看本次修改</summary>
         {panel.lastChange.before.map(block => <p className="panel-removed" key={`before-${block.id}`}>修改前：{block.text}</p>)}
         {panel.lastChange.after.map(block => <p className="panel-added" key={`after-${block.id}`}>修改后：{block.text}</p>)}
       </details>}
-      <small>草稿保存在本地会话中，未修改附件原件。</small>
+      <small>文稿已保存 · 版本 {panel.document.version} · 可以请令狸修改或恢复旧版本</small>
     </>}
   </article>;
 }

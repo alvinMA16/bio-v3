@@ -19,4 +19,7 @@ Page({
   },
   select(event: WechatMiniprogram.TouchEvent) { const item = this.data.items[event.currentTarget.dataset.index]; if (item) this.load(`/${encodeURIComponent(item.conversationId)}/${encodeURIComponent(item.id)}`); },
   back() { this.load(''); },
+  chat() {
+    if (this.data.document) wx.navigateTo({ url: `/pages/chat/index?mode=call&documentId=${encodeURIComponent(this.data.document.id)}` });
+  },
 });

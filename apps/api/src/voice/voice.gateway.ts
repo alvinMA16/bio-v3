@@ -7,7 +7,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'node:http';
 import type { VoiceClientMessage } from '@bio/contracts';
 import { AgentService } from '../agent/agent.service.js';
-import { AttachmentViewDto, CompleteChatDto } from '../chat/dto/complete-chat.dto.js';
+import { AttachmentViewDto, DocumentViewDto, CompleteChatDto } from '../chat/dto/complete-chat.dto.js';
 import { VolcengineAsr } from './volcengine-asr.js';
 import { DoubaoTts } from './doubao-tts.js';
 import { randomUUID } from 'node:crypto';
@@ -67,7 +67,7 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
     let persistence = Promise.resolve();
     let finalized: Promise<void> | undefined;
     const delay = Number(this.config.get('VOICE_ENDPOINT_MS', 2500));
-    const session = new VoiceSession(this.asr, this.tts, (input, emit, signal, trigger) => this.agent.run({ ...input, ...(conversationId ? { conversationId } : {}) }, emit, signal, user ? { userId: user, ...(callId ? { callId } : {}) } : undefined, trigger), event => {
+    const session = new VoiceSession(this.asr, this.tts, (input, emit, signal, trigger, runtime) => this.agent.run({ ...input, ...(conversationId ? { conversationId } : {}) }, emit, signal, user ? { userId: user, ...(callId ? { callId } : {}) } : undefined, trigger, runtime), event => {
       if (ws.readyState !== WebSocket.OPEN) return;
       if (ws.bufferedAmount > 2 * 1024 * 1024) { ws.close(1013, 'Slow connection'); return; }
       ws.send(JSON.stringify(event));
@@ -154,6 +154,10 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
           } else if (message.type === 'playback.stop') {
             const code = ['invalid_audio', 'audio_queue_limit', 'audio_context_failed', 'speaker_muted'].includes(message.code) ? message.code : 'playback_failed';
             session.stopPlayback(message.turnId, code);
+          } else if (message.type === 'document.view') {
+            const view = plainToInstance(DocumentViewDto, message.view);
+            if (!view || (await validate(view, { whitelist: true, forbidNonWhitelisted: true })).length) throw new Error('Invalid document view');
+            session.updateDocumentView(message.turnId, view);
           } else if (message.type === 'attachment.view') {
             const view = plainToInstance(AttachmentViewDto, message.view);
             if (!view || (await validate(view, { whitelist: true, forbidNonWhitelisted: true })).length) throw new Error('Invalid attachment view');

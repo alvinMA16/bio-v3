@@ -189,6 +189,9 @@ export class BrowserVoice {
   updateAttachmentView(view: { materialId: string; page: number }): void {
     if (!this.closed && this.turnId) this.send({ type: 'attachment.view', turnId: this.turnId, view });
   }
+  updateDocumentView(view: import('@bio/contracts').DocumentView): void {
+    if (!this.closed && this.turnId) this.send({ type: 'document.view', turnId: this.turnId, view });
+  }
   finish(): void {
     if (!this.listening || this.finishing) return;
     this.finishing = true; this.capture?.port.postMessage('finish');

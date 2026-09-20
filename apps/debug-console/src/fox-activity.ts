@@ -9,8 +9,8 @@ export function foxActivityOf({ running, live, panel, audioPlaying, userSpeaking
   audioPlaying?: boolean; userSpeaking?: boolean;
   voiceState?: Extract<VoiceServerMessage, { type: 'state' }>['state'];
 }): FoxActivity {
-  const writing = running && !!live.activeTools?.some(tool => tool.name === 'update_content');
-  const reading = running && !!live.activeTools?.some(tool => tool.name === 'get_content');
+  const writing = running && !!live.activeTools?.some(tool => ['edit_document', 'restore_document', 'update_content'].includes(tool.name));
+  const reading = running && !!live.activeTools?.some(tool => ['read_document', 'read_attachment', 'get_content'].includes(tool.name));
   const awaitingInput = audioPlaying !== undefined && (voiceState === 'connecting' || voiceState === 'listening');
   const processing = running || (audioPlaying !== undefined && voiceState !== undefined
     && ['finalizing', 'agent', 'synthesizing'].includes(voiceState));

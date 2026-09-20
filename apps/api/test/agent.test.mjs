@@ -1,7 +1,7 @@
 import { MaterialsService } from '../dist/materials/materials.service.js';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
-import { after, before, test } from 'node:test';
+import { after, before, beforeEach, test } from 'node:test';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -31,7 +31,7 @@ function sendCompletion(response, { text = '你好，我是令狸。', tool, mod
   })}\n\n`);
   chunk({ role: 'assistant' });
   if (tool) chunk({ tool_calls: [{ index: 0, id: `call_${randomUUID()}`, type: 'function', function: {
-    name: typeof tool === 'object' ? tool.name : 'update_content', arguments: JSON.stringify(typeof tool === 'object' ? tool.arguments : { documentId: 'draft', expectedVersion: 0, title: '文章草稿', operations: [{ action: 'insert', block: { id: 'p1', kind: 'paragraph', text: '这是正文。' } }] }),
+    name: typeof tool === 'object' ? tool.name : 'edit_document', arguments: JSON.stringify(typeof tool === 'object' ? tool.arguments : { documentId: 'draft', expectedVersion: 0, title: '文章草稿', operations: [{ action: 'insert', block: { id: 'p1', kind: 'paragraph', text: '这是正文。' } }] }),
   } }] });
   else chunk({ content: text });
   chunk({}, tool ? 'tool_calls' : 'stop');
@@ -41,6 +41,8 @@ function sendCompletion(response, { text = '你好，我是令狸。', tool, mod
   } })}\n\n`);
   response.end('data: [DONE]\n\n');
 }
+
+beforeEach(async () => { await rm(join(root, 'documents'), { recursive: true, force: true }); });
 
 before(async () => {
   root = await mkdtemp(join(tmpdir(), 'bio-pi-test-'));
@@ -62,20 +64,19 @@ before(async () => {
       return;
     }
     const lastCall = payload.messages.at(-2)?.tool_calls?.[0]?.function;
-    const createAfterSwitch = last?.role === 'tool' && lastCall?.name === 'switch_mode'
-      && JSON.parse(lastCall.arguments).mode === 'revision'
+    const showAfterEdit = last?.role === 'tool' && lastCall?.name === 'edit_document'
       && textOf(payload.messages.findLast(message => message.role === 'user')) === 'SHOW_PANEL';
     const runtime = snapshots(payload)[0];
     sendCompletion(response, {
       model: payload.model,
-      tool: createAfterSwitch ? true
-        : lastText === 'SHOW_PANEL' ? (JSON.parse(textOf(runtime)).scene === 'revision' ? true : { name: 'switch_mode', arguments: { mode: 'revision' } })
+      tool: showAfterEdit ? { name: 'show_document', arguments: { documentId: 'draft' } }
+        : lastText === 'SHOW_PANEL' ? true
         : lastText === 'OPEN_ATTACHMENT' ? { name: 'switch_mode', arguments: { mode: 'attachment_conversation', targetId: 'photo1' } }
         : lastText === 'OPEN_MISSING_ATTACHMENT' ? { name: 'switch_mode', arguments: { mode: 'attachment_conversation', targetId: 'missing' } }
         : lastText === 'CLOSE_PANEL' ? { name: 'switch_mode', arguments: { mode: 'conversation' } }
-        : lastText === 'OPEN_DRAFT' ? { name: 'switch_mode', arguments: { mode: 'revision', targetId: 'draft' } }
-        : lastText === 'EDIT_DRAFT' ? { name: 'update_content', arguments: { documentId: 'draft', expectedVersion: 1, operations: [{ action: 'replace', targetId: 'p1', block: { id: 'p1', kind: 'paragraph', text: '这是修改后的正文。' } }] } }
-        : lastText === 'READ_PANEL' ? { name: 'get_content', arguments: {} } : false,
+        : lastText === 'OPEN_DRAFT' ? { name: 'show_document', arguments: { documentId: 'draft' } }
+        : lastText === 'EDIT_DRAFT' ? { name: 'edit_document', arguments: { documentId: 'draft', expectedVersion: 1, operations: [{ action: 'replace', targetId: 'p1', block: { id: 'p1', kind: 'paragraph', text: '这是修改后的正文。' } }] } }
+        : lastText === 'READ_PANEL' ? { name: 'read_document', arguments: JSON.parse(textOf(runtime)).screen.targetId === 'draft' ? { documentId: 'draft' } : {} } : false,
       text: payload.tools?.length ? '你好，我是令狸。' : 'COMPACTED_MEMORY_MARKER',
     });
   });
@@ -129,7 +130,7 @@ test('existing endpoint uses Pi, persists history and isolates conversations', a
   assert.equal(result.usage.promptTokens, 12);
   assert.equal(result.usage.promptCacheHitTokens, 2);
   const request = requests.at(-1);
-  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['switch_mode', 'update_content', 'get_content']);
+  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['switch_mode', 'read_document', 'edit_document', 'show_document', 'restore_document', 'read_attachment']);
   assert.deepEqual(request.thinking, { type: 'disabled' });
   assert.ok(JSON.stringify(request.messages).includes('TEST_PERSONA'));
   assert.ok(!JSON.stringify(request.messages).includes('Compound Codex'));
@@ -306,6 +307,7 @@ test('runtime snapshot precedes this user turn, is replaced on resume and never 
 
 test('runtime snapshot remains before user during tool loop for both providers', async () => {
   for (const provider of ['deepseek', 'qwen']) {
+    await rm(join(root, 'documents'), { recursive: true, force: true });
     const start = requests.length;
     const response = await post('agent/runs/stream', { provider, message: 'SHOW_PANEL', context: {
       scene: 'revision', workspace: { documentId: 'doc-tool', version: 1, excerpt: 'TOOL_WORKSPACE' },
@@ -325,10 +327,10 @@ test('runtime snapshot remains before user during tool loop for both providers',
     const after = JSON.parse(textOf(snapshots(calls[2])[0]));
     assert.equal(before.scene, 'conversation');
     assert.equal(after.scene, 'revision');
-    assert.equal(switched.scene, 'revision');
+    assert.equal(switched.scene, 'conversation');
     assert.equal(switched.screen.targetId, null);
     assert.equal(switched.contentView.document, undefined);
-    assert.equal(after.guidance, switched.guidance);
+    assert.notEqual(after.guidance, switched.guidance);
     assert.notEqual(after.guidance, before.guidance);
     assert.equal(after.screen.mainContent, 'document');
     assert.equal(after.screen.targetId, 'draft');
@@ -379,14 +381,13 @@ test('panel modes, local drafts and attachment registry survive real SDK session
   assert.equal(panelOf(reopened).document.blocks[0].text, '这是修改后的正文。');
   await service.run({ conversationId, message: 'READ_PANEL' });
   const toolResult = JSON.parse(textOf(requests.at(-1).messages.at(-1)));
-  assert.equal(toolResult.mode, 'editor');
-  assert.equal(toolResult.document.version, 2);
+  assert.equal(toolResult.version, 2);
   const saved = JSON.parse(await readFile(join(root, 'conversations', conversationId, 'panel.json'), 'utf8'));
   assert.equal(saved.attachments[0].url, 'https://example.com/photo.png');
   assert.equal(saved.documents.length, 1);
   const isolated = await service.run({ message: 'READ_PANEL' });
   assert.equal(panelOf(isolated).mode, 'conversation');
-  assert.equal(JSON.parse(textOf(requests.at(-1).messages.at(-1))).availableDocuments.length, 0);
+  assert.equal(JSON.parse(textOf(requests.at(-1).messages.at(-1))).length, 1, 'documents are available across conversations for the same owner');
 });
 
 test('switch_mode refreshes guidance and screen within the tool loop and retains state on failure', async () => {

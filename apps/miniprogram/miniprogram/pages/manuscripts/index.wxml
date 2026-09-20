@@ -5,6 +5,7 @@
   <view wx:elif="{{document}}">
     <view class="title">{{document.title}}</view><view class="version">已保存草稿 · 版本 {{document.version}}</view>
     <view wx:for="{{document.blocks}}" wx:key="id" class="block {{item.kind === 'heading' ? 'heading' : ''}}">{{item.text}}</view>
+    <button bindtap="chat">和令狸一起看这篇</button>
   </view>
   <view wx:else>
     <button wx:for="{{items}}" wx:key="index" data-index="{{index}}" bindtap="select">{{item.title}}<view class="version">已保存草稿 · 版本 {{item.version}}</view></button>

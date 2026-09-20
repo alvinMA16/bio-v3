@@ -150,3 +150,6 @@
 .page--attachment .call-buttons button { color: #42534a; background: #dbe6dfb0; backdrop-filter: blur(14px); }
 .page--attachment .call-buttons .call-end { background: #bb6969; color: #fff; }
 .page--attachment .call-scene { width: 214rpx; height: 462rpx; left: -42rpx; top: -88rpx; }
+.document-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; font-size: 24rpx; }
+.document-pagination button { background: rgba(215,231,217,.6); border-radius: 28rpx; }
+.document-pagination button::after { border: 0; }

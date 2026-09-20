@@ -29,9 +29,9 @@ function fixture({ run, synthesize, text = '修改第二段' } = {}) {
     if (synthesize) return synthesize(text, signal, audio);
     await audio(new Uint8Array([0, 0, 1, 0]));
   } };
-  const runner = async (input, emit, signal, trigger) => {
+  const runner = async (input, emit, signal, trigger, runtime) => {
     inputs.push(input);
-    if (run) return run(input, emit, signal, trigger);
+    if (run) return run(input, emit, signal, trigger, runtime);
     emit({ type: 'speech.delta', messageId: 'before', delta: '我来改。' });
     emit({ type: 'speech.completed', messageId: 'before', text: '我来改。' });
     emit({ type: 'tool.started', name: 'update_content', toolCallId: 't' });

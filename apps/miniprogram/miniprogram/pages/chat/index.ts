@@ -52,11 +52,27 @@ Page({
     conversationId: '',
     messages: [] as ChatMessage[],
     panel: { mode: 'conversation', revision: 0 } as PanelState,
+    documentPage: [] as Array<{ blockId: string; kind: string; text: string; start: number; end: number }>,
+    documentPageCount: 1,
     selectedBlockId: '',
   },
 
   async onLoad(options: Record<string, string | undefined> = {}): Promise<void> {
     if (!await requireAccount() || this.unloaded) return;
+    if (options.documentId) {
+      const document = await new Promise<import('@bio/contracts').PanelDocument | undefined>(resolve => {
+        const token = wx.getStorageSync('bio-auth-token');
+        wx.request<import('@bio/contracts').PanelDocument>({
+          url: `${getApp<IAppOption>().globalData.apiBaseUrl}/agent/documents/${encodeURIComponent(options.documentId!)}`,
+          header: token ? { Authorization: `Bearer ${token}` } : {},
+          success: response => { handleUnauthorized(response.statusCode); resolve(response.statusCode === 200 ? response.data : undefined); },
+          fail: () => resolve(undefined),
+        });
+      });
+      if (this.unloaded) return;
+      if (!document) { wx.showToast({ title: '文稿暂时无法打开', icon: 'none' }); return; }
+      this.showPanel({ mode: 'editor', revision: 0, document, documentView: { documentId: document.id, version: document.version, page: 1 } });
+    }
     this.authenticated = true;
     if (options.materialId) {
       this.materialIds = [options.materialId];
@@ -125,7 +141,7 @@ Page({
         return {
           ...(this.data.conversationId ? { conversationId: this.data.conversationId } : {}),
           ...(this.materialIds.length ? { provider: 'gemini' as const } : {}),
-          context: { ...(this.attachmentView ? { attachmentView: this.attachmentView } : {}), materialIds: this.materialIds, ...(this.materialIds.length ? { scene: 'attachment_conversation' as const } : {}), ...(document && selected ? { workspace: { documentId: document.id, version: document.version, selectedBlockId: selected.id, excerpt: selected.text } } : {}) },
+          context: { ...(this.data.panel.mode === 'editor' && this.data.panel.documentView ? { documentView: this.data.panel.documentView } : {}), ...(this.attachmentView ? { attachmentView: this.attachmentView } : {}), materialIds: this.materialIds, ...(this.materialIds.length ? { scene: 'attachment_conversation' as const } : {}), ...(document && selected ? { workspace: { documentId: document.id, version: document.version, selectedBlockId: selected.id, excerpt: selected.text } } : {}) },
         };
       },
       event: event => {
@@ -230,7 +246,7 @@ Page({
       data: {
         message,
         ...(this.materialIds.length ? { provider: 'gemini' as const } : {}),
-          context: { ...(this.attachmentView ? { attachmentView: this.attachmentView } : {}), materialIds: this.materialIds, ...(this.materialIds.length ? { scene: 'attachment_conversation' as const } : {}), ...(document && selected ? { workspace: {
+          context: { ...(this.data.panel.mode === 'editor' && this.data.panel.documentView ? { documentView: this.data.panel.documentView } : {}), ...(this.attachmentView ? { attachmentView: this.attachmentView } : {}), materialIds: this.materialIds, ...(this.materialIds.length ? { scene: 'attachment_conversation' as const } : {}), ...(document && selected ? { workspace: {
           documentId: document.id, version: document.version, selectedBlockId: selected.id, excerpt: selected.text,
         } } : {}) },
         conversationId: this.data.conversationId || undefined,
@@ -265,7 +281,20 @@ Page({
 
   showPanel(panel: PanelState): void {
     if (panel.mode !== this.data.panel.mode || panel.attachment?.id !== this.data.panel.attachment?.id) this.setData({ attachmentFocused: false });
-    this.setData({ panel: localPanel(panel), selectedBlockId: '' });
+    const page = panel.documentView?.page ?? 1;
+    this.setData({ panel: localPanel(panel), selectedBlockId: '', documentPageCount: panel.readingPages?.length ?? 1,
+      documentPage: panel.readingPages?.[page - 1]?.fragments ?? panel.document?.blocks.map(block => ({ blockId: block.id, kind: block.kind, text: block.text, start: 0, end: block.text.length })) ?? [] }, () => {
+      if (panel.mode === 'editor' && panel.documentView) voiceClient?.updateDocumentView(panel.documentView);
+    });
+  },
+
+  turnDocumentPage(event: WechatMiniprogram.BaseEvent): void {
+    const panel = this.data.panel, view = panel.documentView;
+    if (!view) return;
+    const page = view.page + Number(event.currentTarget.dataset.delta);
+    if (page < 1 || page > this.data.documentPageCount) return;
+    this.showPanel({ ...panel, documentView: { ...view, page } });
+    voiceClient?.interrupt();
   },
 
   showRequestError(message: string): void {

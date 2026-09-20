@@ -488,3 +488,8 @@ body { min-width: 320px; }
 .manuscript-folder small { display: block; margin-top: 6px; color: #796349; font-size: 11px; }
 .manuscript-folder article { overflow-wrap: anywhere; line-height: 1.7; }
 .document-progress { font-size: 12px; color: #796349; padding: 8px; background: #f5efe5; border-radius: 6px; }
+.document-reader { min-width: 0; overflow-wrap: anywhere; }
+.document-pagination { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 18px; font-size: 13px; }
+.document-pagination button { border: 0; border-radius: 16px; padding: 9px 12px; color: #344639; background: linear-gradient(140deg, rgba(255,255,255,.82), rgba(207,225,211,.45)); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 2px 8px rgba(35,59,41,.07); backdrop-filter: blur(12px); }
+.document-pagination button:disabled { opacity: .4; }
+.document-reader pre { white-space: pre-wrap; }

@@ -1,7 +1,9 @@
 import type { AgentEvent, ChatCompletionRequest, ChatCompletionResponse } from './index.js';
+import type { DocumentView } from './documents.js';
 
 export type VoiceRequest = Omit<ChatCompletionRequest, 'message'>;
 export type VoiceClientMessage =
+  | { type: 'document.view'; turnId: string; view: DocumentView }
   | { type: 'listen'; turnId: string; callId?: string; resume?: boolean; playbackFeedback?: boolean; request: VoiceRequest }
   | { type: 'playback'; turnId: string; playedSamples: number }
   | { type: 'playback.stop'; turnId: string; code: string }

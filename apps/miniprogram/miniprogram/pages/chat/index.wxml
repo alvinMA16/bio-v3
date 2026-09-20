@@ -38,7 +38,8 @@
       <view wx:if="{{panel.mode === 'editor' && !panel.document && !agentWorking && !sending}}">正文尚未生成成功，可以请令狸重新整理。</view>
       <view wx:if="{{panel.mode === 'editor' && panel.document}}">
         <view class="work-panel__title">{{panel.document.title}} · 版本 {{panel.document.version}}</view>
-        <view wx:for="{{panel.document.blocks}}" wx:key="id" class="work-panel__block work-panel__block--{{item.kind}} {{selectedBlockId === item.id ? 'work-panel__block--selected' : ''}}" bindtap="selectBlock" data-id="{{item.id}}">
+        <view class="document-pagination"><button size="mini" disabled="{{panel.documentView.page <= 1}}" bindtap="turnDocumentPage" data-delta="-1">上一页</button><text>第 {{panel.documentView.page || 1}} / {{documentPageCount}} 页</text><button size="mini" disabled="{{panel.documentView.page >= documentPageCount}}" bindtap="turnDocumentPage" data-delta="1">下一页</button></view>
+        <view wx:for="{{documentPage}}" wx:key="blockId" class="work-panel__block work-panel__block--{{item.kind}} {{selectedBlockId === item.blockId ? 'work-panel__block--selected' : ''}}" bindtap="selectBlock" data-id="{{item.blockId}}">
           <text selectable>{{item.text}}</text>
         </view>
         <view class="work-panel__hint">点选一段后，可以让令狸修改；已写入的草稿可在文稿集中查看。</view>

@@ -16,6 +16,7 @@ const toolLabels: Record<string, string> = {
   // Old persisted traces remain readable; only the new names are exposed to the model.
   set_panel_mode: '展示内容', update_panel_content: '更新正文', get_panel_state: '读取内容',
   switch_mode: '切换模式', show_content: '展示内容', update_content: '更新正文', get_content: '读取内容',
+  read_document: '读取文稿', edit_document: '修改文稿', show_document: '展示文稿', restore_document: '恢复文稿版本', read_attachment: '读取附件',
 };
 
 export function applyLiveEvent(previous: LiveRun, event: AgentEvent, elapsedMs: number): LiveRun {

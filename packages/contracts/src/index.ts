@@ -1,3 +1,6 @@
+import type { DocumentView, DocumentPage } from './documents.js';
+export { documentPages } from './documents.js';
+export type { DocumentView, DocumentPage } from './documents.js';
 export type ChatRole = 'user' | 'assistant' | 'system';
 
 
@@ -39,6 +42,7 @@ export interface PanelBlock {
 }
 
 export interface PanelDocument {
+  schemaVersion?: 1;
   id: string;
   title: string;
   version: number;
@@ -50,6 +54,8 @@ export interface PanelState {
   mode: 'conversation' | 'attachment' | 'editor';
   attachment?: PanelAttachment;
   document?: PanelDocument;
+  documentView?: DocumentView;
+  readingPages?: DocumentPage[];
   lastChange?: { documentId: string; fromVersion: number; toVersion: number; before: PanelBlock[]; after: PanelBlock[] };
 }
 
@@ -67,6 +73,7 @@ export interface MaterialUploadResult extends Material {
 }
 
 export interface AgentContextSnapshot {
+  documentView?: DocumentView;
   attachmentView?: { materialId: string; page: number };
   materialIds?: string[];
   attachments?: PanelAttachment[];

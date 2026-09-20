@@ -1,4 +1,5 @@
 import type { AgentScene, PanelAttachment, PanelBlock, PanelDocument, PanelState } from '@bio/contracts';
+import { documentPages, type DocumentView } from '@bio/contracts';
 import { existsSync, readFileSync, renameSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -26,12 +27,15 @@ export class PanelWorkspace {
   private value: WorkspaceFile;
   private readonly path: string;
   private readonly originalStatuses = new Map<string, PanelAttachment['originalStatus']>();
+  private acknowledgedView?: DocumentView;
+  private documentDirectory: Array<Pick<PanelDocument, 'id' | 'title' | 'version'>> = [];
 
   constructor(cwd: string, attachments: PanelAttachment[] = []) {
     this.path = join(cwd, 'panel.json');
     this.value = existsSync(this.path)
       ? JSON.parse(readFileSync(this.path, 'utf8')) as WorkspaceFile
       : { panel: { mode: 'conversation', revision: 0 }, attachments: [], documents: [] };
+    this.documentDirectory = this.value.documents.map(({ id, title, version }) => ({ id, title, version }));
     const next = structuredClone(this.value);
     for (const attachment of attachments) {
       if ((attachment.kind === 'image' && !attachment.url) || (attachment.kind === 'document' && !attachment.text && !attachment.url)) {
@@ -60,8 +64,71 @@ export class PanelWorkspace {
 
   state(): PanelState {
     const panel = structuredClone(this.value.panel);
+    if (panel.document) panel.readingPages = documentPages(panel.document);
     if (panel.attachment) panel.attachment = this.attachmentView(panel.attachment);
     return panel;
+  }
+
+  /** Document copies here are presentation caches, not the authoritative store. */
+  hydrateDocuments(documents: PanelDocument[], currentId?: string): void {
+    const next = structuredClone(this.value);
+    this.documentDirectory = documents.map(({ id, title, version }) => ({ id, title, version }));
+    // Keep only the open document in the session cache, never copy the user's library into every conversation.
+    next.documents = [];
+    if (next.panel.document) {
+      const restored = documents.find(item => item.id === (currentId ?? next.panel.document!.id));
+      if (restored) {
+        if (restored.version !== next.panel.document.version) delete next.panel.lastChange;
+        next.panel.document = restored;
+        next.documents = [restored];
+      }
+      else { delete next.panel.document; delete next.panel.documentView; }
+      if (next.panel.document) next.panel.documentView = {
+        documentId: next.panel.document.id, version: next.panel.document.version,
+        page: Math.min(next.panel.documentView?.page ?? 1, documentPages(next.panel.document).length),
+      };
+    }
+    this.commit(next);
+  }
+
+  acceptDocumentView(view?: DocumentView): boolean {
+    const document = this.value.documents.find(item => item.id === view?.documentId);
+    if (!view || !document || document.version !== view.version || !Number.isInteger(view.page)
+      || view.page < 1 || view.page > documentPages(document).length) return false;
+    if (this.value.panel.documentView?.documentId !== view.documentId || this.value.panel.documentView.version !== view.version
+      || this.value.panel.documentView.page !== view.page || this.value.panel.mode !== 'editor') this.showDocument(document, view.page);
+    this.acknowledgedView = { ...view }; return true;
+  }
+
+  showDocument(document: PanelDocument, page = 1): PanelState {
+    const pages = documentPages(document);
+    if (!Number.isInteger(page) || page < 1 || page > pages.length) throw new Error(`页码超出范围，共 ${pages.length} 页`);
+    const next = structuredClone(this.value);
+    next.documents = [...next.documents.filter(item => item.id !== document.id), document];
+    next.panel = { mode: 'editor', revision: next.panel.revision + 1, document,
+      documentView: { documentId: document.id, version: document.version, page } };
+    this.commit(next); return this.state();
+  }
+
+  documentSaved(document: PanelDocument): PanelState {
+    const previous = this.value.documents.find(item => item.id === document.id);
+    const next = structuredClone(this.value);
+    next.documents = [...next.documents.filter(item => item.id !== document.id), document];
+    // Editing never opens or switches the user's document. Only refresh it when already open.
+    if (next.panel.document?.id === document.id) {
+      const oldPages = documentPages(next.panel.document);
+      const anchor = oldPages[(next.panel.documentView?.page ?? 1) - 1]?.fragments[0];
+      const pages = documentPages(document);
+      const anchoredPage = anchor ? pages.findIndex(item => item.fragments.some(fragment => fragment.blockId === anchor.blockId && fragment.start <= anchor.start && fragment.end >= anchor.start)) : -1;
+      next.panel.document = document;
+      next.panel.documentView = { documentId: document.id, version: document.version,
+        page: anchoredPage >= 0 ? anchoredPage + 1 : Math.min(next.panel.documentView?.page ?? 1, pages.length) };
+      next.panel.lastChange = { documentId: document.id, fromVersion: previous?.version ?? 0, toVersion: document.version,
+        before: (previous?.blocks ?? []).filter(block => JSON.stringify(block) !== JSON.stringify(document.blocks.find(item => item.id === block.id))),
+        after: document.blocks.filter(block => JSON.stringify(block) !== JSON.stringify(previous?.blocks.find(item => item.id === block.id))) };
+    }
+    next.panel.revision++;
+    this.commit(next); return this.state();
   }
 
   scene(): AgentScene {
@@ -74,7 +141,7 @@ export class PanelWorkspace {
       : mode === 'revision' ? 'editor' : 'conversation', targetId);
   }
 
-  /** Bounded model context. Full content is available through get_content. */
+  /** Bounded model context. Full content is available through read_document. */
   context() {
     const panel = this.state();
     let remaining = 6000;
@@ -90,7 +157,9 @@ export class PanelWorkspace {
       scene: this.scene(),
       revision: panel.revision, mode: panel.mode, document,
       screen: {
-        source: 'server_display_state', renderAcknowledged: false,
+        source: 'server_display_state', renderAcknowledged: panel.mode === 'editor' && !!panel.documentView
+          && panel.documentView.documentId === this.acknowledgedView?.documentId
+          && panel.documentView.version === this.acknowledgedView.version && panel.documentView.page === this.acknowledgedView.page,
         mainContent: panel.mode === 'conversation' ? 'assistant_speech_text'
           : panel.mode === 'attachment' ? 'attachment' : 'document',
         description: panel.mode === 'conversation'
@@ -99,14 +168,17 @@ export class PanelWorkspace {
             ? '主区域展示当前附件；普通回复用于播报，不替换附件。'
             : panel.document
               ? '主区域展示当前文档；普通回复用于播报，不替换文档正文，正文修改必须调用内容工具。'
-              : '主区域为空白文档编辑区，尚未选择或创建文档；使用 update_content 写入新文档。',
+              : '主区域为空白文稿区。先 edit_document 创建，再 show_document 展示。',
         targetId: panel.attachment?.id ?? panel.document?.id ?? null,
         title: panel.attachment?.title ?? panel.document?.title ?? null,
         documentVersion: panel.document?.version ?? null,
+        readingPage: panel.document ? documentPages(panel.document)[(panel.documentView?.page ?? 1) - 1] : null,
+        totalPages: panel.document ? documentPages(panel.document).length : null,
       },
       attachment: panel.attachment && { ...panel.attachment, text: panel.attachment.text?.slice(0, 6000), textTruncated: (panel.attachment.text?.length ?? 0) > 6000 },
       availableAttachments: this.value.attachments.map(({ id, kind, title }) => ({ id, kind, title, originalStatus: this.originalStatuses.get(id) })),
-      availableDocuments: this.value.documents.map(({ id, title, version }) => ({ id, title, version })),
+      availableDocuments: [...this.documentDirectory.filter(item => !this.value.documents.some(document => document.id === item.id)),
+        ...this.value.documents.map(({ id, title, version }) => ({ id, title, version }))],
     };
   }
 
@@ -142,6 +214,7 @@ export class PanelWorkspace {
       const document = next.documents.find(item => item.id === targetId);
       if (!document) throw new Error('草稿不存在；先通过 update_content 创建草稿');
       panel.document = document;
+      panel.documentView = { documentId: document.id, version: document.version, page: 1 };
     } else if (targetId) throw new Error('纯对话模式不接受目标 ID');
     next.panel = panel;
     this.commit(next);

@@ -58,7 +58,14 @@ export class AttachmentViewDto {
   @IsUUID('4') materialId!: string;
   @IsInt() @Min(1) page!: number;
 }
+export class DocumentViewDto {
+  @IsString() @Matches(/^[a-zA-Z0-9_-]{1,64}$/) documentId!: string;
+  @IsInt() @Min(1) version!: number;
+  @IsInt() @Min(1) page!: number;
+}
 export class ContextSnapshotDto implements AgentContextSnapshot {
+  @IsOptional() @ValidateNested() @Type(() => DocumentViewDto)
+  documentView?: DocumentViewDto;
   @IsOptional() @ValidateNested() @Type(() => AttachmentViewDto)
   attachmentView?: AttachmentViewDto;
   @IsOptional() @IsArray() @ArrayMaxSize(10) @IsUUID('4', { each: true })

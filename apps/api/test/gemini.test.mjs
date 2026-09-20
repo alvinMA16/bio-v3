@@ -30,7 +30,7 @@ test(`${modelId} native streaming executes tools with search=${searchEnabled}`, 
     for await (const chunk of req) raw += chunk;
     requests.push({ url: req.url, headers: req.headers, body: JSON.parse(raw) });
     const parts = requests.length === 1
-      ? [{ functionCall: { name: 'get_content', args: {} } }]
+      ? [{ functionCall: { name: 'read_document', args: {} } }]
       : [{ text: 'Gemini 已读取内容。' }];
     res.writeHead(200, { 'content-type': 'text/event-stream' });
     res.end(`data: ${JSON.stringify({ candidates: [{ content: { role: 'model', parts }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 5, totalTokenCount: 17 } })}\n\n`);
@@ -48,12 +48,12 @@ test(`${modelId} native streaming executes tools with search=${searchEnabled}`, 
     assert.equal(requests[0].body.generationConfig.thinkingConfig.thinkingLevel, thinkingLevel);
     assert.equal(requests[0].headers['x-goog-api-key'], 'gemini-local-test-key');
     assert.ok(requests[0].body.systemInstruction);
-    assert.ok(requests[0].body.tools[0].functionDeclarations.some(tool => tool.name === 'get_content'));
+    assert.ok(requests[0].body.tools[0].functionDeclarations.some(tool => tool.name === 'read_document'));
     for (const request of requests) {
       assert.equal(request.body.tools.filter(tool => tool.googleSearch).length, searchEnabled ? 1 : 0);
       assert.equal(request.body.toolConfig?.includeServerSideToolInvocations, searchEnabled ? true : undefined);
     }
-    assert.ok(requests[1].body.contents.some(content => content.parts.some(part => part.functionResponse?.name === 'get_content')));
+    assert.ok(requests[1].body.contents.some(content => content.parts.some(part => part.functionResponse?.name === 'read_document')));
     const reply = session.messages.at(-1);
     assert.equal(reply.role, 'assistant');
     assert.ok(reply.content.some(part => part.text === 'Gemini 已读取内容。'));

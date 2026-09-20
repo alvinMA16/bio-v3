@@ -1,3 +1,4 @@
+> 文稿工具、独立存储、分页与逐页朗读已更新，见 [文稿实现](manuscripts.md)。下文旧的 update_content/get_content 与会话草稿描述保留为历史架构背景，当前以该文档和代码为准。
 > 记忆与会话持久化已新增可选 PostgreSQL 实现，见 [通话记忆 v1](memory.md)。下文关于尚无 Memory、单进程文件存储的描述适用于未启用数据库记忆的模式。
 
 # Agent SDK 骨架

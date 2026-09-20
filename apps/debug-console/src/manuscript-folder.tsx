@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { PanelDocument } from '@bio/contracts';
+import { DocumentReader } from './document-reader';
 
 type Entry = { conversationId: string; id: string; title: string; version: number };
-export function ManuscriptFolder() {
+export function ManuscriptFolder({ onChat }: { onChat?: ((document: PanelDocument) => void) | undefined }) {
   const [items, setItems] = useState<Entry[]>([]);
   const [document, setDocument] = useState<PanelDocument>();
   const [error, setError] = useState('');
@@ -26,6 +27,7 @@ export function ManuscriptFolder() {
     {loading && <p role="status">正在读取文稿…</p>}
     {error && <p role="alert">{error} <button type="button" onClick={() => setAttempt(value => value + 1)}>重试</button></p>}
     {!loading && !error && !selected && (items.length ? items.map(item => <button type="button" key={`${item.conversationId}/${item.id}`} onClick={() => setSelected(item)}>{item.title}<small>已保存草稿 · 版本 {item.version}</small></button>) : <p>还没有已保存的文稿。通话中可以请令狸帮你整理。</p>)}
-    {document && <article><h3>{document.title}</h3><small>已保存草稿 · 版本 {document.version}</small>{document.blocks.map(block => block.kind === 'heading' ? <h4 key={block.id}>{block.text}</h4> : <p key={block.id} style={{ whiteSpace: 'pre-wrap' }}>{block.text}</p>)}</article>}
+    {document && <article><DocumentReader document={document} /><small>已保存文稿 · 版本 {document.version}</small>
+      {onChat && <button type="button" onClick={() => onChat(document)}>和令狸一起看这篇</button>}</article>}
   </div>;
 }

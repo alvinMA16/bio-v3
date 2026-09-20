@@ -2,8 +2,10 @@ import type { AgentEvent, ChatCompletionRequest, ChatCompletionResponse, VoicePl
 import type { AsrProvider, AsrStream, TtsProvider } from './providers.js';
 import { SpokenSegments } from './spoken-segments.js';
 import { PlaybackWindow } from './playback-window.js';
+import type { DocumentRuntime } from '../agent/document-runtime.js';
+import type { DocumentView } from '@bio/contracts';
 
-type Runner = (input: ChatCompletionRequest, emit: (event: AgentEvent) => void, signal: AbortSignal, trigger?: 'call_opening') => Promise<ChatCompletionResponse>;
+type Runner = (input: ChatCompletionRequest, emit: (event: AgentEvent) => void, signal: AbortSignal, trigger?: 'call_opening', runtime?: DocumentRuntime) => Promise<ChatCompletionResponse>;
 type Payload = VoiceServerMessage extends infer M ? M extends VoiceServerMessage ? Omit<M, 'turnId' | 'elapsedMs'> : never : never;
 interface Turn {
   id: string; request: VoiceRequest; abort: AbortController; started: number;
@@ -125,6 +127,12 @@ export class VoiceSession {
     turn.request = { ...turn.request, context: { ...turn.request.context, attachmentView: view } };
   }
 
+  updateDocumentView(id: string, view: DocumentView): void {
+    const turn = this.current;
+    if (!turn || turn.id !== id || !this.isCurrent(turn)) return;
+    turn.request = { ...turn.request, context: { ...turn.request.context, documentView: view } };
+  }
+
   async settled(): Promise<void> { await this.lastTask.catch(() => undefined); }
 
   private async complete(turn: Turn, opening = false): Promise<void> {
@@ -145,15 +153,18 @@ export class VoiceSession {
       const segments = new SpokenSegments();
       let segmentId = 0;
       let queuedCharacters = 0;
+      let speechCharacterLimit = 20_000;
       const result = await this.run({ ...turn.request, message: text }, event => {
         if (!this.isCurrent(turn)) return;
         if (event.runId) turn.progress.runId = event.runId;
+        // The document store allows 40,000 UTF-16 characters. Leave room for a short introduction.
+        if (event.type === 'panel.state.updated' && event.panel.document) speechCharacterLimit = 50_000;
         this.emit(turn, { type: 'agent', event });
         if (event.type !== 'speech.delta' && event.type !== 'speech.completed') return;
         const parts = segments.push(event.messageId, event.type === 'speech.delta' ? event.delta : event.text, event.type === 'speech.completed');
         for (const part of parts) {
           queuedCharacters += part.length;
-          if (queuedCharacters > 20_000) {
+          if (queuedCharacters > speechCharacterLimit) {
             // A speech budget must never abort the independently persisted Agent response.
             ttsError = new Error('Speech text queue limit'); turn.speech.abort(); return;
           }
@@ -187,7 +198,17 @@ export class VoiceSession {
             }
           }).catch(error => { ttsError = error; });
         }
-      }, turn.abort.signal, opening ? 'call_opening' : undefined);
+      }, turn.abort.signal, opening ? 'call_opening' : undefined, {
+        getView: () => turn.request.context?.documentView,
+        beforeShow: async signal => {
+          signal?.throwIfAborted();
+          await ttsQueue;
+          if (ttsError) throw ttsError;
+          await turn.window.drained(signal ? AbortSignal.any([turn.speech.signal, signal]) : turn.speech.signal);
+          signal?.throwIfAborted();
+          if (!this.isCurrent(turn)) throw new Error('Reading cancelled');
+        },
+      });
       if (!this.isCurrent(turn)) return;
       turn.progress.generated = true; this.report(turn);
       this.emit(turn, { type: 'result', result });

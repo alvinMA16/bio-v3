@@ -21,7 +21,8 @@ interface Manifest {
   animations: Animation[];
 }
 
-export function PhonePreview({ attachment, onAttachmentPage, children, subtitle, activity, running, microphone, callOpen, callStartedAt, status, motionState, getMotionLevel, mode, startDisabled, onStart, speakerEnabled, onSpeakerToggle, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
+export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, microphone, callOpen, callStartedAt, status, motionState, getMotionLevel, mode, startDisabled, onStart, speakerEnabled, onSpeakerToggle, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
+  onManuscriptChat?: ((document: import('@bio/contracts').PanelDocument) => void) | undefined;
   attachment?: PanelAttachment | undefined; onAttachmentPage?: ((materialId: string, page: number) => void) | undefined;
   onMaterialChat: (item: Material) => void;
   receipt: SessionReceipt | null; receiptVisible: boolean; onReceiptClose: () => void;
@@ -122,7 +123,7 @@ export function PhonePreview({ attachment, onAttachmentPage, children, subtitle,
         {drawer === 'manuscripts' && <div className="phone-desk-backdrop" onClick={() => setDrawer(null)}>
           <section className="phone-desk-drawer" role="dialog" aria-modal="true" aria-label="文稿集" onClick={event => event.stopPropagation()} onKeyDown={event => { if (event.key === 'Escape') setDrawer(null); }}>
             <button type="button" autoFocus aria-label="关闭" onClick={() => setDrawer(null)}>×</button>
-            <h2>文稿集</h2><ManuscriptFolder />
+            <h2>文稿集</h2><ManuscriptFolder onChat={onManuscriptChat ? document => { setDrawer(null); onManuscriptChat(document); } : undefined} />
           </section>
         </div>}
 
