@@ -26,6 +26,7 @@ test('transport failure leaves call completion to the server grace period', asyn
 
 function environment(t, pendingMic, moduleError, prepare) {
   const cache = new Map();
+  const tones = [];
   const sockets = [], nodes = [], messages = [], events = [], starts = [], playback = [], captures = [], levels = [], gains = [];
   let stopped = 0, ended = 0, connected = 0;
   const stream = { getTracks: () => [{ stop() { stopped++; } }] };
@@ -40,7 +41,8 @@ function environment(t, pendingMic, moduleError, prepare) {
     currentTime = 0; destination = {}; audioWorklet = { async addModule() { if (moduleError) throw moduleError; } };
     async resume() {} async close() {}
     createAnalyser() { return { amplitude: 0, connect(destination) { this.destination = destination; }, disconnect() {}, getFloatTimeDomainData(samples) { samples.fill(this.amplitude); } }; }
-    createGain() { const node = { gain: {}, connect() {}, disconnect() {} }; gains.push(node); return node; }
+    createGain() { const node = { gain: { events: [], setValueAtTime(...args) { this.events.push(args); }, linearRampToValueAtTime(...args) { this.events.push(args); } }, connect() {}, disconnect() {} }; gains.push(node); return node; }
+    createOscillator() { const tone = { frequency: {}, connect() {}, disconnect() {}, start() {}, stop() { this.stopped = true; } }; tones.push(tone); return tone; }
     createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
     createBuffer(_channels, length, rate) { return { getChannelData: () => new Float32Array(length), duration: length / rate }; }
     createBufferSource() { const node = { connect(destination) { node.destination = destination; }, disconnect() {}, start() {}, stop() { node.stopped = true; } }; nodes.push(node); return node; }
@@ -63,7 +65,7 @@ function environment(t, pendingMic, moduleError, prepare) {
   const client = new BrowserVoice({ prepare, connected: () => connected++, request: () => ({}), start: id => starts.push(id), event: event => events.push(event),
     inputLevel: level => levels.push(level), playback: (...args) => playback.push(args), error: message => events.push({ type: 'local.error', message }), ended: () => ended++ });
   t.after(() => { client.close(); restore.forEach(fn => fn()); });
-  return { client, cache, sockets, nodes, captures, levels, gains, starts, messages, events, playback, stream, connected: () => connected, stopped: () => stopped, ended: () => ended };
+  return { client, cache, tones, sockets, nodes, captures, levels, gains, starts, messages, events, playback, stream, connected: () => connected, stopped: () => stopped, ended: () => ended };
 }
 
 test('interruption clears scheduled audio and rejects old turn callbacks', async t => {
@@ -328,4 +330,32 @@ test('opening audio connects before playing even before the first listening stat
   assert.equal(f.connected(), 1);
   ws.onmessage({ data: JSON.stringify({ type: 'state', turnId: f.starts[0], state: 'listening', elapsedMs: 0 }) });
   assert.equal(f.connected(), 1);
+});
+
+test('ringback pulses quietly while dialing and stops before listening or greeting', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  for (const type of ['state', 'audio']) {
+    const f = environment(t); await f.client.start();
+    assert.deepEqual(f.tones.map(tone => tone.frequency.value), [440, 480]);
+    t.mock.timers.tick(1);
+    assert.deepEqual(f.gains[1].gain.events.map(event => event[0]), [0, .025, .025, 0]);
+    f.sockets[0].onopen();
+    assert.ok(f.tones.every(tone => !tone.stopped));
+    f.sockets[0].onmessage({ data: JSON.stringify({ type, state: 'listening', turnId: f.starts[0], sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1 }) });
+    assert.ok(f.tones.every(tone => tone.stopped));
+    const count = f.gains[1].gain.events.length;
+    t.mock.timers.tick(5000);
+    assert.equal(f.gains[1].gain.events.length, count);
+    f.client.close();
+  }
+});
+test('ringback stops on cancellation during permission and startup failure', async t => {
+  const pending = new Promise(() => {});
+  const f = environment(t, pending);
+  void f.client.start(); await flush(); f.client.close();
+  assert.equal(f.tones.length, 2);
+  assert.ok(f.tones.every(tone => tone.stopped));
+  const failed = environment(t, undefined, new Error('worklet failed'));
+  await failed.client.start();
+  assert.ok(failed.tones.every(tone => tone.stopped));
 });

@@ -39,6 +39,7 @@ export class BrowserVoice {
   private closed = false;
   private listening = false;
   private callReady = false;
+  private ringback: { tones: OscillatorNode[]; gain: GainNode; timer: ReturnType<typeof setTimeout> } | undefined;
   private speechSignal = new FoxSpeechSignal(value => this.callbacks.speaking?.(value));
   private finishing = false;
   private drained = false;
@@ -83,6 +84,7 @@ export class BrowserVoice {
       this.playbackAnalyser.connect(this.output);
       await this.context.resume();
       if (this.closed) return;
+      this.startRingback();
       const generation = this.micGeneration;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       if (this.closed) { stream.getTracks().forEach(track => track.stop()); return; }
@@ -129,6 +131,35 @@ export class BrowserVoice {
         this.fail(permissionDenied ? '无法开启麦克风，请检查权限后重试。' : '语音连接失败，请重试。');
       }
     }
+  }
+
+  private startRingback(): void {
+    const context = this.context!;
+    const gain = context.createGain();
+    gain.gain.value = 0;
+    gain.connect(this.output!);
+    const tones = [440, 480].map(frequency => {
+      const tone = context.createOscillator();
+      tone.frequency.value = frequency;
+      tone.connect(gain); tone.start();
+      return tone;
+    });
+    const pulse = () => {
+      const now = context.currentTime;
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(.025, now + .08);
+      gain.gain.setValueAtTime(.025, now + .85);
+      gain.gain.linearRampToValueAtTime(0, now + 1);
+      if (this.ringback) this.ringback.timer = setTimeout(pulse, 4000);
+    };
+    this.ringback = { tones, gain, timer: setTimeout(pulse, 0) };
+  }
+  private stopRingback(): void {
+    if (!this.ringback) return;
+    const { tones, gain, timer } = this.ringback;
+    clearTimeout(timer);
+    tones.forEach(tone => { tone.stop(); tone.disconnect(); });
+    gain.disconnect(); this.ringback = undefined;
   }
 
   private connectSocket(): void {
@@ -209,6 +240,7 @@ export class BrowserVoice {
   }
   private receive(event: VoiceServerMessage): void {
     if (this.closed || event.turnId !== this.turnId) return;
+    if (event.type === 'error') this.stopRingback();
     if (event.type === 'connected') {
       this.callId = event.callId; this.conversationId = event.conversationId;
       this.confirmed = true; this.resume = false; this.reconnects = 0; this.remember();
@@ -217,6 +249,7 @@ export class BrowserVoice {
     if (event.type === 'error' && event.code === 'CALL_BUSY') { if (this.socket) this.reconnect(this.socket); return; }
     if (event.type === 'asr' && this.listening) this.speechSignal.recognize(event.text);
     if (event.type === 'state') {
+      if (event.state === 'listening') this.stopRingback();
       this.setListening(this.micEnabled && event.state === 'listening');
       if (event.state === 'listening' && !this.callReady) { this.callReady = true; this.callbacks.connected?.(); }
     }
@@ -224,6 +257,7 @@ export class BrowserVoice {
     if (event.type === 'agent') this.conversationId = event.event.conversationId;
     if (event.type === 'result') this.conversationId = event.result.conversationId;
     if (event.type === 'audio' && !this.audioFailed) {
+      this.stopRingback();
       if (!this.callReady) { this.callReady = true; this.callbacks.connected?.(); }
       try { this.enqueue(event); }
       catch (error) {
@@ -353,6 +387,7 @@ export class BrowserVoice {
     else this.send({ type: 'disconnect', turnId: this.turnId || 'disconnect', reason });
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.closed = true; ++this.micGeneration; this.callbacks.microphone?.(false); this.setListening(false); this.stopAudio();
+    this.stopRingback();
     this.capture?.disconnect(); this.source?.disconnect(); this.muted?.disconnect();
     this.playbackAnalyser?.disconnect();
     this.output?.disconnect();

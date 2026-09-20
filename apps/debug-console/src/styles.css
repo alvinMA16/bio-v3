@@ -537,21 +537,40 @@ body { min-width: 320px; }
 .attachment-heading { flex: 0 0 auto; margin-bottom: 12px; }
 .phone-content-panel .attachment-heading h3 { font-size: 18px; font-weight: 500; line-height: 1.55; margin: 0 0 8px; overflow-wrap: anywhere; }
 .attachment-heading small { font-size: 11px; color: #768277; }
-.phone-dialing { flex: 1; min-height: 0; overflow-y: auto; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 24px; text-align: center; }
-.phone-dialing .phone-video { width: 124px; height: 124px; flex: 0 0 124px; border-radius: 50%; outline: 1px solid #dce5da; outline-offset: 12px; margin-bottom: 24px; }
-.phone-dialing .phone-video-scene { width: 207px; height: 447px; left: -41px; top: -85px; }
-.phone-dialing h2 { font-size: 23px; font-weight: 500; margin: 0 0 12px; }
-.phone-dialing p { font-size: 14px; color: #647168; margin: 0 0 12px; }
-.phone-dialing small { font-size: 12px; line-height: 1.8; color: #748074; overflow-wrap: anywhere; }
-.phone-redial { margin-top: 20px; padding: 10px 22px; min-height: 44px; border: 0; border-radius: 22px; background: linear-gradient(130deg,#eef5ed,#d5e3d6); color: #405c48; cursor: pointer; }
-.phone-dialing[aria-busy="true"] .phone-video { animation: phone-dial-ring 2.4s ease-out infinite; }
-@keyframes phone-dial-ring { from { box-shadow: 0 0 0 0 #82997b26; } to { box-shadow: 0 0 0 22px #82997b00; } }
-@media (prefers-reduced-motion: reduce) { .phone-dialing[aria-busy="true"] .phone-video { animation: none; } }
-
-/* Conversation lives in the room; the status strip and call controls are separate. */
+/* Dark call stage: felt artwork stays inside the arched video window. */
+.phone-screen.phone-screen--conversation,
+.phone-screen.phone-screen--dialing { background: radial-gradient(ellipse at 50% 15%, #293839, #151e23 75%); color: #edf0e9; }
 .phone-art-actors { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
-.phone-conversation-scene { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
-.phone-screen--conversation:not(.phone-screen--dialing) .phone-content-panel { margin: 112% 20px 0; padding: 10px 2px 0; }
-.phone-screen.phone-screen--call .phone-call-controls { position: relative; z-index: 4; display: grid; grid-template-columns: minmax(52px, 1fr) 92px; align-items: center; margin: 0 12px 14px; padding: 6px 10px; gap: 8px; }
-.phone-call-controls .document-call-state { min-width: 52px; text-align: left; font-size: 14px; }
-.phone-call-controls .document-call-state small { display: block; font-size: 11px; margin-top: 4px; }
+.phone-conversation-window { position: relative; flex: 0 0 auto; width: 82%; aspect-ratio: 1 / 1.08; margin: 9% auto 0; overflow: hidden; border-radius: 50% 50% 12px 12px / 46% 46% 12px 12px; background: #b6b49d; box-shadow: 0 16px 40px #00000026; }
+.phone-conversation-scene { position: absolute; width: 100%; aspect-ratio: 320 / 692; top: -18%; left: 0; pointer-events: none; }
+.phone-screen--conversation:not(.phone-screen--dialing) .phone-content-panel { margin: 18px 20px 0; padding: 0; }
+.phone-screen--conversation .phone-dialogue p { font-family: inherit; font-size: 16px; line-height: 1.85; color: #e0e5df; }
+.phone-screen.phone-screen--call .phone-call-controls { position: relative; z-index: 4; display: grid; grid-template-columns: minmax(52px, 1fr) 92px; align-items: center; margin: 0 20px 16px; padding: 0; gap: 8px; border-radius: 0; background: none; box-shadow: none; backdrop-filter: none; }
+.phone-call-controls .document-call-state { min-width: 52px; text-align: left; font-size: 14px; color: inherit; }
+.phone-call-controls .document-call-state small { display: block; font-size: 11px; margin-top: 5px; color: inherit; opacity: .55; font-variant-numeric: tabular-nums; }
+.phone-screen--conversation .slide-to-end,
+.phone-screen--dialing .slide-to-end { background: #ffffff08; box-shadow: none; }
+.phone-screen--conversation .slide-to-end-label,
+.phone-screen--dialing .slide-to-end-label { color: #b4bdb9; }
+.phone-screen--conversation .slide-to-end-thumb,
+.phone-screen--dialing .slide-to-end-thumb { background: #81545c; }
+.phone-screen--conversation .phone-call-status--glass span { color: #f0f3ee; text-shadow: 0 1px 8px #101c22; }
+.phone-dialing { flex: 1; min-height: 0; overflow-y: auto; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 40px 24px; text-align: center; }
+.phone-dial-avatar { position: relative; width: 112px; height: 112px; flex: 0 0 112px; margin: 0 0 48px; }
+.phone-dialing .phone-video { width: 112px; height: 112px; border-radius: 50%; }
+.phone-dialing .phone-video-scene { width: 187px; height: 405px; left: -37px; top: -77px; }
+.phone-dial-avatar > i { position: absolute; inset: 0; border: 1px solid #a5bdb63b; border-radius: 50%; opacity: 0; pointer-events: none; }
+.phone-dialing[aria-busy="true"] .phone-dial-avatar > i { animation: phone-dial-ripple 3.6s ease-out infinite; }
+.phone-dialing[aria-busy="true"] .phone-dial-avatar > i:nth-child(2) { animation-delay: 1.2s; }
+.phone-dialing[aria-busy="true"] .phone-dial-avatar > i:nth-child(3) { animation-delay: 2.4s; }
+.phone-dialing[aria-busy="true"] .phone-video { animation: phone-dial-breathe 3.6s ease-in-out infinite; }
+.phone-dialing p { font-size: 14px; color: #dce5dd; letter-spacing: 2px; margin: 0; }
+.phone-dialing small { font-size: 12px; line-height: 1.8; color: #9baaa3; margin-top: 16px; overflow-wrap: anywhere; }
+.phone-redial { margin-top: 20px; padding: 10px 22px; min-height: 44px; border: 0; border-radius: 22px; background: linear-gradient(130deg,#eef5ed,#d5e3d6); color: #405c48; cursor: pointer; }
+@keyframes phone-dial-ripple { from { transform: scale(1); opacity: .7; } to { transform: scale(1.85); opacity: 0; } }
+@keyframes phone-dial-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+@media (prefers-reduced-motion: reduce) {
+ .phone-dialing[aria-busy="true"] .phone-dial-avatar > i,
+ .phone-dialing[aria-busy="true"] .phone-video { animation: none; }
+ .phone-dial-avatar > i:first-child { opacity: .4; transform: scale(1.25); }
+}

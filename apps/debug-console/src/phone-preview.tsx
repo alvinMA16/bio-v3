@@ -130,12 +130,12 @@ export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, c
 
       </> : <>
         {dialing ? <section className="phone-dialing" aria-label="呼叫令狸" aria-busy={!callFailed}>
-          <div className="phone-video"><div className="phone-video-scene">{artwork}</div></div>
-          <p role="status">{callFailed ? '暂时未能接通' : '正在呼叫，等待接通…'}</p>
-          <small>{callFailed ? status : status === '正在申请麦克风权限' ? '请允许使用麦克风，以便与令狸通话' : '接通后就可以开始聊了'}</small>
+          <div className="phone-dial-avatar"><i /><i /><i /><div className="phone-video"><div className="phone-video-scene">{artwork}</div></div></div>
+          <p role="status">{callFailed ? '暂时未能接通' : '正在呼叫'}</p>
+          {callFailed && <small>{status}</small>}
           {callFailed && <button type="button" className="phone-redial" disabled={startDisabled} onClick={onStart}>重新呼叫</button>}
         </section> : <>
-          {mode === 'conversation' && <div className="phone-conversation-scene" role="img" aria-label="令狸在书房里">{artwork}</div>}
+          {mode === 'conversation' && <div className="phone-conversation-window" role="img" aria-label="令狸在书房里"><div className="phone-conversation-scene">{artwork}</div></div>}
           <section className={`phone-content-panel ${mode !== 'conversation' ? 'phone-content-panel--document' : ''}`} aria-label={mode === 'conversation' ? '对话内容' : mode === 'attachment' ? '附件内容' : '编辑内容'}>
             {mode === 'attachment' && attachment ? <AttachmentViewer key={attachment.id} attachment={attachment} onPage={onAttachmentPage} /> : mode === 'conversation' ? <div className="phone-panel-scroll phone-dialogue" ref={subtitleRef}>
               <p>{subtitle || (running && phase !== 'listening' ? '让我想一想…' : '我在这里，慢慢讲。')}</p>
