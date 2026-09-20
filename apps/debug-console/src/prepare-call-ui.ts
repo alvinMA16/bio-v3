@@ -1,7 +1,25 @@
 import { uiAsset } from './ui-asset';
 
-/** Preflight the initial screen before voice can start receiving or playing audio. */
+let scenePreparation: Promise<void> | undefined;
+
+/** Start on the desk; concurrent calls share assets and failures remain retryable. */
+export function warmCallUi(): Promise<void> {
+  if (!scenePreparation) scenePreparation = loadCallUi().catch(error => {
+    scenePreparation = undefined; throw error;
+  });
+  return scenePreparation;
+}
+
 export async function prepareCallUi(materialId?: string): Promise<void> {
+  await Promise.all([
+    warmCallUi(),
+    // A previous call may have released its GPU resources while images stay cached.
+    import('./voice-glass-stack.js').then(renderer => renderer.prepareGlassStack()),
+    materialId ? loadCallUi(materialId, false) : Promise.resolve(),
+  ]);
+}
+
+async function loadCallUi(materialId?: string, includeScene = true): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 25_000);
   async function json(url: string) {
@@ -29,10 +47,9 @@ export async function prepareCallUi(materialId?: string): Promise<void> {
     await Promise.race([
       new Promise<never>((_, reject) => controller.signal.addEventListener('abort', () => reject(new Error('通话资源加载超时，请重新呼叫。')), { once: true })),
       Promise.all([
-      // Always give each new call a visible dialing transition, even with warm caches.
-      new Promise(resolve => setTimeout(resolve, 1200)),
-      import('./voice-glass-stack.js'),
+      includeScene ? import('./voice-glass-stack.js').then(renderer => renderer.prepareGlassStack()) : Promise.resolve(),
       (async () => {
+        if (!includeScene) return;
         const manifest = await json('/animations/fox-clerk/manifest.json') as {
           layers: Record<string, { src?: string }>; animations: { src: string }[];
         };

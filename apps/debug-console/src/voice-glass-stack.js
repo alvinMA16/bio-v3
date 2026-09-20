@@ -47,6 +47,14 @@ function createScene() {
   return {renderer,scene,camera,wideCamera,group,plates,geometry,softGeometry,crystalGeometry,crystalEdges,edgeGeometry,lightField:new GlassLightField(),environmentTarget,lastTime:-1,lastVariant:-1,travelingWave:new GlassTravelingWave(),crop:[0,960],projected:new THREE.Vector3(),tint:new THREE.Color()};
 }
 
+export function prepareGlassStack() {
+  if(sceneState)return;
+  try {
+    sceneState??=createScene();
+    sceneState.renderer.compile(sceneState.scene,sceneState.wideCamera);
+  } catch { /* The text status remains available without WebGL. */ }
+}
+
 export function drawGlassStack(surface,input) {
   const {ctx:c,w,h}=surface;if(!w||!h)return;
   c.clearRect(0,0,w,h);

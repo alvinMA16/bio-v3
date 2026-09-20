@@ -1,3 +1,4 @@
+import { warmCallUi } from './prepare-call-ui';
 import { SlideToEnd } from './slide-to-end';
 import { VoiceCallStatus } from './voice-call-status';
 import { AttachmentViewer } from './attachment-viewer';
@@ -33,6 +34,7 @@ export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, c
   motionState?: 'listen' | 'speak' | 'think'; getMotionLevel?: () => number;
   startDisabled: boolean; onStart: () => void; onEnd: () => void;
 }) {
+  useEffect(() => { void warmCallUi().catch(() => { /* Retry when the user calls. */ }); }, []);
   const dialing = callOpen && callStartedAt === null;
   const { phase, notebook, speech } = activity;
   const [manifest, setManifest] = useState<Manifest>();

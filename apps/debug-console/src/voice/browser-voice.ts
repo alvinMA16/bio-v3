@@ -40,6 +40,7 @@ export class BrowserVoice {
   private listening = false;
   private callReady = false;
   private uiReady = false;
+  private captureReady = false;
   private dialingFinished = false;
   private pendingEvents: VoiceServerMessage[] = [];
   private pendingEventBytes = 0;
@@ -94,15 +95,19 @@ export class BrowserVoice {
       await this.context.resume();
       if (this.closed) return;
       this.startRingback();
+      // Start the opening immediately; capture and assets gate playback, not the server.
+      this.connectSocket();
+      const workletReady = this.context.audioWorklet.addModule(workletUrl).then(
+        () => ({ ok: true as const }), error => ({ ok: false as const, error }),
+      );
       const generation = this.micGeneration;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       if (this.closed) { stream.getTracks().forEach(track => track.stop()); return; }
       if (!this.micEnabled || generation !== this.micGeneration) stream.getTracks().forEach(track => track.stop());
       else this.stream = stream;
-      try {
-        await this.context.audioWorklet.addModule(workletUrl);
-      } catch (error) {
-        console.error('Voice capture module failed to load', error);
+      const worklet = await workletReady;
+      if (!worklet.ok) {
+        console.error('Voice capture module failed to load', worklet.error);
         throw new Error('语音连接失败，请重试。');
       }
       if (this.closed) return;
@@ -131,7 +136,8 @@ export class BrowserVoice {
         ws.send(event.data as ArrayBuffer);
       };
       if (this.closed) return;
-      this.connectSocket();
+      this.captureReady = true;
+      this.flushPreparedEvents();
     } catch (error) {
       if (!this.closed) {
         console.error('Voice startup failed', error);
@@ -173,7 +179,7 @@ export class BrowserVoice {
   }
 
   private flushPreparedEvents(): void {
-    if (this.closed || !this.uiReady || !this.dialingFinished) return;
+    if (this.closed || !this.uiReady || !this.captureReady || !this.dialingFinished) return;
     const events = this.pendingEvents;
     this.pendingEvents = []; this.pendingEventBytes = 0;
     for (const event of events) this.receive(event);
@@ -230,7 +236,7 @@ export class BrowserVoice {
 
   private listen(): void {
     if (this.closed) return;
-    if (!this.micEnabled || !this.stream || this.turnActive) return;
+    if (!this.micEnabled || (this.callReady && !this.stream) || this.turnActive) return;
     this.turnActive = true; this.submitted = false;
     this.stopAudio(); this.drained = false; this.audioFailed = false; this.receivedSamples = 0; this.acknowledgedSamples = 0;
     this.turnId = crypto.randomUUID();
@@ -259,10 +265,10 @@ export class BrowserVoice {
   private receive(event: VoiceServerMessage): void {
     if (this.closed || event.turnId !== this.turnId) return;
     if (event.type === 'error' && event.code !== 'CALL_BUSY') {
-      if (!this.uiReady || !this.dialingFinished) { this.fail(event.message); return; }
+      if (!this.uiReady || !this.captureReady || !this.dialingFinished) { this.fail(event.message); return; }
       this.stopRingback();
     }
-    if ((!this.uiReady || !this.dialingFinished) && event.type !== 'connected' && event.type !== 'error') {
+    if ((!this.uiReady || !this.captureReady || !this.dialingFinished) && event.type !== 'connected' && event.type !== 'error') {
       this.pendingEventBytes += JSON.stringify(event).length * 2;
       if (this.pendingEvents.length >= 2000 || this.pendingEventBytes > 4 * 1024 * 1024) {
         this.fail('开场准备超时，请重新呼叫。'); return;

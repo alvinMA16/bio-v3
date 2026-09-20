@@ -102,7 +102,7 @@ test('closing while microphone permission is pending stops the late stream', asy
   const f = environment(t, pending);
   const starting = f.client.start(); await flush(); f.client.close();
   resolve(f.stream); await starting;
-  assert.equal(f.stopped(), 1); assert.equal(f.sockets.length, 0);
+  assert.equal(f.stopped(), 1); assert.equal(f.sockets.length, 1); assert.equal(f.sockets[0].readyState, 3);
 });
 
 test('muting releases the microphone while keeping queued reply audio playing', async t => {
@@ -200,7 +200,7 @@ test('worklet load failure shows a friendly error and releases microphone resour
   assert.equal(f.events.find(event => event.type === 'local.error').message, '语音连接失败，请重试。');
   assert.equal(f.stopped(), 1);
   assert.equal(f.ended(), 1);
-  assert.equal(f.sockets.length, 0);
+  assert.equal(f.sockets.length, 1); assert.equal(f.sockets[0].readyState, 3);
 });
 
 test('playback credits are sent only after audio ends, and stale audio never acknowledges a new turn', async t => {
@@ -407,4 +407,28 @@ test('reconnecting during dialing discards audio from the replaced connection', 
   t.mock.timers.tick(2000);
   assert.equal(f.connected(), 1); assert.equal(f.nodes.length, 0);
   assert.equal(f.tones.length, 2, 'reconnect does not restart the three rings');
+});
+
+test('opening starts while microphone permission is pending but playback waits for capture', async t => {
+  let allow;
+  const f = environment(t, new Promise(resolve => { allow = resolve; }));
+  const starting = f.client.start(); await flush();
+  assert.equal(f.sockets.length, 1);
+  f.sockets[0].onopen();
+  assert.equal(f.starts.length, 1);
+  f.sockets[0].onmessage({ data: JSON.stringify({ type: 'audio', turnId: f.starts[0], sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1 }) });
+  t.mock.timers.tick(3000);
+  assert.equal(f.connected(), 0); assert.equal(f.nodes.length, 0);
+  allow(f.stream); await starting;
+  assert.equal(f.connected(), 1); assert.equal(f.nodes.length, 1);
+});
+test('denying microphone permission discards the prepared opening and closes transport', async t => {
+  let deny;
+  const f = environment(t, new Promise((_, reject) => { deny = reject; }));
+  t.mock.method(console, 'error', () => {});
+  const starting = f.client.start(); await flush(); f.sockets[0].onopen();
+  f.sockets[0].onmessage({ data: JSON.stringify({ type: 'audio', turnId: f.starts[0], sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1 }) });
+  deny(Object.assign(new Error('denied'), { name: 'NotAllowedError' })); await starting; t.mock.timers.tick(4000);
+  assert.equal(f.ended(), 1); assert.equal(f.connected(), 0); assert.equal(f.nodes.length, 0);
+  assert.equal(f.sockets[0].readyState, 3);
 });

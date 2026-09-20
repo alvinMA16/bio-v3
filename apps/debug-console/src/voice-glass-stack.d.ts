@@ -9,3 +9,5 @@ export interface GlassInput {
 }
 export function drawGlassStack(surface: { ctx: CanvasRenderingContext2D; w: number; h: number }, input: GlassInput): void;
 export function disposeGlassStack(): void;
+
+export function prepareGlassStack(): void;

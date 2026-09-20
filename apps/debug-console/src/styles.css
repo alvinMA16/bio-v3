@@ -545,13 +545,12 @@ body { min-width: 320px; }
 .phone-conversation-scene { position: absolute; width: 100%; aspect-ratio: 320 / 692; top: -18%; left: 0; pointer-events: none; }
 .phone-screen--conversation:not(.phone-screen--dialing) .phone-content-panel { margin: 18px 20px 0; padding: 0; }
 .phone-screen--conversation .phone-dialogue p { font-family: inherit; font-size: 16px; line-height: 1.85; color: #e0e5df; }
-.phone-screen.phone-screen--call .phone-call-controls { position: relative; z-index: 4; display: grid; grid-template-columns: minmax(52px, 1fr) 92px; align-items: center; margin: 18px 20px 16px; padding: 0; gap: 8px; border-radius: 0; background: none; box-shadow: none; backdrop-filter: none; }
-.phone-call-controls .document-call-state { min-width: 52px; text-align: left; font-size: 14px; color: inherit; }
+.phone-screen.phone-screen--call .phone-call-controls { position: relative; z-index: 4; display: grid; grid-template-columns: minmax(44px, 1fr) 112px; align-items: center; margin: 0 16px 16px; padding: 0; gap: 8px; border-radius: 0; background: none; box-shadow: none; backdrop-filter: none; }
+.phone-call-controls .document-call-state { min-width: 44px; text-align: left; font-size: 14px; color: inherit; }
 .phone-call-controls .document-call-state small { display: block; font-size: 11px; margin-top: 5px; color: inherit; opacity: .55; font-variant-numeric: tabular-nums; }
-.phone-screen--conversation .slide-to-end { background: #536b66; box-shadow: inset 0 1px 0 #b7d0c47a; }
-.phone-screen--conversation .slide-to-end-label,
-.phone-screen--conversation .slide-to-end-caption { color: #edf3ed; }
-.phone-screen--conversation .slide-to-end-thumb { background: #bb777e; }
+.phone-screen--conversation .slide-to-end { background: #ffffff0e; box-shadow: inset 0 1px 0 #ffffff12; }
+.phone-screen--conversation .slide-to-end-label { color: #edf3ed; }
+.phone-screen--conversation .slide-to-end-thumb { background: #ed4149; }
 .phone-screen--conversation .phone-call-status--glass span { color: #f0f3ee; text-shadow: 0 1px 8px #101c22; }
 .phone-dialing { flex: 1; min-height: 0; overflow-y: auto; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 40px 24px; text-align: center; }
 .phone-dial-avatar { position: relative; width: 112px; height: 112px; flex: 0 0 112px; margin: 0 0 48px; }
