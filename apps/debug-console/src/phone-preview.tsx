@@ -1,3 +1,4 @@
+import { VoiceCallStatus } from './voice-call-status';
 import { AttachmentViewer } from './attachment-viewer';
 import { MaterialFolder } from './material-folder';
 import { uiAsset } from './ui-asset';
@@ -20,7 +21,7 @@ interface Manifest {
   animations: Animation[];
 }
 
-export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, callOpen, callStartedAt, status, callFailed = false, mode, startDisabled, onStart, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
+export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, callOpen, callStartedAt, status, callFailed = false, motionState = 'listen', getMotionLevel = () => 0, mode, startDisabled, onStart, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
   onManuscriptChat?: ((document: import('@bio/contracts').PanelDocument) => void) | undefined;
   attachment?: PanelAttachment | undefined; onAttachmentPage?: ((materialId: string, page: number) => void) | undefined;
   onMaterialChat: (item: Material) => void;
@@ -28,11 +29,11 @@ export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, c
   children: ReactNode; subtitle: string; activity: FoxActivity; running: boolean;
   callOpen: boolean; callStartedAt: number | null; status: string; mode: 'conversation' | 'attachment' | 'editor';
   callFailed?: boolean;
+  motionState?: 'listen' | 'speak' | 'think'; getMotionLevel?: () => number;
   startDisabled: boolean; onStart: () => void; onEnd: () => void;
 }) {
   const dialing = callOpen && callStartedAt === null;
   const { phase, notebook, speech } = activity;
-  const speaking = speech !== 'silent' && phase !== 'listening';
   const [manifest, setManifest] = useState<Manifest>();
   const [assetError, setAssetError] = useState(false);
   const [folderSearchOpen, setFolderSearchOpen] = useState(false);
@@ -141,11 +142,12 @@ export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, c
               <p>{subtitle || (running && phase !== 'listening' ? '让我想一想…' : '我在这里，慢慢讲。')}</p>
             </div> : <div className="phone-panel-scroll">{children}</div>}
           </section>
-          {mode !== 'conversation' && subtitle && <div className="document-call-subtitle" ref={subtitleRef}><span>令狸：</span>{subtitle}</div>}
         </>}
         <footer className="phone-call-controls" aria-label="通话控制">
-          <div className="phone-dock-avatar" aria-hidden="true"><div className="phone-video-scene">{artwork}</div></div>
-          <div className="document-call-state"><span role="status">{dialing ? callFailed ? '未接通' : '正在呼叫令狸…' : status || (speaking ? '令狸正在说' : running ? '令狸在思考' : '与令狸通话中')}</span><small>{dialing ? callFailed ? '可重新呼叫' : '等待接通' : callDuration}</small></div>
+          <div className="document-call-state">
+            {dialing ? <span role="status">{callFailed ? '未接通' : '正在呼叫令狸…'}</span> : <VoiceCallStatus state={motionState} getLevel={getMotionLevel} label="我在听" />}
+            <small>{dialing ? callFailed ? '可重新呼叫' : '等待接通' : callDuration}</small>
+          </div>
           <button type="button" className="phone-control-button phone-control-button--end" aria-label={dialing ? '取消呼叫' : '结束通话'} onClick={onEnd}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15v-4c5-5 13-5 18 0v4l-5-1v-3a14 14 0 0 0-8 0v3Z" /></svg>
           </button>

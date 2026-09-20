@@ -24,7 +24,7 @@ test('transport failure leaves call completion to the server grace period', asyn
   assert.equal(f.messages.map(JSON.parse).filter(m => m.type === 'hangup').length, 0);
 });
 
-function environment(t, pendingMic, moduleError) {
+function environment(t, pendingMic, moduleError, prepare) {
   const cache = new Map();
   const sockets = [], nodes = [], messages = [], events = [], starts = [], playback = [], captures = [], levels = [], gains = [];
   let stopped = 0, ended = 0, connected = 0;
@@ -60,7 +60,7 @@ function environment(t, pendingMic, moduleError) {
     Object.defineProperty(globalThis, key, { configurable: true, value });
     restore.push(() => original ? Object.defineProperty(globalThis, key, original) : delete globalThis[key]);
   }
-  const client = new BrowserVoice({ connected: () => connected++, request: () => ({}), start: id => starts.push(id), event: event => events.push(event),
+  const client = new BrowserVoice({ prepare, connected: () => connected++, request: () => ({}), start: id => starts.push(id), event: event => events.push(event),
     inputLevel: level => levels.push(level), playback: (...args) => playback.push(args), error: message => events.push({ type: 'local.error', message }), ended: () => ended++ });
   t.after(() => { client.close(); restore.forEach(fn => fn()); });
   return { client, cache, sockets, nodes, captures, levels, gains, starts, messages, events, playback, stream, connected: () => connected, stopped: () => stopped, ended: () => ended };
@@ -309,4 +309,23 @@ test('cancel during dialing ignores late readiness', async t => {
   f.client.close();
   ws.onmessage({ data: JSON.stringify({ type: 'state', turnId: f.starts[0], state: 'listening', elapsedMs: 0 }) });
   assert.equal(f.connected(), 0);
+});
+
+
+test('preparation blocks connecting and cancellation prevents late connection', async t => {
+  let ready; const preparation = new Promise(resolve => { ready = resolve; });
+  const f = environment(t, undefined, undefined, () => preparation);
+  const starting = f.client.start(); await flush();
+  assert.equal(f.sockets.length, 0);
+  f.client.close(); ready(); await starting;
+  assert.equal(f.sockets.length, 0);
+});
+
+test('opening audio connects before playing even before the first listening state', async t => {
+  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen();
+  assert.equal(f.connected(), 0);
+  ws.onmessage({ data: JSON.stringify({ type: 'audio', turnId: f.starts[0], sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1 }) });
+  assert.equal(f.connected(), 1);
+  ws.onmessage({ data: JSON.stringify({ type: 'state', turnId: f.starts[0], state: 'listening', elapsedMs: 0 }) });
+  assert.equal(f.connected(), 1);
 });

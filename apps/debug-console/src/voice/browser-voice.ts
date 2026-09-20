@@ -10,6 +10,7 @@ type Callbacks = {
   error: (message: string) => void;
   ended: () => void;
   connected?: () => void;
+  prepare?: () => Promise<void>;
   microphone?: (enabled: boolean) => void;
   inputLevel?: (level: number) => void;
   listening?: (active: boolean) => void;
@@ -118,6 +119,8 @@ export class BrowserVoice {
         this.callbacks.inputLevel?.(rms < 0.008 ? 0 : Math.min(4, Math.ceil(rms * 24)));
         ws.send(event.data as ArrayBuffer);
       };
+      await this.callbacks.prepare?.();
+      if (this.closed) return;
       this.connectSocket();
     } catch (error) {
       if (!this.closed) {
@@ -221,6 +224,7 @@ export class BrowserVoice {
     if (event.type === 'agent') this.conversationId = event.event.conversationId;
     if (event.type === 'result') this.conversationId = event.result.conversationId;
     if (event.type === 'audio' && !this.audioFailed) {
+      if (!this.callReady) { this.callReady = true; this.callbacks.connected?.(); }
       try { this.enqueue(event); }
       catch (error) {
         const code = error instanceof Error && ['invalid_audio', 'audio_queue_limit'].includes(error.message) ? error.message : 'audio_context_failed';

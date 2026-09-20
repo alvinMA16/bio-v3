@@ -11,3 +11,6 @@
 .phone-call-status--glass span { position: relative; max-width: 100%; padding: 0 8px; font-size: 13px; letter-spacing: .5px; color: #ecf2ee; text-shadow: 0 1px 5px #1c1f24; }
 .phone-screen--attachment .phone-call-status--glass span { color: #243b3d; text-shadow: 0 1px 3px #ffffffe6, 0 0 8px #ffffffbf; }
 .phone-screen--focused .phone-call-status--glass { display: none; }
+.phone-call-controls .document-call-state { text-align: center; }
+.phone-call-controls .phone-call-status--glass { min-height: 52px; margin: 0; padding: 0; }
+.phone-screen--call .phone-call-status--glass span { color: #243b3d; text-shadow: 0 1px 3px #ffffffe6, 0 0 8px #ffffffbf; }
