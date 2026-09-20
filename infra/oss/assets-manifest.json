@@ -1,6 +1,6 @@
 {
-  "baseUrl": "https://calendar-images.oss-cn-beijing.aliyuncs.com/bio-v3/assets/5d907751142d191f",
-  "prefix": "bio-v3/assets/5d907751142d191f/",
+  "baseUrl": "https://calendar-images.oss-cn-beijing.aliyuncs.com/bio-v3/assets/f36f433f84351fbf",
+  "prefix": "bio-v3/assets/f36f433f84351fbf/",
   "cdnDomain": "image.neozeppelin.com",
   "files": [
     {
@@ -20,6 +20,12 @@
       "sha256": "724c33ded1c735befd8b9f6a64a02aa06f1300911d2c1e7f8b6e3bdbd9b9291f",
       "bytes": 93506,
       "contentType": "image/webp"
+    },
+    {
+      "path": "animations/fox-clerk/lingli-avatar.png",
+      "sha256": "a869169655986acce63f8237b0b0e9620faa0d18734058e7dd6c8d20d006916f",
+      "bytes": 376674,
+      "contentType": "image/png"
     },
     {
       "path": "animations/fox-clerk/manifest.json",
@@ -91,6 +97,12 @@
       "path": "materials/felt-oat.webp",
       "sha256": "8113ccbcd25bb82cde5a2bbfd35dfdeed76a8e6df0bc1b6c6044999d53c58405",
       "bytes": 76528,
+      "contentType": "image/webp"
+    },
+    {
+      "path": "materials/lingli-chat-wave.webp",
+      "sha256": "0c6708490002bf98403576d43569bfca0dd6d4136386a84f0c2a9b9cedff9c13",
+      "bytes": 20842,
       "contentType": "image/webp"
     },
     {

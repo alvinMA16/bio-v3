@@ -109,6 +109,7 @@ export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, c
       {!manifest && <div className="phone-art-fallback">令狸<span>{assetError ? '场景素材加载失败' : '正在加载场景…'}</span></div>}
     </>;
   return <div className="phone-preview" aria-label="手机用户界面预览">
+    <link rel="preload" as="image" href={uiAsset('lingli-avatar.png')} />
     <div className={`phone-screen ${callOpen ? 'phone-screen--call' : ''} ${mode === 'attachment' ? 'phone-screen--attachment' : ''} ${mode === 'editor' ? 'phone-screen--editor' : ''} ${callOpen && mode === 'conversation' ? 'phone-screen--conversation' : ''} ${dialing ? 'phone-screen--dialing' : ''}`} style={{ aspectRatio: '320/692' }}>
       {!callOpen ? <>
         {artwork}
@@ -130,10 +131,10 @@ export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, c
 
       </> : <>
         {dialing ? <section className="phone-dialing" aria-label="呼叫令狸" aria-busy={!callFailed}>
-          <div className="phone-dial-avatar"><i /><i /><i /><div className="phone-video"><div className="phone-video-scene">{artwork}</div></div></div>
+          <div className="phone-dial-avatar"><i /><i /><i /><img className="phone-dial-portrait" src={uiAsset('lingli-avatar.png')} alt="令狸的头像" /></div>
           <p role="status">{callFailed ? '暂时未能接通' : '正在呼叫'}</p>
           {callFailed && <small>{status}</small>}
-          {callFailed && <button type="button" className="phone-redial" disabled={startDisabled} onClick={onStart}>重新呼叫</button>}
+          {callFailed && <div className="phone-dial-recovery"><button type="button" className="phone-redial" disabled={startDisabled} onClick={onStart}>重新呼叫</button><button type="button" className="phone-dial-back" onClick={onEnd}>返回</button></div>}
         </section> : <>
           {mode === 'conversation' && <div className="phone-conversation-window" role="img" aria-label="令狸在书房里"><div className="phone-conversation-scene">{artwork}</div></div>}
           <section className={`phone-content-panel ${mode !== 'conversation' ? 'phone-content-panel--document' : ''}`} aria-label={mode === 'conversation' ? '对话内容' : mode === 'attachment' ? '附件内容' : '编辑内容'}>
@@ -143,10 +144,10 @@ export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, c
           </section>
         </>}
         {!dialing && <VoiceCallStatus state={motionState} getLevel={getMotionLevel} label="我在听" />}
-        <footer className="phone-call-controls" aria-label="通话控制">
+        {!dialing && <footer className="phone-call-controls" aria-label="通话控制">
           <div className="document-call-state"><span>令狸</span><small>{dialing ? callFailed ? '未接通' : '等待接通' : callDuration}</small></div>
           <SlideToEnd key={`${mode}:${dialing}`} dialing={dialing} onEnd={onEnd} />
-        </footer>
+        </footer>}
       </>}
       {receiptVisible && receipt && !callOpen && <ReceiptPrinter key={receipt.id} receipt={receipt} onClose={onReceiptClose} />}
     </div>

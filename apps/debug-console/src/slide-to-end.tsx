@@ -13,7 +13,8 @@ export function SlideToEnd({ onEnd, dialing = false }: { onEnd: () => void; dial
   function reset() { gesture.current = undefined; setDragging(false); if (!completed.current) setValue(0); }
   function finish() { if (completed.current) return; completed.current = true; gesture.current = undefined; setDragging(false); setValue(100); onEnd(); }
   return <div ref={track} className={`slide-to-end ${dragging ? 'slide-to-end--dragging' : ''}`}>
-    <span className="slide-to-end-label" aria-hidden="true" style={{ opacity: 1 - value / 100 }}>{dialing ? '取消' : '退出'} ›</span>
+    <span className="slide-to-end-caption" aria-hidden="true">{label}</span>
+    <span className="slide-to-end-label" aria-hidden="true" style={{ opacity: 1 - value / 100 }}>→</span>
     <button type="button" role="slider" className="slide-to-end-thumb" aria-label={label}
       aria-orientation="horizontal" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(value)}
       aria-valuetext={value >= 96 ? '松开或按回车确认退出' : '向右滑到底后松开退出'} aria-describedby={helpId}
