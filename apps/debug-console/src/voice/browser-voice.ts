@@ -39,6 +39,10 @@ export class BrowserVoice {
   private closed = false;
   private listening = false;
   private callReady = false;
+  private uiReady = false;
+  private dialingFinished = false;
+  private pendingEvents: VoiceServerMessage[] = [];
+  private pendingEventBytes = 0;
   private ringback: { tones: OscillatorNode[]; gain: GainNode; timer: ReturnType<typeof setTimeout> } | undefined;
   private speechSignal = new FoxSpeechSignal(value => this.callbacks.speaking?.(value));
   private finishing = false;
@@ -75,6 +79,11 @@ export class BrowserVoice {
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('请在 HTTPS 或 localhost 页面使用麦克风。');
       document.addEventListener('visibilitychange', this.onVisibility);
+      // UI assets, microphone setup and the server opening run concurrently.
+      void Promise.resolve().then(() => this.callbacks.prepare?.()).then(() => {
+        if (this.closed) return;
+        this.uiReady = true; this.flushPreparedEvents();
+      }).catch(() => this.fail('通话资源加载失败，请重新呼叫。'));
       this.context = new AudioContext();
       this.output = this.context.createGain();
       this.output.gain.value = this.speakerEnabled ? 1 : 0;
@@ -121,7 +130,6 @@ export class BrowserVoice {
         this.callbacks.inputLevel?.(rms < 0.008 ? 0 : Math.min(4, Math.ceil(rms * 24)));
         ws.send(event.data as ArrayBuffer);
       };
-      await this.callbacks.prepare?.();
       if (this.closed) return;
       this.connectSocket();
     } catch (error) {
@@ -144,15 +152,17 @@ export class BrowserVoice {
       tone.connect(gain); tone.start();
       return tone;
     });
-    const pulse = () => {
-      const now = context.currentTime;
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(.025, now + .08);
-      gain.gain.setValueAtTime(.025, now + .85);
-      gain.gain.linearRampToValueAtTime(0, now + 1);
-      if (this.ringback) this.ringback.timer = setTimeout(pulse, 4000);
-    };
-    this.ringback = { tones, gain, timer: setTimeout(pulse, 0) };
+    const now = context.currentTime;
+    for (let pulse = 0; pulse < 3; pulse++) {
+      const start = now + pulse * 1.2;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(.025, start + .08);
+      gain.gain.setValueAtTime(.025, start + .48);
+      gain.gain.linearRampToValueAtTime(0, start + .6);
+    }
+    this.ringback = { tones, gain, timer: setTimeout(() => {
+      this.stopRingback(); this.dialingFinished = true; this.flushPreparedEvents();
+    }, 3000) };
   }
   private stopRingback(): void {
     if (!this.ringback) return;
@@ -160,6 +170,13 @@ export class BrowserVoice {
     clearTimeout(timer);
     tones.forEach(tone => { tone.stop(); tone.disconnect(); });
     gain.disconnect(); this.ringback = undefined;
+  }
+
+  private flushPreparedEvents(): void {
+    if (this.closed || !this.uiReady || !this.dialingFinished) return;
+    const events = this.pendingEvents;
+    this.pendingEvents = []; this.pendingEventBytes = 0;
+    for (const event of events) this.receive(event);
   }
 
   private connectSocket(): void {
@@ -195,6 +212,7 @@ export class BrowserVoice {
     this.remember();
     this.send({ type: 'disconnect', turnId: this.turnId || 'disconnect', reason: 'client_error' });
     this.socket = undefined; ws.close();
+    this.pendingEvents = []; this.pendingEventBytes = 0;
     this.setListening(false); this.stopAudio(); this.turnActive = false;
     this.callbacks.event({ type: 'cancelled', turnId: this.turnId, elapsedMs: 0, reason: 'connection_lost' });
     if (document.hidden || this.reconnects >= 3) { this.fail('连接暂时中断，重新连接可尝试恢复刚才的对话。'); return; }
@@ -240,7 +258,17 @@ export class BrowserVoice {
   }
   private receive(event: VoiceServerMessage): void {
     if (this.closed || event.turnId !== this.turnId) return;
-    if (event.type === 'error') this.stopRingback();
+    if (event.type === 'error' && event.code !== 'CALL_BUSY') {
+      if (!this.uiReady || !this.dialingFinished) { this.fail(event.message); return; }
+      this.stopRingback();
+    }
+    if ((!this.uiReady || !this.dialingFinished) && event.type !== 'connected' && event.type !== 'error') {
+      this.pendingEventBytes += JSON.stringify(event).length * 2;
+      if (this.pendingEvents.length >= 2000 || this.pendingEventBytes > 4 * 1024 * 1024) {
+        this.fail('开场准备超时，请重新呼叫。'); return;
+      }
+      this.pendingEvents.push(event); return;
+    }
     if (event.type === 'connected') {
       this.callId = event.callId; this.conversationId = event.conversationId;
       this.confirmed = true; this.resume = false; this.reconnects = 0; this.remember();
@@ -388,6 +416,7 @@ export class BrowserVoice {
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.closed = true; ++this.micGeneration; this.callbacks.microphone?.(false); this.setListening(false); this.stopAudio();
     this.stopRingback();
+    this.pendingEvents = []; this.pendingEventBytes = 0;
     this.capture?.disconnect(); this.source?.disconnect(); this.muted?.disconnect();
     this.playbackAnalyser?.disconnect();
     this.output?.disconnect();

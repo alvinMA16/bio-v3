@@ -9,7 +9,7 @@ const { BrowserVoice } = await import(`data:text/javascript;base64,${Buffer.from
 const flush = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
 
 test('one phone call keeps its callId across turns and only explicit close sends hangup', async t => {
-  const f = environment(t); await f.client.start(); f.sockets[0].onopen();
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); f.sockets[0].onopen();
   f.client.interrupt();
   const listens = f.messages.map(JSON.parse).filter(m => m.type === 'listen');
   assert.equal(listens.length, 2); assert.equal(listens[0].callId, listens[1].callId);
@@ -19,12 +19,14 @@ test('one phone call keeps its callId across turns and only explicit close sends
 });
 
 test('transport failure leaves call completion to the server grace period', async t => {
-  const f = environment(t); await f.client.start(); f.sockets[0].onopen();
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); f.sockets[0].onopen();
   f.sockets[0].onerror();
   assert.equal(f.messages.map(JSON.parse).filter(m => m.type === 'hangup').length, 0);
 });
 
+const timerContexts = new WeakSet();
 function environment(t, pendingMic, moduleError, prepare) {
+  if (!timerContexts.has(t)) { t.mock.timers.enable({ apis: ['setTimeout'] }); timerContexts.add(t); }
   const cache = new Map();
   const tones = [];
   const sockets = [], nodes = [], messages = [], events = [], starts = [], playback = [], captures = [], levels = [], gains = [];
@@ -69,9 +71,9 @@ function environment(t, pendingMic, moduleError, prepare) {
 }
 
 test('interruption clears scheduled audio and rejects old turn callbacks', async t => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+
   const f = environment(t);
-  await f.client.start(); const ws = f.sockets[0]; ws.onopen();
+  await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen();
   const first = f.starts[0];
   ws.onmessage({ data: JSON.stringify({ type: 'audio', turnId: first, sampleRate: 16000, data: 'AAA=', text: '旧音频', segmentId: 1 }) });
   f.client.interrupt();
@@ -84,9 +86,9 @@ test('interruption clears scheduled audio and rejects old turn callbacks', async
 });
 
 test('next listening turn waits for actual playback drain, not server done', async t => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+
   const f = environment(t);
-  await f.client.start(); const ws = f.sockets[0]; ws.onopen(); const id = f.starts[0];
+  await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen(); const id = f.starts[0];
   ws.onmessage({ data: JSON.stringify({ type: 'audio', turnId: id, sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1 }) });
   ws.onmessage({ data: JSON.stringify({ type: 'done', turnId: id }) });
   t.mock.timers.tick(300); assert.equal(f.starts.length, 1);
@@ -104,9 +106,9 @@ test('closing while microphone permission is pending stops the late stream', asy
 });
 
 test('muting releases the microphone while keeping queued reply audio playing', async t => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+
   const f = environment(t);
-  await f.client.start(); const ws = f.sockets[0]; ws.onopen(); const id = f.starts[0];
+  await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen(); const id = f.starts[0];
   ws.onmessage({ data: JSON.stringify({ type: 'audio', turnId: id, sampleRate: 16000, data: 'AAA=', text: '继续说完', segmentId: 1 }) });
   await f.client.setMicrophone(false);
   assert.equal(f.stopped(), 1);
@@ -120,7 +122,7 @@ test('muting releases the microphone while keeping queued reply audio playing', 
 
 test('muting an unsubmitted utterance cancels it and discards late recognition', async t => {
   const f = environment(t);
-  await f.client.start(); const ws = f.sockets[0]; ws.onopen(); const id = f.starts[0];
+  await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen(); const id = f.starts[0];
   ws.onmessage({ data: JSON.stringify({ type: 'state', state: 'listening', turnId: id }) });
   await f.client.setMicrophone(false);
   assert.ok(f.messages.some(value => typeof value === 'string' && JSON.parse(value).type === 'cancel'));
@@ -131,9 +133,9 @@ test('muting an unsubmitted utterance cancels it and discards late recognition',
 });
 
 test('unmuting during playback does not start a new listening turn early', async t => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+
   const f = environment(t);
-  await f.client.start(); const ws = f.sockets[0]; ws.onopen(); const id = f.starts[0];
+  await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen(); const id = f.starts[0];
   ws.onmessage({ data: JSON.stringify({ type: 'audio', turnId: id, sampleRate: 16000, data: 'AAA=', text: '还没说完', segmentId: 1 }) });
   await f.client.setMicrophone(false); await f.client.setMicrophone(true);
   assert.equal(f.starts.length, 1);
@@ -154,7 +156,7 @@ test('muting during permission prompt discards a late microphone stream', async 
 
 test('microphone meter reflects input PCM only and resets when listening pauses', async t => {
   const f = environment(t);
-  await f.client.start(); const ws = f.sockets[0]; ws.onopen(); const id = f.starts[0];
+  await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen(); const id = f.starts[0];
   const state = value => ws.onmessage({ data: JSON.stringify({ type: 'state', state: value, turnId: id }) });
   const frame = value => f.captures[0].port.onmessage({ data: new Int16Array(1600).fill(value).buffer });
   state('listening');
@@ -172,9 +174,9 @@ test('microphone meter reflects input PCM only and resets when listening pauses'
 
 
 test('speaker mute silences current and future audio without stopping playback or microphone', async t => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+
   const f = environment(t);
-  await f.client.start(); const ws = f.sockets[0]; ws.onopen(); const id = f.starts[0];
+  await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen(); const id = f.starts[0];
   const audio = segmentId => ws.onmessage({ data: JSON.stringify({ type: 'audio', turnId: id, sampleRate: 16000, data: 'AAA=', text: '你好', segmentId }) });
   audio(1);
   const analyser = f.nodes[0].destination;
@@ -194,7 +196,7 @@ test('speaker mute silences current and future audio without stopping playback o
 test('worklet load failure shows a friendly error and releases microphone resources', async t => {
   t.mock.method(console, 'error', () => {});
   const f = environment(t, undefined, new Error("Unable to load a worklet's module."));
-  await f.client.start();
+  await f.client.start(); t.mock.timers.tick(3000);
   assert.equal(f.events.find(event => event.type === 'local.error').message, '语音连接失败，请重试。');
   assert.equal(f.stopped(), 1);
   assert.equal(f.ended(), 1);
@@ -202,8 +204,8 @@ test('worklet load failure shows a friendly error and releases microphone resour
 });
 
 test('playback credits are sent only after audio ends, and stale audio never acknowledges a new turn', async t => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen();
+
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen();
   const id = f.starts[0];
   ws.onmessage({ data: JSON.stringify({ type: 'audio', turnId: id, sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1, endSample: 1 }) });
   const messages = () => f.messages.map(JSON.parse).filter(m => m.type === 'playback');
@@ -215,8 +217,8 @@ test('playback credits are sent only after audio ends, and stale audio never ack
 });
 
 test('bad audio pauses speech while retaining complete text and keeping the call open', async t => {
-  t.mock.timers.enable({ apis: ['setTimeout'] }); t.mock.method(console, 'error', () => {});
-  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen();
+ t.mock.method(console, 'error', () => {});
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen();
   const id = f.starts[0];
   ws.onmessage({ data: JSON.stringify({ type: 'audio', turnId: id, sampleRate: 16000, data: 'AA==', text: '错误音频', segmentId: 1 }) });
   assert.equal(f.ended(), 0); assert.equal(ws.readyState, 1);
@@ -229,8 +231,8 @@ test('bad audio pauses speech while retaining complete text and keeping the call
 });
 
 test('network reconnect reuses confirmed call identity and ignores the old socket; hangup stops retries', async t => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const f = environment(t); await f.client.start(); const old = f.sockets[0]; old.onopen();
+
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); const old = f.sockets[0]; old.onopen();
   const first = f.messages.map(JSON.parse).find(m => m.type === 'listen');
   old.onmessage({ data: JSON.stringify({ type: 'connected', turnId: first.turnId, callId: first.callId, conversationId: 'conv', resumed: false }) });
   old.onclose({ code: 1006 });
@@ -246,7 +248,7 @@ test('network reconnect reuses confirmed call identity and ignores the old socke
 });
 
 test('manual reconnect restores the cached call; another account and explicit hangup do not inherit it', async t => {
-  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen();
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen();
   const first = f.messages.map(JSON.parse).find(m => m.type === 'listen');
   ws.onmessage({ data: JSON.stringify({ type: 'connected', turnId: first.turnId, callId: first.callId, conversationId: 'conv', resumed: false }) });
   f.client.close(false);
@@ -262,8 +264,8 @@ test('manual reconnect restores the cached call; another account and explicit ha
 });
 
 test('recoverable recognition failure pauses microphone instead of looping and allows explicit retry', async t => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen(); const turnId = f.starts[0];
+
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen(); const turnId = f.starts[0];
   ws.onmessage({ data: JSON.stringify({ type: 'error', turnId, stage: 'asr', recoverable: true, message: '识别暂时不可用' }) });
   ws.onmessage({ data: JSON.stringify({ type: 'done', turnId }) });
   t.mock.timers.tick(2000); assert.equal(f.starts.length, 1); assert.equal(f.ended(), 0);
@@ -272,7 +274,7 @@ test('recoverable recognition failure pauses microphone instead of looping and a
 
 
 test('motion level follows accepted microphone PCM and clears when listening stops', async t => {
-  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen();
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen();
   const turnId = f.starts[0];
   ws.onmessage({ data: JSON.stringify({ type: 'state', state: 'listening', turnId }) });
   const pcm = value => f.captures[0].port.onmessage({ data: new Int16Array(320).fill(value).buffer });
@@ -283,7 +285,7 @@ test('motion level follows accepted microphone PCM and clears when listening sto
 });
 
 test('motion samples playback as it sounds and clears on mute, interruption and close', async t => {
-  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen();
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen();
   ws.onmessage({ data: JSON.stringify({ type: 'audio', turnId: f.starts[0], sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1 }) });
   const analyser = f.nodes[0].destination;
   assert.equal(f.client.getMotionLevel(), 0, 'queued silent audio does not animate');
@@ -296,7 +298,7 @@ test('motion samples playback as it sounds and clears on mute, interruption and 
 
 
 test('call connects only when listening is ready, once across subsequent turns', async t => {
-  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen();
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen();
   assert.equal(f.connected(), 0);
   const emit = (turnId, state) => ws.onmessage({ data: JSON.stringify({ type: 'state', turnId, state, elapsedMs: 0 }) });
   emit(f.starts[0], 'connecting'); assert.equal(f.connected(), 0);
@@ -310,21 +312,25 @@ test('cancel during dialing ignores late readiness', async t => {
   const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen();
   f.client.close();
   ws.onmessage({ data: JSON.stringify({ type: 'state', turnId: f.starts[0], state: 'listening', elapsedMs: 0 }) });
+  t.mock.timers.tick(5000);
   assert.equal(f.connected(), 0);
 });
 
 
-test('preparation blocks connecting and cancellation prevents late connection', async t => {
+test('server connects during UI preparation and cancellation prevents late playback', async t => {
   let ready; const preparation = new Promise(resolve => { ready = resolve; });
   const f = environment(t, undefined, undefined, () => preparation);
   const starting = f.client.start(); await flush();
-  assert.equal(f.sockets.length, 0);
-  f.client.close(); ready(); await starting;
-  assert.equal(f.sockets.length, 0);
+  assert.equal(f.sockets.length, 1);
+  f.sockets[0].onopen();
+  f.sockets[0].onmessage({ data: JSON.stringify({ type: 'audio', turnId: f.starts[0], sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1 }) });
+  assert.equal(f.nodes.length, 0);
+  f.client.close(); ready(); await starting; await flush(); t.mock.timers.tick(5000);
+  assert.equal(f.nodes.length, 0); assert.equal(f.connected(), 0);
 });
 
 test('opening audio connects before playing even before the first listening state', async t => {
-  const f = environment(t); await f.client.start(); const ws = f.sockets[0]; ws.onopen();
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen();
   assert.equal(f.connected(), 0);
   ws.onmessage({ data: JSON.stringify({ type: 'audio', turnId: f.starts[0], sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1 }) });
   assert.equal(f.connected(), 1);
@@ -332,22 +338,46 @@ test('opening audio connects before playing even before the first listening stat
   assert.equal(f.connected(), 1);
 });
 
-test('ringback pulses quietly while dialing and stops before listening or greeting', async t => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+test('exactly three scheduled rings hold early audio and listening until the dialing ends', async t => {
   for (const type of ['state', 'audio']) {
     const f = environment(t); await f.client.start();
     assert.deepEqual(f.tones.map(tone => tone.frequency.value), [440, 480]);
-    t.mock.timers.tick(1);
-    assert.deepEqual(f.gains[1].gain.events.map(event => event[0]), [0, .025, .025, 0]);
+    assert.equal(f.gains[1].gain.events.length, 12);
+    assert.deepEqual(f.gains[1].gain.events.filter((_, i) => i % 4 === 3).map(e => Math.round(e[1] * 1000)), [600, 1800, 3000]);
     f.sockets[0].onopen();
-    assert.ok(f.tones.every(tone => !tone.stopped));
     f.sockets[0].onmessage({ data: JSON.stringify({ type, state: 'listening', turnId: f.starts[0], sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1 }) });
-    assert.ok(f.tones.every(tone => tone.stopped));
+    t.mock.timers.tick(2999);
+    assert.equal(f.connected(), 0); assert.equal(f.nodes.length, 0);
+    t.mock.timers.tick(1);
+    assert.equal(f.connected(), 1); assert.ok(f.tones.every(tone => tone.stopped));
     const count = f.gains[1].gain.events.length;
-    t.mock.timers.tick(5000);
-    assert.equal(f.gains[1].gain.events.length, count);
+    t.mock.timers.tick(5000); assert.equal(f.gains[1].gain.events.length, count);
     f.client.close();
   }
+});
+test('slow UI waits silently after three rings, then releases the buffered opening in order', async t => {
+  let ready;
+  const f = environment(t, undefined, undefined, () => new Promise(resolve => { ready = resolve; }));
+  await f.client.start(); f.sockets[0].onopen();
+  const emit = e => f.sockets[0].onmessage({ data: JSON.stringify({ turnId: f.starts[0], ...e }) });
+  emit({ type: 'audio', sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1 });
+  emit({ type: 'done' });
+  t.mock.timers.tick(6000);
+  assert.ok(f.tones.every(tone => tone.stopped)); assert.equal(f.connected(), 0); assert.equal(f.nodes.length, 0);
+  ready(); await flush();
+  assert.equal(f.connected(), 1); assert.equal(f.nodes.length, 1);
+  assert.deepEqual(f.events.map(e => e.type), ['audio', 'done']);
+  assert.equal(f.starts.length, 1);
+  f.nodes[0].onended(); t.mock.timers.tick(200); assert.equal(f.starts.length, 2);
+});
+test('UI failure during server preparation stops the call without playing queued audio', async t => {
+  let reject;
+  const f = environment(t, undefined, undefined, () => new Promise((_, r) => { reject = r; }));
+  await f.client.start(); f.sockets[0].onopen();
+  f.sockets[0].onmessage({ data: JSON.stringify({ type: 'audio', turnId: f.starts[0], sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1 }) });
+  reject(new Error('asset failure')); await flush(); t.mock.timers.tick(5000);
+  assert.equal(f.ended(), 1); assert.equal(f.nodes.length, 0); assert.equal(f.connected(), 0);
+  assert.ok(f.tones.every(tone => tone.stopped));
 });
 test('ringback stops on cancellation during permission and startup failure', async t => {
   const pending = new Promise(() => {});
@@ -358,4 +388,23 @@ test('ringback stops on cancellation during permission and startup failure', asy
   const failed = environment(t, undefined, new Error('worklet failed'));
   await failed.client.start();
   assert.ok(failed.tones.every(tone => tone.stopped));
+});
+
+test('startup server failure stops all tones and discards the queued opening', async t => {
+  const f = environment(t); await f.client.start(); f.sockets[0].onopen();
+  const emit = event => f.sockets[0].onmessage({ data: JSON.stringify({ turnId: f.starts[0], ...event }) });
+  emit({ type: 'audio', sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1 });
+  emit({ type: 'error', stage: 'tts', recoverable: true, message: '开场语音不可用' });
+  t.mock.timers.tick(5000);
+  assert.equal(f.ended(), 1); assert.equal(f.connected(), 0); assert.equal(f.nodes.length, 0);
+  assert.ok(f.tones.every(tone => tone.stopped));
+});
+test('reconnecting during dialing discards audio from the replaced connection', async t => {
+  const f = environment(t); await f.client.start(); const old = f.sockets[0]; old.onopen();
+  old.onmessage({ data: JSON.stringify({ type: 'audio', turnId: f.starts[0], sampleRate: 16000, data: 'AAA=', text: '旧开场', segmentId: 1 }) });
+  old.onerror(); t.mock.timers.tick(1000); f.sockets[1].onopen();
+  f.sockets[1].onmessage({ data: JSON.stringify({ type: 'state', turnId: f.starts[1], state: 'listening' }) });
+  t.mock.timers.tick(2000);
+  assert.equal(f.connected(), 1); assert.equal(f.nodes.length, 0);
+  assert.equal(f.tones.length, 2, 'reconnect does not restart the three rings');
 });
