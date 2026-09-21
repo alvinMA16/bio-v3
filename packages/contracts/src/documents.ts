@@ -19,6 +19,7 @@ export interface DocumentNavigationReceipt {
 export interface DocumentHighlight {
   requestId: string;
   kind: 'change' | 'focus';
+  color?: 'yellow' | 'green' | 'purple' | 'blue' | 'pink';
   ranges: DocumentRange[];
   deletions?: Array<{ blockId: string; text: string }>;
   notice?: string;

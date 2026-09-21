@@ -1,0 +1,23 @@
+.top-toast {
+  position: absolute; z-index: 20; top: max(16px, env(safe-area-inset-top)); left: 16px; right: 16px;
+  max-width: 360px; margin-inline: auto; padding: 14px 16px 12px; border-radius: 22px;
+  color: #304d3e; background: linear-gradient(135deg, #ffffffe0, #eff7ed99 48%, #e6f0e5a6);
+  backdrop-filter: blur(18px) saturate(1.45); -webkit-backdrop-filter: blur(18px) saturate(1.45);
+  box-shadow: inset 0 1px 1px #fff, inset 0 -1px 1px #ffffff80, 0 8px 28px #304d3e1f;
+  pointer-events: none; animation: top-toast-arrive 240ms ease-out both;
+}
+.font-toast-heading { display: flex; align-items: baseline; gap: 10px; font-size: 11px; line-height: 1.6; }
+.font-toast-heading strong { font-size: 13px; font-weight: 550; }
+.font-toast-heading small { margin-left: auto; font-size: 10px; font-variant-numeric: tabular-nums; opacity: .7; }
+.font-toast-scale { position: relative; display: grid; grid-template-columns: repeat(var(--font-stops), 1fr); margin: 10px -5px 0; }
+.font-toast-scale::before { content: ''; position: absolute; top: 6px; left: 10%; right: 10%; height: 2px; background: #587b5830; }
+.font-toast-scale > span { position: relative; display: grid; justify-items: center; gap: 7px; }
+.font-toast-scale > span > i { display: block; width: 5px; height: 5px; margin: 4px 0; border-radius: 50%; background: #64816b88; }
+.font-toast-scale small { font-size: 10px; color: #52675a; }
+.font-toast-scale .is-current small { color: #294b36; font-weight: 650; }
+.font-toast-selection { position: absolute; width: calc(100% / var(--font-stops)); height: 13px; left: 0; top: 0; transform: translateX(calc(var(--font-to) * 100%)); animation: font-stop-move 550ms cubic-bezier(.22, .8, .25, 1) both; }
+.font-toast-selection::after { content: ''; display: block; width: 13px; height: 13px; margin: auto; border-radius: 50%; background: #517958; box-shadow: 0 0 0 3px #a6c6a63b, inset 0 1px 2px #ffffff70; }
+@keyframes font-stop-move { from { transform: translateX(calc(var(--font-from) * 100%)); } to { transform: translateX(calc(var(--font-to) * 100%)); } }
+@keyframes top-toast-arrive { from { opacity: 0; translate: 0 -8px; } to { opacity: 1; translate: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .top-toast, .font-toast-selection { animation: none; } }
+@supports not (backdrop-filter: blur(1px)) { .top-toast { background: #edf4ebf5; } }

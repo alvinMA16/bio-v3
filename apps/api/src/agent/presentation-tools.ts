@@ -8,6 +8,8 @@ import type { DocumentRuntime } from './document-runtime.js';
 import { randomUUID } from 'node:crypto';
 
 const id = Type.String({ pattern: '^[a-zA-Z0-9_-]{1,64}$' });
+const highlightColor = Type.Optional(Type.Union((['yellow', 'green', 'purple', 'blue', 'pink'] as const).map(color => Type.Literal(color)), { description: '本次荧光笔颜色，可自主选择；默认黄色。同一次操作统一使用一种颜色，仅影响展示，不修改正文。' }));
+const highlightGranularity = Type.Optional(Type.Union([Type.Literal('reading'), Type.Literal('character')], { description: '默认 reading：英文按完整单词或标识符、数字按完整数值、中文至少按完整汉字标记。仅在用户明确要求字符级对比时选择 character；仍不拆分组合字符。' }));
 const block = Type.Object({ id, kind: Type.Union(['paragraph', 'heading', 'list', 'quote', 'code'].map(value => Type.Literal(value))), text: Type.String({ maxLength: 12000, description: '原始正文字符串，不要再 JSON.stringify。排版使用真实换行字符（U+000A），不要写成反斜杠加 n 或 r；多个自然段优先拆成独立 block，list 各项以真实换行分隔。需原样保留转义示例、代码或路径时使用 kind=code。' }) });
 export interface AttachmentLibrary {
   list: (query?: string) => Promise<Array<{ attachmentId: string; title: string; kind: string; filename: string; createdAt: string }>>;
@@ -70,26 +72,26 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
     }),
     defineTool({
       name: 'edit_document', label: '修改文稿原文',
-      description: '创建或修改持久化文稿正文，与翻页/展示无关。仅在用户要求创作或修改时执行；问“怎么改”先讨论。新建 expectedVersion=0 并给 title；已有文稿使用当前版本。operations 原子执行：insert 不填 afterId 时追加，replace 保留段落 ID，delete 删除段落。不自动打开新稿，随后用 show_document；已显示该稿时刷新正文并保持阅读位置，程序自动按字符差异高亮新增或替换的字词、标点，并返回具体范围。不必再将整个修改段落高亮；若用户想看修改位置，可用 show_document 精确定位。版本冲突先 read_document 重新读取并检查意图，不强行覆盖。每次提交保存完整历史版本。',
+      description: '创建或修改持久化文稿正文，与翻页/展示无关。仅在用户要求创作或修改时执行；问“怎么改”先讨论。新建 expectedVersion=0 并给 title；已有文稿使用当前版本。operations 原子执行：insert 不填 afterId 时追加，replace 保留段落 ID，delete 删除段落。不自动打开新稿，随后用 show_document；已显示该稿时刷新正文并保持阅读位置，程序根据实际差异生成高亮，并对齐到最小完整阅读单位，返回实际展示范围。不必再将整个修改段落高亮；若用户想看修改位置，可用 show_document 精确定位。版本冲突先 read_document 重新读取并检查意图，不强行覆盖。写入前统一规范化非代码块的排版语法，保留块结构、链接地址和代码原文；后续定位以 read_document 返回的实际正文为准。每次提交保存完整历史版本。',
       parameters: Type.Object({ documentId: Type.Optional(id), expectedVersion: Type.Integer({ minimum: 0 }), title: Type.Optional(Type.String({ minLength: 1, maxLength: 300 })), summary: Type.Optional(Type.String({ maxLength: 300 })),
-        operations: Type.Array(Type.Object({ action: Type.Union([Type.Literal('insert'), Type.Literal('replace'), Type.Literal('delete')]), targetId: Type.Optional(id), afterId: Type.Optional(id), block: Type.Optional(block) }), { minItems: 1, maxItems: 100 }) }),
+        highlightColor, highlightGranularity, operations: Type.Array(Type.Object({ action: Type.Union([Type.Literal('insert'), Type.Literal('replace'), Type.Literal('delete')]), targetId: Type.Optional(id), afterId: Type.Optional(id), block: Type.Optional(block) }), { minItems: 1, maxItems: 100 }) }),
       execute: async (_id, params, signal) => {
         await runtime?.beforeShow?.(signal); signal?.throwIfAborted();
         const { store, user, conversationId } = binding();
         if (!params.documentId && params.expectedVersion !== 0) throw new Error('修改已有文稿需要 documentId');
         const document = await store.edit(user, conversationId, { ...params, documentId: params.documentId ?? randomUUID() }, params.summary);
-        updated(workspace.documentSaved(document));
+        updated(workspace.documentSaved(document, params.highlightColor, params.highlightGranularity));
         return result({ status: 'saved', documentId: document.id, version: document.version, blockIds: document.blocks.map(item => item.id), displayed: workspace.state().document?.id === document.id,
           highlight: workspace.state().document?.id === document.id ? workspace.state().documentView?.highlight : undefined });
       },
     }),
     defineTool({
       name: 'show_document', label: '展示文稿或移动阅读位置',
-      description: '展示文稿、定位段落或推进朗读，不修改正文。界面是连续滚动正文，没有用户可见页码。page/navigation 为内部朗读分段游标，不等于用户实际看见的内容；实际可见内容以 screen.visibleContent 为准。blockId 精确滚动到段落开头。highlights 用于“在哪里/指出这句话/标出来”：先 read_document 取得最新原文与版本，传 expectedVersion 和 [{blockId, quote, occurrence?}]；quote 必须是要强调的最短准确原文，可只有一个字或标点，不要为方便选整段。重复原文须指定 occurrence（从1开始）。程序精确匹配并滚动到第一处，同时返回实际范围；不接受猜测的文字。仅看整段时用 blockId，不需要高亮整段。高亮只是临时展示，不修改正文，不产生版本；clearHighlight=true 清除。highlights 不与其他定位参数同传。三种普通定位最多一种。全文朗读先 page=1、follow=true 恢复跟随，输出 screen.readingPage 原文，再 navigation=next 继续；工具等待前文实际播放完。用户手动滑动后客户端停止跟随，后续推进不要传 follow=true 强行拉回；只有用户明确要求跟随或重新从头朗读时才恢复。',
+      description: '展示文稿、定位段落或推进朗读，不修改正文。界面是连续滚动正文，没有用户可见页码。page/navigation 为内部朗读分段游标，不等于用户实际看见的内容；实际可见内容以 screen.visibleContent 为准。blockId 精确滚动到段落开头。highlights 用于“在哪里/指出这句话/标出来”：先 read_document 取得最新原文与版本，传 expectedVersion 和 [{blockId, quote, occurrence?}]；quote 必须是需要强调的最小完整原文，不要为方便选整段；匹配后程序按 highlightGranularity 统一调整展示边界。重复原文须指定 occurrence（从1开始）。程序精确匹配并滚动到第一处，同时返回实际范围；不接受猜测的文字。仅看整段时用 blockId，不需要高亮整段。高亮只是临时展示，不修改正文，不产生版本；clearHighlight=true 清除。highlights 不与其他定位参数同传。三种普通定位最多一种。全文朗读先 page=1、follow=true 恢复跟随，输出 screen.readingPage 原文，再 navigation=next 继续；工具等待前文实际播放完。用户手动滑动后客户端停止跟随，后续推进不要传 follow=true 强行拉回；只有用户明确要求跟随或重新从头朗读时才恢复。',
       parameters: Type.Object({ documentId: Type.Optional(id), page: Type.Optional(Type.Integer({ minimum: 1 })), navigation: Type.Optional(Type.Union([Type.Literal('next'), Type.Literal('previous')])), blockId: Type.Optional(id), follow: Type.Optional(Type.Boolean()),
         expectedVersion: Type.Optional(Type.Integer({ minimum: 1 })),
         highlights: Type.Optional(Type.Array(Type.Object({ blockId: id, quote: Type.String({ minLength: 1, maxLength: 12000 }), occurrence: Type.Optional(Type.Integer({ minimum: 1 })) }), { minItems: 1, maxItems: 30 })),
-        clearHighlight: Type.Optional(Type.Boolean()) }),
+        highlightColor, highlightGranularity, clearHighlight: Type.Optional(Type.Boolean()) }),
       execute: async (_id, params, signal) => {
         if (params.highlights && (params.page || params.navigation || params.blockId || params.clearHighlight)) throw new Error('highlights 不能与其他定位或清除操作同时使用');
         if ([params.page, params.navigation, params.blockId].filter(value => value !== undefined).length > 1) throw new Error('只能指定一种定位方式');
@@ -100,7 +102,7 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
         const document = await store.get(user, documentId), pages = documentPages(document);
         if (params.highlights && params.expectedVersion === undefined) throw new Error('精准高亮需提供刚读取的 expectedVersion');
         if (params.expectedVersion !== undefined && document.version !== params.expectedVersion) throw new Error('文稿版本已变化，请重新读取后定位');
-        const ranges = params.highlights?.map(target => locateText(document, target));
+        const ranges = params.highlights?.map(target => locateText(document, { ...target, granularity: params.highlightGranularity }));
         const targetBlock = params.blockId && document.blocks.find(block => block.id === params.blockId);
         if (params.blockId && !targetBlock) throw new Error('段落不存在');
         const focus = ranges?.[0] ?? (targetBlock ? { blockId: targetBlock.id, start: 0, end: targetBlock.text.length } : undefined);
@@ -109,7 +111,7 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
         const page = params.page ?? (focus ? pages.findIndex(item => item.fragments.some(fragment => fragment.blockId === focus.blockId && fragment.start <= focus.start && fragment.end >= focus.start)) + 1
           : params.navigation ? current!.page + (params.navigation === 'next' ? 1 : -1) : current?.documentId === documentId ? Math.min(current.page, pages.length) : 1);
         const panel = workspace.showDocument(document, page, params.follow, {
-          ...(ranges ? { highlight: { requestId: randomUUID(), kind: 'focus', ranges } } : {}),
+          ...(ranges ? { highlight: { requestId: randomUUID(), kind: 'focus', ranges, ...(params.highlightColor ? { color: params.highlightColor } : {}) } } : {}),
           ...(focus ? { focus } : {}), ...(params.clearHighlight ? { clearHighlight: true } : {}) });
         const sent = updated(panel);
         const target = panel.documentView?.focus;

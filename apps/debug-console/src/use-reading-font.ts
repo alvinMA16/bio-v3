@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_READING_FONT_SIZE, isReadingFontSize, type ReadingFontSize } from '@bio/contracts';
 import { accountCacheKey } from './account-cache';
+export interface ReadingFontFeedback { id: number; previous: ReadingFontSize; current: ReadingFontSize }
 
 export function useReadingFont() {
   const key = accountCacheKey('bio-reading-font');
@@ -9,12 +10,12 @@ export function useReadingFont() {
     catch { return DEFAULT_READING_FONT_SIZE; }
   });
   const revision = useRef(0);
-  const [feedback, setFeedback] = useState<{ id: number; text: string }>();
+  const [feedback, setFeedback] = useState<ReadingFontFeedback>();
   const apply = (size: ReadingFontSize, previous?: ReadingFontSize) => {
     if (!isReadingFontSize(size)) return;
     revision.current++;
     setFontSize(size);
-    if (previous) setFeedback({ id: revision.current, text: previous === size ? `已经是${size}` : `字号已从${previous}调为${size}` });
+    if (previous) setFeedback({ id: revision.current, previous, current: size });
     try { localStorage.setItem(key, size); } catch { /* Server persistence remains authoritative. */ }
   };
   useEffect(() => {

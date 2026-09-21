@@ -11,6 +11,7 @@ import type { MemoryScope } from '../memory/memory-types.js';
 import { PiSessionFactory } from './pi-session.factory.js';
 import { beijingTime } from '../memory/call-history.js';
 import type { DocumentRuntime } from './document-runtime.js';
+import { createSpeechTextStream } from '../text-normalization/index.js';
 
 const CALL_OPENING_GUIDANCE = `服务端事件：一通新电话刚接通，用户尚未发言。请由令狸先开口，然后等待用户。
 默认一句，最多两句，通常不超过40个汉字。像熟人接电话一样自然，不长篇介绍、总结往事或连续提问。
@@ -37,6 +38,8 @@ export class AgentService {
     const events: AgentEvent[] = [];
     let sequence = 0;
     let messageId = randomUUID();
+    let speech = createSpeechTextStream();
+    let spokenText = '';
     let session: AgentSession | undefined;
     let release: (() => Promise<void>) | undefined;
     let archiveQueue = Promise.resolve();
@@ -114,20 +117,27 @@ export class AgentService {
           if (event.type === 'message_update') {
             const update = event.assistantMessageEvent;
             trace('pi', event.type, 'delta' in update ? { type: update.type, delta: update.delta } : { type: update.type });
-            if (update.type === 'text_delta') emit({ type: 'speech.delta', messageId, delta: update.delta });
+            if (update.type === 'text_delta') {
+              const delta = speech.push(update.delta);
+              if (delta) emit({ type: 'speech.delta', messageId, delta });
+            }
             return;
           }
           trace('pi', event.type, event);
           switch (event.type) {
             case 'message_start':
-              if (event.message.role === 'assistant') messageId = randomUUID();
+              if (event.message.role === 'assistant') { messageId = randomUUID(); speech = createSpeechTextStream(); spokenText = ''; }
               break;
             case 'message_end':
               if (event.message.role === 'assistant') {
                 lastAssistant = event.message;
                 addUsage(event.message.usage);
-                const text = assistantText(event.message);
-                if (text && event.message.stopReason !== 'error' && event.message.stopReason !== 'aborted') {
+                const rawText = assistantText(event.message);
+                if (event.message.stopReason !== 'error' && event.message.stopReason !== 'aborted') {
+                  const { delta, text } = speech.finish(rawText);
+                  spokenText = text;
+                  if (delta) emit({ type: 'speech.delta', messageId, delta });
+                  if (!text) break;
                   if (scope && this.memory?.enabled) {
                     const savedId = messageId;
                     archiveQueue = archiveQueue.then(() => this.memory!.archive(scope, conversationId, runId, savedId, 'assistant', text)).catch(error => { eventError = error; abort(); });
@@ -169,7 +179,7 @@ export class AgentService {
       const rate = Number(this.config.get('USD_TO_CNY_RATE', 6.7829));
       return {
         conversationId, runId, events,
-        message: { id: messageId, role: 'assistant', content: assistantText(lastAssistant), createdAt: new Date().toISOString() },
+        message: { id: messageId, role: 'assistant', content: spokenText, createdAt: new Date().toISOString() },
         finishReason: lastAssistant.stopReason === 'toolUse' ? 'tool_calls' : lastAssistant.stopReason,
         model: lastAssistant.model, usage,
         estimatedCost: estimateModelCost(lastAssistant.model, usage, Number.isFinite(rate) && rate > 0 ? rate : 6.7829),

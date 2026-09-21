@@ -57,7 +57,7 @@ test('speech contract covers every ordinary response and fixes legacy persona na
   assert.ok(DEFAULT_PERSONA.includes('令狸'));
   assert.ok(prompt.includes('旧名称以令狸为准'));
   assert.ok(prompt.includes('包括调用工具前后的说明'));
-  assert.ok(prompt.includes('普通回复不使用 Markdown'));
+  assert.ok(prompt.includes('口语通道不输出 Markdown'));
   assert.ok(!prompt.includes('show_panel'));
 });
 

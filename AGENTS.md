@@ -22,3 +22,8 @@
 - Scene and background elements use handmade felt / stop-motion textures.
 - Core CTA buttons use frosted glass with a subtle pale sage-green tint, soft optical highlights and translucent depth. Avoid opaque beige panels or conspicuous outline-button borders.
 - Keep related CTA text and character art grouped and centered; distribute actions rather than crowding the top of the screen.
+
+# Agent behavior changes
+
+- Design prompt and Agent constraints as general principles and decision rules that apply across situations. Do not accumulate case-by-case instructions, keyword exceptions, or patches for individual examples. Examples belong in regression tests, not as substitutes for general rules.
+- When proposing Agent changes, state which component changes, its current behavior, the proposed behavior, and how the general rule will be verified. If the user requests plan approval, wait for that approval before implementing those changes.

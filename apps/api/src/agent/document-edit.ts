@@ -1,5 +1,6 @@
 import type { PanelDocument } from '@bio/contracts';
 import type { PanelUpdate } from './panel-workspace.js';
+import { normalizeDocumentBlock, normalizeDocumentTitle } from '../text-normalization/index.js';
 
 /** Validate a whole batch on a copy before any persistence or display change. */
 export function editDocument(previous: PanelDocument | undefined, input: PanelUpdate): PanelDocument {
@@ -10,11 +11,15 @@ export function editDocument(previous: PanelDocument | undefined, input: PanelUp
   if (document.version !== input.expectedVersion) throw new Error(`版本冲突，当前版本为 ${document.version}，请重新读取后修改`);
   if (!input.operations.length || input.operations.length > 100) throw new Error('每次修改需要 1～100 个操作');
   for (const operation of input.operations) {
-    const block = operation.block;
+    let block = operation.block;
     if (block && (!/^[a-zA-Z0-9_-]{1,64}$/.test(block.id) || !['paragraph', 'heading', 'list', 'quote', 'code'].includes(block.kind)
       || typeof block.text !== 'string' || block.text.length > 12000)) throw new Error('无效段落');
     if (block && block.kind !== 'code' && /\\[nr]/.test(block.text)) {
       throw new Error(`段落 ${block.id} 含字面量换行转义（反斜杠加 n 或 r）。本批次未保存，版本未改变。请将排版换行改为真实换行字符，或拆成多个段落，使用相同 expectedVersion 重新提交完整操作批次；不要对 text 再做 JSON.stringify。若需原样展示转义示例、代码或含此序列的路径，请放入 kind=code 的独立块，保留原文。`);
+    }
+    if (block) {
+      block = normalizeDocumentBlock(block);
+      if (block.text.length > 12000) throw new Error('段落转换后超过 12000 字符');
     }
     if (operation.action === 'insert') {
       if (!block || operation.targetId) throw new Error('插入需要 block，不接受 targetId');
@@ -38,7 +43,8 @@ export function editDocument(previous: PanelDocument | undefined, input: PanelUp
   if (document.blocks.length > 200 || document.blocks.reduce((sum, block) => sum + block.text.length, 0) > 40000) throw new Error('文稿最多 200 个段落、40000 字符');
   if (input.title !== undefined) {
     if (!input.title.trim() || input.title.length > 300) throw new Error('标题需为 1～300 字符');
-    document.title = input.title;
+    document.title = normalizeDocumentTitle(input.title);
+    if (!document.title.trim() || document.title.length > 300) throw new Error('标题转换后需为 1～300 字符');
   }
   document.schemaVersion = 1;
   document.version++;

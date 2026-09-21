@@ -40,6 +40,31 @@ test('explicit focus rejects ambiguous or nonexistent quotes rather than widenin
   assert.throws(() => locateText(document, { blockId: 'p1', quote: '花', occurrence: 3 }), /范围/);
 });
 
+test('automatic edits and explicit focus share complete reading units', () => {
+  for (const [before, after, expected] of [
+    ['OpenAl', 'OpenAI', ['OpenAI']],
+    ['foo_bar', 'foo_baz', ['foo_baz']],
+    ['front-end', 'front-ends', ['front-ends']],
+    ['12.35', '12.45', ['12.45']],
+    ['-1,234.50%', '-1,235.50%', ['-1,235.50%']],
+    ['cafe', 'cafe\u0301', ['cafe\u0301']],
+    ['👩‍💻', '👩🏽‍💻', ['👩🏽‍💻']],
+    ['kitten', 'sitting', ['sitting']],
+  ]) {
+    const ranges = changedText(doc(before), doc(after)).ranges;
+    assert.deepEqual(ranges.map(r => after.slice(r.start, r.end)), expected);
+    const characterRanges = changedText(doc(before), doc(after), 'character').ranges;
+    for (const range of characterRanges) {
+      const quote = after.slice(range.start, range.end);
+      const located = locateText(doc(after), { blockId: 'p1', quote, occurrence: 1 });
+      assert.equal(after.slice(located.start, located.end), expected[0]);
+    }
+  }
+  const document = doc('完整单词 Example 和中文。');
+  assert.deepEqual(locateText(document, { blockId: 'p1', quote: 'xam' }), { blockId: 'p1', start: 5, end: 12 });
+  assert.deepEqual(locateText(document, { blockId: 'p1', quote: 'xam', granularity: 'character' }), { blockId: 'p1', start: 6, end: 9 });
+});
+
 test('focus works within the same narration chunk; edits and reloads keep precise temporary marks', async () => {
   const root = mkdtempSync(join(tmpdir(), 'bio-highlight-'));
   try {
@@ -47,17 +72,19 @@ test('focus works within the same narration chunk; edits and reloads keep precis
     const conversationId = randomUUID(), cwd = storage.conversationDirectory(conversationId), workspace = new PanelWorkspace(cwd);
     const tools = Object.fromEntries(createPresentationTools(workspace, () => {}, undefined, { store, conversationId }).map(t => [t.name, t]));
     await tools.edit_document.execute('1', { documentId: 'story', expectedVersion: 0, title: '回忆', operations: [{ action: 'insert', block: doc('花开了，花又落了。').blocks[0] }] });
-    await assert.rejects(tools.show_document.execute('2', { documentId: 'story', expectedVersion: 1, highlights: [{ blockId: 'p1', quote: '花', occurrence: 2 }] }), /unconfirmed/);
+    await assert.rejects(tools.show_document.execute('2', { documentId: 'story', expectedVersion: 1, highlightColor: 'purple', highlights: [{ blockId: 'p1', quote: '花', occurrence: 2 }] }), /unconfirmed/);
     const state = workspace.state();
     assert.equal(state.documentView.page, 1); assert.equal(state.documentView.focus.start, 4);
     assert.equal(state.documentView.highlight.ranges[0].end, 5);
+    assert.equal(state.documentView.highlight.color, 'purple');
     const reopened = new PanelWorkspace(cwd); reopened.hydrateDocuments([await store.get(undefined, 'story')]);
     assert.deepEqual(reopened.state().documentView.highlight, state.documentView.highlight);
     await assert.rejects(tools.show_document.execute('3', { expectedVersion: 2, highlights: [{ blockId: 'p1', quote: '花' }] }), /版本/);
     assert.deepEqual(workspace.state(), state);
-    await tools.edit_document.execute('4', { documentId: 'story', expectedVersion: 1, operations: [{ action: 'replace', targetId: 'p1', block: doc('花开了，花又落了！').blocks[0] }] });
+    await tools.edit_document.execute('4', { documentId: 'story', expectedVersion: 1, highlightColor: 'green', operations: [{ action: 'replace', targetId: 'p1', block: doc('花开了，花又落了！').blocks[0] }] });
     assert.deepEqual(workspace.state().documentView.highlight.ranges, [{ blockId: 'p1', start: 8, end: 9 }]);
     assert.equal(workspace.state().documentView.focus, undefined);
+    assert.equal(workspace.state().documentView.highlight.color, 'green');
     assert.equal((await store.get(undefined, 'story')).highlight, undefined);
     await tools.show_document.execute('5', { clearHighlight: true });
     assert.equal(workspace.state().documentView.highlight, undefined);

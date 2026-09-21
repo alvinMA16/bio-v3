@@ -229,3 +229,39 @@ test('document tools reject escaped prose atomically and accept model correction
     await assert.rejects(f.store.get(undefined, 'bad'), /不存在/);
   } finally { f.clean(); }
 });
+
+test('normalization reaches storage, history and displayed highlights atomically', async () => {
+  const f = fixture(), conversationId = randomUUID();
+  try {
+    const workspace = new PanelWorkspace(f.storage.conversationDirectory(conversationId));
+    const tools = Object.fromEntries(createPresentationTools(workspace, () => {}, undefined,
+      { store: f.store, conversationId }).map(tool => [tool.name, tool]));
+    const raw = { documentId: 'clean', expectedVersion: 0, title: '# **回忆**', operations: [
+      { action: 'insert', block: paragraph('p1', '原文。') },
+      { action: 'insert', block: { id: 'c', kind: 'code', text: '**literal**' } },
+    ] };
+    await tools.edit_document.execute('create', raw);
+    assert.equal(raw.title, '# **回忆**');
+    await tools.show_document.execute('show', { documentId: 'clean' });
+    await tools.edit_document.execute('edit', { documentId: 'clean', expectedVersion: 1, operations: [
+      { action: 'replace', targetId: 'p1', block: paragraph('p1', '**修改**。参考[来源](https://example.com)。') },
+    ] });
+    const saved = await f.store.get(undefined, 'clean');
+    assert.equal(saved.title, '回忆');
+    assert.equal(saved.blocks[0].text, '修改。参考来源（https://example.com）。');
+    assert.equal(saved.blocks[1].text, '**literal**');
+    assert.deepEqual(workspace.state().document, saved);
+    assert.deepEqual((await f.store.history(undefined, 'clean'))[0].document, saved);
+    for (const range of workspace.state().documentView.highlight.ranges) {
+      assert.ok(range.start >= 0 && range.end <= saved.blocks.find(b => b.id === range.blockId).text.length);
+    }
+    const shown = workspace.state();
+    await assert.rejects(tools.edit_document.execute('invalid', { documentId: 'clean', expectedVersion: 2, operations: [
+      { action: 'replace', targetId: 'p1', block: paragraph('p1', '**不能保存的修改**') },
+      { action: 'insert', block: paragraph('bad', '```js\nconst x = 1;\n```') },
+    ] }), /本批次未保存/);
+    assert.deepEqual(await f.store.get(undefined, 'clean'), saved);
+    assert.equal((await f.store.history(undefined, 'clean')).length, 2);
+    assert.deepEqual(workspace.state(), shown);
+  } finally { f.clean(); }
+});

@@ -23,7 +23,7 @@ let root, mock, app, config, service, storage, factory, baseUrl;
 const requests = [];
 let onHeldRequest;
 
-function sendCompletion(response, { text = '你好，我是令狸。', tool, model = 'deepseek-v4-flash' } = {}) {
+function sendCompletion(response, { text = '你好，我是令狸。', tool, model = 'deepseek-v4-flash', characterChunks = false } = {}) {
   response.writeHead(200, { 'content-type': 'text/event-stream' });
   const chunk = (delta, finish_reason = null) => response.write(`data: ${JSON.stringify({
     id: 'mock-completion', object: 'chat.completion.chunk', created: 1, model,
@@ -33,7 +33,7 @@ function sendCompletion(response, { text = '你好，我是令狸。', tool, mod
   if (tool) chunk({ tool_calls: [{ index: 0, id: `call_${randomUUID()}`, type: 'function', function: {
     name: typeof tool === 'object' ? tool.name : 'edit_document', arguments: JSON.stringify(typeof tool === 'object' ? tool.arguments : { documentId: 'draft', expectedVersion: 0, title: '文章草稿', operations: [{ action: 'insert', block: { id: 'p1', kind: 'paragraph', text: '这是正文。' } }] }),
   } }] });
-  else chunk({ content: text });
+  else for (const content of characterChunks ? [...text] : [text]) chunk({ content });
   chunk({}, tool ? 'tool_calls' : 'stop');
   response.write(`data: ${JSON.stringify({ choices: [], usage: {
     prompt_tokens: 12, completion_tokens: 5, total_tokens: 17,
@@ -69,6 +69,7 @@ before(async () => {
     const runtime = snapshots(payload)[0];
     sendCompletion(response, {
       model: payload.model,
+      characterChunks: lastText === 'MARKUP_SPEECH',
       tool: showAfterEdit ? { name: 'show_document', arguments: { documentId: 'draft' } }
         : lastText === 'SHOW_PANEL' ? true
         : lastText === 'OPEN_ATTACHMENT' ? { name: 'switch_mode', arguments: { mode: 'attachment_conversation', targetId: 'photo1' } }
@@ -79,7 +80,7 @@ before(async () => {
         : lastText === 'SMALLER_FONT' ? { name: 'set_reading_font_size', arguments: { size: '调小' } }
         : lastText === 'EDIT_DRAFT' ? { name: 'edit_document', arguments: { documentId: 'draft', expectedVersion: 1, operations: [{ action: 'replace', targetId: 'p1', block: { id: 'p1', kind: 'paragraph', text: '这是修改后的正文。' } }] } }
         : lastText === 'READ_PANEL' ? { name: 'read_document', arguments: JSON.parse(textOf(runtime)).screen.targetId === 'draft' ? { documentId: 'draft' } : {} } : false,
-      text: payload.tools?.length ? '你好，我是令狸。' : 'COMPACTED_MEMORY_MARKER',
+      text: lastText === 'MARKUP_SPEECH' ? '这是**重点**。查看[官网](https://example.com)。' : payload.tools?.length ? '你好，我是令狸。' : 'COMPACTED_MEMORY_MARKER',
     });
   });
   mock.listen(0, '127.0.0.1');
@@ -490,6 +491,33 @@ test('voice ASR enters real Agent tool loop and streams panel plus speech to TTS
   assert.ok(received.some(event => event.type === 'result' && event.result.usage.totalTokens > 0));
   assert.deepEqual(spoken, ['你好，我是令狸。']);
   voice.close();
+});
+
+
+test('real SDK character deltas reach captions and TTS as the same plain text without replay', async () => {
+  const { VoiceSession } = await import('../dist/voice/voice-session.js');
+  const received = [], spoken = [];
+  let resolveDone;
+  const done = new Promise(resolve => { resolveDone = resolve; });
+  const voice = new VoiceSession(
+    { async open() { return { write() {}, close() {}, async finish() { return 'MARKUP_SPEECH'; } }; } },
+    { async synthesize(text, _signal, emit) { spoken.push(text); emit(new Uint8Array([0, 0])); } },
+    (input, emit, signal) => service.run(input, emit, signal),
+    event => { received.push(event); if (event.type === 'done' || event.type === 'error') resolveDone(event); },
+  );
+  try {
+    await voice.listen('plain-speech-e2e', {});
+    voice.finish('plain-speech-e2e');
+    assert.equal((await done).type, 'done');
+    assert.deepEqual(spoken, ['这是重点。', '查看官网。']);
+    const events = received.filter(e => e.type === 'agent').map(e => e.event);
+    assert.equal(events.filter(e => e.type === 'speech.delta').map(e => e.delta).join(''), '这是重点。查看官网。');
+    assert.equal(events.find(e => e.type === 'speech.completed').text, '这是重点。查看官网。');
+    const result = received.find(e => e.type === 'result').result;
+    assert.equal(result.message.content, '这是重点。查看官网。');
+    const trace = await (await fetch(`${baseUrl}/api/v1/agent/runs/${result.runId}/trace`)).json();
+    assert.ok(trace.some(e => e.source === 'pi' && e.type === 'message_end' && JSON.stringify(e.data).includes('**重点**')));
+  } finally { voice.close(); }
 });
 
 test('material IDs load server originals and edits create immutable conversation snapshots', async () => {

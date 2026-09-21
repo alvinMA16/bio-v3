@@ -1,4 +1,5 @@
 import type { DocumentNavigationReceipt, DocumentView } from '@bio/contracts';
+import { documentViewport } from './document-viewport.ts';
 
 /** A focus request is complete only after layout confirms the target is visible. */
 export function navigateDocumentFocus(root: HTMLElement, focus: NonNullable<DocumentView['focus']>,
@@ -12,8 +13,8 @@ export function navigateDocumentFocus(root: HTMLElement, focus: NonNullable<Docu
   const target = () => Array.from(root.querySelectorAll<HTMLElement>('[data-block]')).find(span =>
     span.dataset.block === focus.blockId && Number(span.dataset.start) <= focus.start && Number(span.dataset.end) > focus.start);
   const viewport = () => {
-    const bounds = scroller()?.getBoundingClientRect();
-    return bounds ? { top: Math.max(0, bounds.top), bottom: Math.min(window.innerHeight ?? bounds.bottom, bounds.bottom) } : undefined;
+    const scroll = scroller();
+    return scroll ? documentViewport(scroll) : undefined;
   };
   const visible = (element: HTMLElement | undefined | null) => {
     const bounds = viewport();

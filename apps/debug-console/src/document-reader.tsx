@@ -1,21 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-import { documentPages, documentTextSegments, type DocumentNavigationReceipt, type DocumentRange, type DocumentView, type PanelDocument } from '@bio/contracts';
+import { documentPages, documentTextSegments, type DocumentHighlight, type DocumentNavigationReceipt, type DocumentRange, type DocumentView, type PanelDocument } from '@bio/contracts';
+import { markerBrush } from './marker-brush';
+import { documentViewport } from './document-viewport';
 import { navigateDocumentFocus } from './document-navigation';
 import './document-highlight.css';
 
 // Small inline spans let us report visible text without changing paragraph layout.
-function textSpans(text: string, blockId: string, ranges: DocumentRange[], base = 0) {
+function textSpans(text: string, blockId: string, ranges: DocumentRange[], base = 0, highlight?: DocumentHighlight) {
   return documentTextSegments(text, blockId, ranges, base).map(part =>
     <span key={part.start} data-block={blockId} data-start={part.start} data-end={part.end}>
-      {part.highlighted ? <mark className="document-highlight">{part.text}</mark> : part.text}
+      {part.highlighted ? <mark key={highlight?.requestId} className="document-highlight" style={{ backgroundImage: markerBrush(highlight?.color, part.start + blockId.length) }}>{part.text}</mark> : part.text}
     </span>);
 }
 
-function listItems(text: string, blockId: string, ranges: DocumentRange[]) {
+function listItems(text: string, blockId: string, ranges: DocumentRange[], highlight?: DocumentHighlight) {
   let offset = 0;
   return text.split('\n').map((line, index) => {
     const start = offset; offset += line.length + 1;
-    return <li key={index}>{textSpans(line, blockId, ranges, start)}</li>;
+    return <li key={index}>{textSpans(line, blockId, ranges, start, highlight)}</li>;
   });
 }
 
@@ -26,6 +28,7 @@ export function DocumentReader({ document, view, onView }: {
   const [dismissed, setDismissed] = useState<string>();
   const highlight = view?.version === document.version && view.highlight?.requestId !== dismissed ? view.highlight : undefined;
   const ranges = highlight?.ranges ?? [];
+  const renderText = (text: string, blockId: string) => textSpans(text, blockId, ranges, 0, highlight);
   const titleBlock = document.blocks[0]?.kind === 'heading' && document.blocks[0].text.trim() === document.title.trim() ? document.blocks[0] : undefined;
   const content = useRef<HTMLElement>(null);
   const following = useRef(true);
@@ -52,7 +55,7 @@ export function DocumentReader({ document, view, onView }: {
     const publish = () => {
       clearTimeout(timer);
       const { document, view, onView } = current.current;
-      const bounds = scroller.getBoundingClientRect();
+      const bounds = documentViewport(scroller);
       const visibleRanges: NonNullable<DocumentView['visibleRanges']> = [];
       for (const span of root.querySelectorAll<HTMLElement>('[data-block]')) {
         if (!Array.from(span.getClientRects()).some(rect => rect.bottom > bounds.top && rect.top < bounds.bottom)) continue;
@@ -119,8 +122,8 @@ export function DocumentReader({ document, view, onView }: {
     report.current();
   }, [document.id, document.version, view?.page, view?.followRequest, view?.focus?.requestId]);
   useEffect(() => { report.current(); }, [document.version]);
-  return <section className={`document-reader document-reader--${highlight?.kind ?? 'plain'}`} ref={content} aria-label="文稿阅读">
-    <header className="document-heading"><h3>{titleBlock ? textSpans(titleBlock.text, titleBlock.id, ranges) : document.title}</h3><small>已保存 · 版本 {document.version}</small></header>
+  return <section className={`document-reader document-reader--${highlight?.kind ?? 'plain'}`} data-marker-color={highlight?.color ?? 'yellow'} ref={content} aria-label="文稿阅读">
+    <header className="document-heading"><h3>{titleBlock ? renderText(titleBlock.text, titleBlock.id) : document.title}</h3><small>已保存 · 版本 {document.version}</small></header>
     {highlight && <aside className="document-highlight-note" aria-label="文稿标记">
       <span><i aria-hidden="true" />{highlight.kind === 'focus' ? '定位与高亮标记' : highlight.ranges.length ? '本次文字改动标记' : highlight.deletions?.length ? '本次移除了文字' : '本次未标记正文文字'}</span>
       <button type="button" aria-label="清除高亮" onClick={() => setDismissed(highlight.requestId)}>清除</button>
@@ -129,11 +132,11 @@ export function DocumentReader({ document, view, onView }: {
     </aside>}
     {document.blocks.filter((block, index) => !(index === 0 && block.kind === 'heading' && block.text.trim() === document.title.trim())).map(block =>
       <section key={block.id} className="panel-block">
-        {block.kind === 'heading' ? <h4>{textSpans(block.text, block.id, ranges)}</h4>
-          : block.kind === 'quote' ? <blockquote>{textSpans(block.text, block.id, ranges)}</blockquote>
-          : block.kind === 'list' ? <ul>{listItems(block.text, block.id, ranges)}</ul>
-          : block.kind === 'code' ? <pre><code>{textSpans(block.text, block.id, ranges)}</code></pre>
-          : <p style={{ whiteSpace: 'pre-wrap' }}>{textSpans(block.text, block.id, ranges)}</p>}
+        {block.kind === 'heading' ? <h4>{renderText(block.text, block.id)}</h4>
+          : block.kind === 'quote' ? <blockquote>{renderText(block.text, block.id)}</blockquote>
+          : block.kind === 'list' ? <ul>{listItems(block.text, block.id, ranges, highlight)}</ul>
+          : block.kind === 'code' ? <pre><code>{renderText(block.text, block.id)}</code></pre>
+          : <p style={{ whiteSpace: 'pre-wrap' }}>{renderText(block.text, block.id)}</p>}
       </section>)}
   </section>;
 }

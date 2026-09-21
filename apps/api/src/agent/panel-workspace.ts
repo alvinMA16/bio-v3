@@ -1,6 +1,6 @@
 import type { AgentScene, PanelAttachment, PanelBlock, PanelDocument, PanelState } from '@bio/contracts';
 import { documentPages, type DocumentView, type DocumentHighlight, type DocumentRange } from '@bio/contracts';
-import { changedText } from './document-highlight.js';
+import { changedText, type HighlightGranularity } from './document-highlight.js';
 import { existsSync, readFileSync, renameSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -140,7 +140,7 @@ export class PanelWorkspace {
     this.commit(next); return this.state();
   }
 
-  documentSaved(document: PanelDocument): PanelState {
+  documentSaved(document: PanelDocument, highlightColor?: DocumentHighlight['color'], granularity?: HighlightGranularity): PanelState {
     const previous = this.value.documents.find(item => item.id === document.id);
     const next = structuredClone(this.value);
     next.documents = [...next.documents.filter(item => item.id !== document.id), document];
@@ -153,7 +153,7 @@ export class PanelWorkspace {
       next.panel.document = document;
       next.panel.documentView = { documentId: document.id, version: document.version,
         page: anchoredPage >= 0 ? anchoredPage + 1 : Math.min(next.panel.documentView?.page ?? 1, pages.length),
-        highlight: changedText(previous, document) };
+        highlight: { ...changedText(previous, document, granularity), ...(highlightColor ? { color: highlightColor } : {}) } };
       next.panel.lastChange = { documentId: document.id, fromVersion: previous?.version ?? 0, toVersion: document.version,
         before: (previous?.blocks ?? []).filter(block => JSON.stringify(block) !== JSON.stringify(document.blocks.find(item => item.id === block.id))),
         after: document.blocks.filter(block => JSON.stringify(block) !== JSON.stringify(previous?.blocks.find(item => item.id === block.id))) };
