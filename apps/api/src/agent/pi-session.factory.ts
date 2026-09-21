@@ -1,4 +1,5 @@
 import { GeminiFiles } from '../materials/gemini-files.js';
+import { GeminiContextCache } from '../models/gemini-context-cache.js';
 import { ModelObservations } from './model-observation.js';
 import { geminiAttachmentContext } from '../materials/gemini-attachment-context.js';
 import { materialHistoryContext, originalUnavailableNotice, unavailableOriginal, type MaterialReference } from '../materials/material-history-context.js';
@@ -27,9 +28,12 @@ import type { AgentContextSnapshot, ModelProvider } from '@bio/contracts';
 
 @Injectable()
 export class PiSessionFactory {
+  private readonly contextCache = new GeminiContextCache();
   private nativeFiles?: GeminiFiles;
   private readonly observations = new ModelObservations();
   constructor(private readonly config: ConfigService, private readonly storage: AgentStorage, private readonly materials: MaterialsService, @Optional() private readonly memory?: MemoryService, @Optional() private readonly documents?: DocumentStore) {}
+
+  async onModuleDestroy() { await this.contextCache.close(); }
 
   async create(conversationId: string, systemPrompt: string | undefined, emit: (event: AgentEventPayload) => void, provider?: ModelProvider, context?: AgentContextSnapshot, scope?: MemoryScope, runtime?: DocumentRuntime, observe?: (type: string, data: unknown) => void) {
     const cwd = this.storage.conversationDirectory(conversationId, scope?.userId);
@@ -85,7 +89,8 @@ export class PiSessionFactory {
     };
     await refreshAttachments();
     emit({ type: 'panel.state.updated', panel: workspace.state() });
-    const { modelRuntime, model, thinkingLevel } = await createModelRuntime(this.config, cwd, provider);
+    const { modelRuntime, model, thinkingLevel } = await createModelRuntime(this.config, cwd, provider,
+      this.config.get<string>('GEMINI_CONTEXT_CACHE_ENABLED', 'true') === 'true' ? this.contextCache.stream(cwd, observe) : undefined);
     const nativeGemini = model.api === 'google-generative-ai';
     const searchEnabled = nativeGemini && this.config.get<string>('GEMINI_GOOGLE_SEARCH_ENABLED', 'true') === 'true';
     this.nativeFiles ??= new GeminiFiles(this.config, this.materials);
@@ -121,7 +126,7 @@ export class PiSessionFactory {
           view.attachment.textTruncated = false;
         }
         return buildRuntimeContext(context, view) + (recoveryContext ? `\n${recoveryContext}` : '');
-      }), ...(nativeGemini ? [geminiAttachmentContext(this.nativeFiles, nativeAttachments, scope?.userId, onUnavailable),
+      }, nativeGemini), ...(nativeGemini ? [geminiAttachmentContext(this.nativeFiles, nativeAttachments, scope?.userId, onUnavailable),
         ...(observe ? [this.observations.extension(cwd, observe)] : [])] : [])],
     });
     await resourceLoader.reload();

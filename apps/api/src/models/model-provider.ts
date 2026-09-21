@@ -4,6 +4,7 @@ import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 import type { ModelProvider } from '@bio/contracts';
 import { join } from 'node:path';
 import { getModelPrice } from '../chat/model-pricing.js';
+import type { GeminiContextCache } from './gemini-context-cache.js';
 
 // Provider-specific protocol details stay outside the Agent/session lifecycle.
 const providers = {
@@ -13,7 +14,7 @@ const providers = {
   'openai-compatible': { prefix: 'LLM', baseUrl: '', model: '', contextWindow: 131072, thinkingFormat: undefined },
 } as const;
 
-export async function createModelRuntime(config: ConfigService, cwd: string, requested?: ModelProvider) {
+export async function createModelRuntime(config: ConfigService, cwd: string, requested?: ModelProvider, geminiStream?: ReturnType<GeminiContextCache['stream']>) {
   const selected = requested ?? config.get<string>('MODEL_PROVIDER', 'gemini');
   if (!Object.hasOwn(providers, selected)) throw new ServiceUnavailableException('Unknown MODEL_PROVIDER');
   const profile = providers[selected as ModelProvider];
@@ -28,6 +29,7 @@ export async function createModelRuntime(config: ConfigService, cwd: string, req
   const modelRuntime = await ModelRuntime.create({ authPath: join(cwd, 'auth.json'), modelsPath: null, allowModelNetwork: false });
   modelRuntime.registerProvider(providerId, {
     api: selected === 'gemini' ? 'google-generative-ai' : 'openai-completions', baseUrl,
+    ...(selected === 'gemini' && geminiStream ? { streamSimple: geminiStream } : {}),
     models: [{
       id: modelId, name: modelId, reasoning: selected === 'gemini' || !!profile.thinkingFormat, input: config.get<string>(`${profile.prefix}_SUPPORTS_IMAGES`, selected === 'gemini' ? 'true' : 'false') === 'true' ? ['text', 'image'] : ['text'],
       contextWindow: profile.contextWindow, maxTokens: 8192,

@@ -1,0 +1,2008 @@
+{
+  "valid_for_cache_comparison": true,
+  "runner": "gemini-cache-comparison.mjs",
+  "runner_sha256": "6f1abffac7328d9f905abf6e69d8cbb5c2c8ae0a891ed492ab14316eb837a27a",
+  "pi_version": "0.84.4",
+  "google_genai_version": "1.52.0",
+  "summary": {
+    "original": {
+      "requests": 16,
+      "input_tokens": 188972,
+      "cached_tokens": 0,
+      "uncached_tokens": 188972,
+      "cache_ratio": 0.0,
+      "hits": 0,
+      "cache_field_missing": 16,
+      "explicit_active_requests": 0,
+      "explicit_active_hits": 0,
+      "mean_generation_ms": 4320.0625,
+      "median_first_text_ms": 3689.0,
+      "mean_first_text_ms": 3997.1875,
+      "setup_ms": 0,
+      "delete_ms": 0,
+      "amortized_generation_plus_lifecycle_ms": 4320.0625,
+      "finish_reasons": {
+        "STOP": 16
+      }
+    },
+    "tail": {
+      "requests": 16,
+      "input_tokens": 188972,
+      "cached_tokens": 59958,
+      "uncached_tokens": 129014,
+      "cache_ratio": 0.31728510043816016,
+      "hits": 8,
+      "cache_field_missing": 8,
+      "explicit_active_requests": 0,
+      "explicit_active_hits": 0,
+      "mean_generation_ms": 6926.1875,
+      "median_first_text_ms": 3895.0,
+      "mean_first_text_ms": 6548,
+      "setup_ms": 0,
+      "delete_ms": 0,
+      "amortized_generation_plus_lifecycle_ms": 6926.1875,
+      "finish_reasons": {
+        "STOP": 16
+      }
+    },
+    "explicit": {
+      "requests": 16,
+      "input_tokens": 188972,
+      "cached_tokens": 103281,
+      "uncached_tokens": 85691,
+      "cache_ratio": 0.5465412865398048,
+      "hits": 15,
+      "cache_field_missing": 1,
+      "explicit_active_requests": 14,
+      "explicit_active_hits": 14,
+      "mean_generation_ms": 4540.6875,
+      "median_first_text_ms": 3678.5,
+      "mean_first_text_ms": 4110.5625,
+      "setup_ms": 15521,
+      "delete_ms": 9213,
+      "amortized_generation_plus_lifecycle_ms": 6086.5625,
+      "finish_reasons": {
+        "STOP": 16
+      }
+    }
+  },
+  "by_round": [
+    {
+      "round": 1,
+      "arm": "original",
+      "input": 94486,
+      "cached": 0
+    },
+    {
+      "round": 1,
+      "arm": "tail",
+      "input": 94486,
+      "cached": 8001
+    },
+    {
+      "round": 1,
+      "arm": "explicit",
+      "input": 94486,
+      "cached": 55646
+    },
+    {
+      "round": 2,
+      "arm": "original",
+      "input": 94486,
+      "cached": 0
+    },
+    {
+      "round": 2,
+      "arm": "tail",
+      "input": 94486,
+      "cached": 51957
+    },
+    {
+      "round": 2,
+      "arm": "explicit",
+      "input": 94486,
+      "cached": 47635
+    }
+  ],
+  "validation": {
+    "generation_count": 48,
+    "same_input_token_count_per_case_across_arms": true,
+    "tail_and_explicit_expanded_payload_equal": true,
+    "all_14_explicit_reads_match_created_cache_token_count": true,
+    "all_4_caches_deleted": true
+  },
+  "records": [
+    {
+      "revision": "a7d5b13549da9edbec70935c729ae0e48e93a6e0",
+      "run": "stable-prefix-v2",
+      "fixture": "synthetic",
+      "kind": "method",
+      "cases": 8,
+      "model": "gemini-3.8-flash",
+      "source": "synthetic Chinese orchard records; viewport changes each call; document version changes at call 5",
+      "limitations": "Historical mode is reconstruction, not exact replay. Fixed system without historical memory summary; same 512 output cap in all arms. No returned tool calls are executed. Arms share implicit-cache namespace.",
+      "at": "2026-09-21T07:25:15.375Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "original",
+      "case": 1,
+      "commonMessages": null,
+      "fullMessageCount": 2,
+      "requestFingerprint": "9f1d07ad3ff45cd2710bbdf92433e4f7535bcebfc854b0dfee299b79ac1a2328",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 5239,
+      "firstChunkMs": 4818,
+      "firstTextMs": 4818,
+      "chunks": 2,
+      "textChars": 2,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11726,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 11727,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11726
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:25:20.622Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "tail",
+      "case": 1,
+      "commonMessages": null,
+      "fullMessageCount": 2,
+      "requestFingerprint": "2e1652849884345435133c746a35d3b8354ba0ec8816452122b4a9d403fe186c",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 7454,
+      "firstChunkMs": 6064,
+      "firstTextMs": 6064,
+      "chunks": 2,
+      "textChars": 2,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11726,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 11727,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11726
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:25:28.077Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "explicit",
+      "case": 1,
+      "commonMessages": null,
+      "fullMessageCount": 2,
+      "requestFingerprint": "2e1652849884345435133c746a35d3b8354ba0ec8816452122b4a9d403fe186c",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 10630,
+      "firstChunkMs": 10200,
+      "firstTextMs": 10200,
+      "chunks": 2,
+      "textChars": 2,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11726,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 11727,
+        "cachedContentTokenCount": 8011,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11726
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8011
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:25:38.708Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "tail",
+      "case": 2,
+      "commonMessages": 1,
+      "fullMessageCount": 4,
+      "requestFingerprint": "09df1635e31f57b198d6bffbc08a1d90a80009b06c8b2caab0375ceef65dc9e3",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 4744,
+      "firstChunkMs": 4260,
+      "firstTextMs": 4260,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11757,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11759,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11757
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:25:43.453Z"
+    },
+    {
+      "kind": "cache_create",
+      "round": 1,
+      "case": 2,
+      "ms": 4506,
+      "contentsCount": 1,
+      "prefixContentTokens": 2499,
+      "usage": {
+        "totalTokenCount": 6769
+      },
+      "expireTime": "2026-09-21T07:35:46.186816858Z",
+      "error": null,
+      "at": "2026-09-21T07:25:47.960Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "explicit",
+      "case": 2,
+      "commonMessages": 1,
+      "fullMessageCount": 4,
+      "requestFingerprint": "09df1635e31f57b198d6bffbc08a1d90a80009b06c8b2caab0375ceef65dc9e3",
+      "cacheActive": true,
+      "cachedMessages": 1,
+      "setupMs": 4506,
+      "ms": 2661,
+      "firstChunkMs": 2191,
+      "firstTextMs": 2191,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11757,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11759,
+        "cachedContentTokenCount": 6769,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11757
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6769
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:25:50.622Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "original",
+      "case": 2,
+      "commonMessages": 0,
+      "fullMessageCount": 4,
+      "requestFingerprint": "aa8c293214a99d819a2eae603dca6070a4000ab3464d34808be1bb0afbca4453",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 7171,
+      "firstChunkMs": 6708,
+      "firstTextMs": 6708,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11757,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11759,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11757
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:25:57.794Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "explicit",
+      "case": 3,
+      "commonMessages": 3,
+      "fullMessageCount": 6,
+      "requestFingerprint": "eb0a72cb80a73df00a1140b6451ea8cca43fb11b4a9cef2d724024c5c7d5ef1e",
+      "cacheActive": true,
+      "cachedMessages": 1,
+      "setupMs": 0,
+      "ms": 5801,
+      "firstChunkMs": 5319,
+      "firstTextMs": 5319,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11772,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11774,
+        "cachedContentTokenCount": 6769,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11772
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6769
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:26:03.596Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "original",
+      "case": 3,
+      "commonMessages": 2,
+      "fullMessageCount": 6,
+      "requestFingerprint": "19d1e177bd3f747c2b63ccd04a096972473f358d5f80aa50a1665768ae844080",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 5547,
+      "firstChunkMs": 5135,
+      "firstTextMs": 5135,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11772,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11774,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11772
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:26:09.143Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "tail",
+      "case": 3,
+      "commonMessages": 3,
+      "fullMessageCount": 6,
+      "requestFingerprint": "eb0a72cb80a73df00a1140b6451ea8cca43fb11b4a9cef2d724024c5c7d5ef1e",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 4225,
+      "firstChunkMs": 3768,
+      "firstTextMs": 3768,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11772,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11774,
+        "cachedContentTokenCount": 8001,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11772
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8001
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:26:13.368Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "original",
+      "case": 4,
+      "commonMessages": 4,
+      "fullMessageCount": 8,
+      "requestFingerprint": "32107078ebe673e85d7d5952cb874b58744ae153ebda59e8fec6301cef49bc01",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 4512,
+      "firstChunkMs": 4086,
+      "firstTextMs": 4086,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11793,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11795,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11793
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:26:17.881Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "tail",
+      "case": 4,
+      "commonMessages": 5,
+      "fullMessageCount": 8,
+      "requestFingerprint": "c7c9e1336ff4f6e6a3cb9bce3c351db738db8cb94d8e02c64b95766a668852ed",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 4400,
+      "firstChunkMs": 3981,
+      "firstTextMs": 3981,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11793,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11795,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11793
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:26:22.282Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "explicit",
+      "case": 4,
+      "commonMessages": 5,
+      "fullMessageCount": 8,
+      "requestFingerprint": "c7c9e1336ff4f6e6a3cb9bce3c351db738db8cb94d8e02c64b95766a668852ed",
+      "cacheActive": true,
+      "cachedMessages": 1,
+      "setupMs": 0,
+      "ms": 5064,
+      "firstChunkMs": 4593,
+      "firstTextMs": 4593,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11793,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11795,
+        "cachedContentTokenCount": 6769,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11793
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6769
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:26:27.347Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "tail",
+      "case": 5,
+      "commonMessages": 7,
+      "fullMessageCount": 10,
+      "requestFingerprint": "57bd5ac6bc33639b2ed3bf4b223c584c820d9d13142f2df3f6f24c5287c41893",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 4224,
+      "firstChunkMs": 3809,
+      "firstTextMs": 3809,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11832,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11834,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11832
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:26:31.572Z"
+    },
+    {
+      "kind": "cache_delete",
+      "round": 1,
+      "reason": "grow_prefix",
+      "ms": 4602,
+      "error": null,
+      "at": "2026-09-21T07:26:36.175Z"
+    },
+    {
+      "kind": "cache_create",
+      "round": 1,
+      "case": 5,
+      "ms": 4896,
+      "contentsCount": 7,
+      "prefixContentTokens": 2562,
+      "usage": {
+        "totalTokenCount": 6832
+      },
+      "expireTime": "2026-09-21T07:36:38.096705488Z",
+      "error": null,
+      "at": "2026-09-21T07:26:41.071Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "explicit",
+      "case": 5,
+      "commonMessages": 7,
+      "fullMessageCount": 10,
+      "requestFingerprint": "57bd5ac6bc33639b2ed3bf4b223c584c820d9d13142f2df3f6f24c5287c41893",
+      "cacheActive": true,
+      "cachedMessages": 7,
+      "setupMs": 4896,
+      "ms": 5983,
+      "firstChunkMs": 4671,
+      "firstTextMs": 4671,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11832,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11834,
+        "cachedContentTokenCount": 6832,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11832
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6832
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:26:47.055Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "original",
+      "case": 5,
+      "commonMessages": 6,
+      "fullMessageCount": 10,
+      "requestFingerprint": "676e16ea3050ab7442b49b4683cbd0c1bdcee12404fc7b0fd43a88a86b3d66ad",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 4437,
+      "firstChunkMs": 4028,
+      "firstTextMs": 4028,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11832,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11834,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11832
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:26:51.493Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "explicit",
+      "case": 6,
+      "commonMessages": 9,
+      "fullMessageCount": 12,
+      "requestFingerprint": "8d5492308e62949393b14b65302c16e443df7034cc7e32a935cc6111faa1d3ef",
+      "cacheActive": true,
+      "cachedMessages": 7,
+      "setupMs": 0,
+      "ms": 4592,
+      "firstChunkMs": 4301,
+      "firstTextMs": 4301,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11843,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11845,
+        "cachedContentTokenCount": 6832,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11843
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6832
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:26:56.085Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "original",
+      "case": 6,
+      "commonMessages": 8,
+      "fullMessageCount": 12,
+      "requestFingerprint": "54513ac45ba7bedb18eec76904576a06931d08de5ea0395a7a1838b26cbd585f",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 3478,
+      "firstChunkMs": 3188,
+      "firstTextMs": 3188,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11843,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11845,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11843
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:26:59.564Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "tail",
+      "case": 6,
+      "commonMessages": 9,
+      "fullMessageCount": 12,
+      "requestFingerprint": "8d5492308e62949393b14b65302c16e443df7034cc7e32a935cc6111faa1d3ef",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 3020,
+      "firstChunkMs": 2772,
+      "firstTextMs": 2772,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11843,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11845,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11843
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:27:02.584Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "original",
+      "case": 7,
+      "commonMessages": 10,
+      "fullMessageCount": 14,
+      "requestFingerprint": "c1dfbb3538ec0df56e9baa8ceaecaf0eeb1cd2159564134c53d95596078f4074",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 3076,
+      "firstChunkMs": 2832,
+      "firstTextMs": 2832,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11874,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11876,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11874
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:27:05.661Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "tail",
+      "case": 7,
+      "commonMessages": 11,
+      "fullMessageCount": 14,
+      "requestFingerprint": "dab0911edff41844ffefd03f2a0ca03c92e45cb0846494df93c083b9a498af7e",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 5195,
+      "firstChunkMs": 4941,
+      "firstTextMs": 4941,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11874,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11876,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11874
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:27:10.857Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "explicit",
+      "case": 7,
+      "commonMessages": 11,
+      "fullMessageCount": 14,
+      "requestFingerprint": "dab0911edff41844ffefd03f2a0ca03c92e45cb0846494df93c083b9a498af7e",
+      "cacheActive": true,
+      "cachedMessages": 7,
+      "setupMs": 0,
+      "ms": 3652,
+      "firstChunkMs": 3302,
+      "firstTextMs": 3302,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11874,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11876,
+        "cachedContentTokenCount": 6832,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11874
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6832
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:27:14.510Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "tail",
+      "case": 8,
+      "commonMessages": 13,
+      "fullMessageCount": 16,
+      "requestFingerprint": "2fa219a9e8b6a218f1fe63589651cfb2977032de43736f9fe20526ca4019c1eb",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 3433,
+      "firstChunkMs": 3180,
+      "firstTextMs": 3180,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11889,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11891,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11889
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:27:17.944Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "explicit",
+      "case": 8,
+      "commonMessages": 13,
+      "fullMessageCount": 16,
+      "requestFingerprint": "2fa219a9e8b6a218f1fe63589651cfb2977032de43736f9fe20526ca4019c1eb",
+      "cacheActive": true,
+      "cachedMessages": 7,
+      "setupMs": 0,
+      "ms": 3719,
+      "firstChunkMs": 3414,
+      "firstTextMs": 3414,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11889,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11891,
+        "cachedContentTokenCount": 6832,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11889
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6832
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:27:21.664Z"
+    },
+    {
+      "kind": "generation",
+      "round": 1,
+      "arm": "original",
+      "case": 8,
+      "commonMessages": 12,
+      "fullMessageCount": 16,
+      "requestFingerprint": "524293f2a4bd5493ba7ad81d7456e733fa8320bd5462df66021427586ac0ce07",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 2485,
+      "firstChunkMs": 2236,
+      "firstTextMs": 2236,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11889,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11891,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11889
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:27:24.149Z"
+    },
+    {
+      "kind": "cache_delete",
+      "round": 1,
+      "reason": "round_complete",
+      "ms": 1176,
+      "error": null,
+      "at": "2026-09-21T07:27:25.325Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "explicit",
+      "case": 1,
+      "commonMessages": null,
+      "fullMessageCount": 2,
+      "requestFingerprint": "2e1652849884345435133c746a35d3b8354ba0ec8816452122b4a9d403fe186c",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 4484,
+      "firstChunkMs": 3654,
+      "firstTextMs": 3654,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11726,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11728,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11726
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:27:29.809Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "tail",
+      "case": 1,
+      "commonMessages": null,
+      "fullMessageCount": 2,
+      "requestFingerprint": "2e1652849884345435133c746a35d3b8354ba0ec8816452122b4a9d403fe186c",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 3566,
+      "firstChunkMs": 3223,
+      "firstTextMs": 3223,
+      "chunks": 2,
+      "textChars": 2,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11726,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 11727,
+        "cachedContentTokenCount": 8011,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11726
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8011
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:27:33.376Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "original",
+      "case": 1,
+      "commonMessages": null,
+      "fullMessageCount": 2,
+      "requestFingerprint": "9f1d07ad3ff45cd2710bbdf92433e4f7535bcebfc854b0dfee299b79ac1a2328",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 2763,
+      "firstChunkMs": 2510,
+      "firstTextMs": 2510,
+      "chunks": 2,
+      "textChars": 2,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11726,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 11727,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11726
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:27:36.140Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "original",
+      "case": 2,
+      "commonMessages": 0,
+      "fullMessageCount": 4,
+      "requestFingerprint": "aa8c293214a99d819a2eae603dca6070a4000ab3464d34808be1bb0afbca4453",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 2870,
+      "firstChunkMs": 2567,
+      "firstTextMs": 2567,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11757,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11759,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11757
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:27:39.010Z"
+    },
+    {
+      "kind": "cache_create",
+      "round": 2,
+      "case": 2,
+      "ms": 2280,
+      "contentsCount": 1,
+      "prefixContentTokens": 2499,
+      "usage": {
+        "totalTokenCount": 6769
+      },
+      "expireTime": "2026-09-21T07:37:39.644061878Z",
+      "error": null,
+      "at": "2026-09-21T07:27:41.290Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "explicit",
+      "case": 2,
+      "commonMessages": 1,
+      "fullMessageCount": 4,
+      "requestFingerprint": "09df1635e31f57b198d6bffbc08a1d90a80009b06c8b2caab0375ceef65dc9e3",
+      "cacheActive": true,
+      "cachedMessages": 1,
+      "setupMs": 2280,
+      "ms": 3004,
+      "firstChunkMs": 2708,
+      "firstTextMs": 2708,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11757,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11759,
+        "cachedContentTokenCount": 6769,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11757
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6769
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:27:44.294Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "tail",
+      "case": 2,
+      "commonMessages": 1,
+      "fullMessageCount": 4,
+      "requestFingerprint": "09df1635e31f57b198d6bffbc08a1d90a80009b06c8b2caab0375ceef65dc9e3",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 6496,
+      "firstChunkMs": 6150,
+      "firstTextMs": 6150,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11757,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11759,
+        "cachedContentTokenCount": 8006,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11757
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8006
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:27:50.791Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "tail",
+      "case": 3,
+      "commonMessages": 3,
+      "fullMessageCount": 6,
+      "requestFingerprint": "eb0a72cb80a73df00a1140b6451ea8cca43fb11b4a9cef2d724024c5c7d5ef1e",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 5656,
+      "firstChunkMs": 5376,
+      "firstTextMs": 5376,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11772,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11774,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11772
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:27:56.448Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "original",
+      "case": 3,
+      "commonMessages": 2,
+      "fullMessageCount": 6,
+      "requestFingerprint": "19d1e177bd3f747c2b63ccd04a096972473f358d5f80aa50a1665768ae844080",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 5094,
+      "firstChunkMs": 4813,
+      "firstTextMs": 4813,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11772,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11774,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11772
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:28:01.542Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "explicit",
+      "case": 3,
+      "commonMessages": 3,
+      "fullMessageCount": 6,
+      "requestFingerprint": "eb0a72cb80a73df00a1140b6451ea8cca43fb11b4a9cef2d724024c5c7d5ef1e",
+      "cacheActive": true,
+      "cachedMessages": 1,
+      "setupMs": 0,
+      "ms": 3995,
+      "firstChunkMs": 3703,
+      "firstTextMs": 3703,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11772,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11774,
+        "cachedContentTokenCount": 6769,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11772
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6769
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:28:05.538Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "explicit",
+      "case": 4,
+      "commonMessages": 5,
+      "fullMessageCount": 8,
+      "requestFingerprint": "c7c9e1336ff4f6e6a3cb9bce3c351db738db8cb94d8e02c64b95766a668852ed",
+      "cacheActive": true,
+      "cachedMessages": 1,
+      "setupMs": 0,
+      "ms": 3127,
+      "firstChunkMs": 2887,
+      "firstTextMs": 2887,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11793,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11795,
+        "cachedContentTokenCount": 6769,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11793
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6769
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:28:08.666Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "tail",
+      "case": 4,
+      "commonMessages": 5,
+      "fullMessageCount": 8,
+      "requestFingerprint": "c7c9e1336ff4f6e6a3cb9bce3c351db738db8cb94d8e02c64b95766a668852ed",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 18325,
+      "firstChunkMs": 18081,
+      "firstTextMs": 18081,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11793,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11795,
+        "cachedContentTokenCount": 7996,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11793
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 7996
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:28:26.992Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "original",
+      "case": 4,
+      "commonMessages": 4,
+      "fullMessageCount": 8,
+      "requestFingerprint": "32107078ebe673e85d7d5952cb874b58744ae153ebda59e8fec6301cef49bc01",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 4824,
+      "firstChunkMs": 4477,
+      "firstTextMs": 4477,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11793,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11795,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11793
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:28:31.817Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "original",
+      "case": 5,
+      "commonMessages": 6,
+      "fullMessageCount": 10,
+      "requestFingerprint": "676e16ea3050ab7442b49b4683cbd0c1bdcee12404fc7b0fd43a88a86b3d66ad",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 3631,
+      "firstChunkMs": 3350,
+      "firstTextMs": 3350,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11832,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11834,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11832
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:28:35.448Z"
+    },
+    {
+      "kind": "cache_delete",
+      "round": 2,
+      "reason": "grow_prefix",
+      "ms": 1709,
+      "error": null,
+      "at": "2026-09-21T07:28:37.157Z"
+    },
+    {
+      "kind": "cache_create",
+      "round": 2,
+      "case": 5,
+      "ms": 3839,
+      "contentsCount": 7,
+      "prefixContentTokens": 2562,
+      "usage": {
+        "totalTokenCount": 6832
+      },
+      "expireTime": "2026-09-21T07:38:38.849550823Z",
+      "error": null,
+      "at": "2026-09-21T07:28:40.996Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "explicit",
+      "case": 5,
+      "commonMessages": 7,
+      "fullMessageCount": 10,
+      "requestFingerprint": "57bd5ac6bc33639b2ed3bf4b223c584c820d9d13142f2df3f6f24c5287c41893",
+      "cacheActive": true,
+      "cachedMessages": 7,
+      "setupMs": 3839,
+      "ms": 5992,
+      "firstChunkMs": 5711,
+      "firstTextMs": 5711,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11832,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11834,
+        "cachedContentTokenCount": 6832,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11832
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6832
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:28:46.988Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "tail",
+      "case": 5,
+      "commonMessages": 7,
+      "fullMessageCount": 10,
+      "requestFingerprint": "57bd5ac6bc33639b2ed3bf4b223c584c820d9d13142f2df3f6f24c5287c41893",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 30246,
+      "firstChunkMs": 29959,
+      "firstTextMs": 29959,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11832,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11834,
+        "cachedContentTokenCount": 7992,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11832
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 7992
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:29:17.234Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "tail",
+      "case": 6,
+      "commonMessages": 9,
+      "fullMessageCount": 12,
+      "requestFingerprint": "8d5492308e62949393b14b65302c16e443df7034cc7e32a935cc6111faa1d3ef",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 3603,
+      "firstChunkMs": 3260,
+      "firstTextMs": 3260,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11843,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11845,
+        "cachedContentTokenCount": 3993,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11843
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 3993
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:29:20.837Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "original",
+      "case": 6,
+      "commonMessages": 8,
+      "fullMessageCount": 12,
+      "requestFingerprint": "54513ac45ba7bedb18eec76904576a06931d08de5ea0395a7a1838b26cbd585f",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 2834,
+      "firstChunkMs": 2590,
+      "firstTextMs": 2590,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11843,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11845,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11843
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:29:23.671Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "explicit",
+      "case": 6,
+      "commonMessages": 9,
+      "fullMessageCount": 12,
+      "requestFingerprint": "8d5492308e62949393b14b65302c16e443df7034cc7e32a935cc6111faa1d3ef",
+      "cacheActive": true,
+      "cachedMessages": 7,
+      "setupMs": 0,
+      "ms": 2483,
+      "firstChunkMs": 2185,
+      "firstTextMs": 2185,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11843,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11845,
+        "cachedContentTokenCount": 6832,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11843
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6832
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:29:26.155Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "explicit",
+      "case": 7,
+      "commonMessages": 11,
+      "fullMessageCount": 14,
+      "requestFingerprint": "dab0911edff41844ffefd03f2a0ca03c92e45cb0846494df93c083b9a498af7e",
+      "cacheActive": true,
+      "cachedMessages": 7,
+      "setupMs": 0,
+      "ms": 3093,
+      "firstChunkMs": 2849,
+      "firstTextMs": 2849,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11874,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11876,
+        "cachedContentTokenCount": 6832,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11874
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6832
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:29:29.248Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "tail",
+      "case": 7,
+      "commonMessages": 11,
+      "fullMessageCount": 14,
+      "requestFingerprint": "dab0911edff41844ffefd03f2a0ca03c92e45cb0846494df93c083b9a498af7e",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 2959,
+      "firstChunkMs": 2959,
+      "firstTextMs": 2959,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11874,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11876,
+        "cachedContentTokenCount": 7982,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11874
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 7982
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:29:32.208Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "original",
+      "case": 7,
+      "commonMessages": 10,
+      "fullMessageCount": 14,
+      "requestFingerprint": "c1dfbb3538ec0df56e9baa8ceaecaf0eeb1cd2159564134c53d95596078f4074",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 2753,
+      "firstChunkMs": 2508,
+      "firstTextMs": 2508,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11874,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11876,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11874
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:29:34.962Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "original",
+      "case": 8,
+      "commonMessages": 12,
+      "fullMessageCount": 16,
+      "requestFingerprint": "524293f2a4bd5493ba7ad81d7456e733fa8320bd5462df66021427586ac0ce07",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 8407,
+      "firstChunkMs": 8109,
+      "firstTextMs": 8109,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11889,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11891,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11889
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "at": "2026-09-21T07:29:43.369Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "explicit",
+      "case": 8,
+      "commonMessages": 13,
+      "fullMessageCount": 16,
+      "requestFingerprint": "2fa219a9e8b6a218f1fe63589651cfb2977032de43736f9fe20526ca4019c1eb",
+      "cacheActive": true,
+      "cachedMessages": 7,
+      "setupMs": 0,
+      "ms": 4371,
+      "firstChunkMs": 4081,
+      "firstTextMs": 4081,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11889,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11891,
+        "cachedContentTokenCount": 6832,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11889
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6832
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:29:47.741Z"
+    },
+    {
+      "kind": "generation",
+      "round": 2,
+      "arm": "tail",
+      "case": 8,
+      "commonMessages": 13,
+      "fullMessageCount": 16,
+      "requestFingerprint": "2fa219a9e8b6a218f1fe63589651cfb2977032de43736f9fe20526ca4019c1eb",
+      "cacheActive": false,
+      "cachedMessages": 0,
+      "setupMs": 0,
+      "ms": 3273,
+      "firstChunkMs": 2985,
+      "firstTextMs": 2985,
+      "chunks": 2,
+      "textChars": 3,
+      "toolCalls": 0,
+      "finish": "STOP",
+      "usage": {
+        "promptTokenCount": 11889,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 11891,
+        "cachedContentTokenCount": 7977,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11889
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 7977
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "at": "2026-09-21T07:29:51.015Z"
+    },
+    {
+      "kind": "cache_delete",
+      "round": 2,
+      "reason": "round_complete",
+      "ms": 1726,
+      "error": null,
+      "at": "2026-09-21T07:29:52.741Z"
+    }
+  ]
+}

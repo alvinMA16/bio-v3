@@ -227,3 +227,24 @@ production environment before deploying this integration. The API signs only the
 published UI-asset allowlist, not arbitrary objects. Publishing new asset versions,
 the Calendar reference and directory ownership are documented in
 [OSS artwork](../oss/README.md). Keep old object versions for rollback.
+
+## Gemini stable-prefix cache
+
+Native Gemini sessions append fresh `bio_runtime_context` after conversation/tool
+history. Explicit caching is enabled by default; set
+`GEMINI_CONTEXT_CACHE_ENABLED=false` to disable explicit caching while retaining
+the context layout. Stable system instructions, tool configuration and a historical
+prefix are prepared in the background after a successful completion. Dynamic
+runtime state remains outside the cache. Caches have a 10-minute TTL and are
+isolated by account/conversation, model, endpoint and credential. Prefix changes
+invalidate reuse; substantial history growth (at least 2,048 additional tokens)
+can trigger background replacement. Cache failures before any partial output
+fall back once to a full request; cancellation and partial output never replay.
+
+`model.cache` trace events show preparation/reuse/invalidation/fallback without
+prompt text or cache resource IDs. Confirm actual usage with `model.response`
+cacheRead metrics. Cache creation does not imply immediate reuse on the next call,
+and cache hits do not guarantee lower voice latency. See
+`docs/gemini-cache-experiment-2026-09-21.md` for the append-only experiment history
+and implementation decision. Normal shutdown and idle eviction attempt deletion;
+remote TTL bounds retention after a crash or deletion failure.
