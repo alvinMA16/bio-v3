@@ -1,6 +1,14 @@
 import type { PanelDocument } from './index.js';
 
 export interface DocumentRange { blockId: string; start: number; end: number }
+export interface DocumentNavigationReceipt {
+  requestId: string;
+  status: 'visible' | 'failed';
+  reason?: 'target_missing' | 'not_visible' | 'user_interrupted';
+  attempts: number;
+  scrollBefore: number;
+  scrollAfter: number;
+}
 export interface DocumentHighlight {
   requestId: string;
   kind: 'change' | 'focus';
@@ -34,6 +42,8 @@ export interface DocumentView {
   /** Text ranges intersecting the viewport; offsets use UTF-16. */
   visibleRanges?: Array<{ blockId: string; start: number; end: number }>;
   following?: boolean;
+  /** Result of a specific focus request, never inferred from the narration page. */
+  navigation?: DocumentNavigationReceipt;
   /** Explicit request to resume following, distinct from normal narration movement. */
   followRequest?: number;
   /** Temporary presentation only; never part of the saved manuscript. */

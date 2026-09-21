@@ -200,6 +200,10 @@ export class PanelWorkspace {
         source: 'server_display_state', renderAcknowledged: panel.mode === 'editor' && !!panel.documentView
           && panel.documentView.documentId === this.acknowledgedView?.documentId
           && panel.documentView.version === this.acknowledgedView.version
+          && (!panel.documentView.focus || (this.acknowledgedView.navigation?.requestId === panel.documentView.focus.requestId
+            && this.acknowledgedView.navigation.status === 'visible'
+            && visibleView?.visibleRanges?.some(range => range.blockId === panel.documentView!.focus!.blockId
+              && range.start <= panel.documentView!.focus!.start && range.end > panel.documentView!.focus!.start)))
           && (visibleContent !== undefined || panel.documentView.page === this.acknowledgedView.page),
         visibleContent: visibleContent ?? null,
         following: visibleView?.following ?? null,

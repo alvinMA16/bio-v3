@@ -243,7 +243,7 @@ export function App() {
       record.live = applyLiveEvent(record.live!, event.event, event.elapsedMs);
       if (record.live.panel) record.panel = record.live.panel;
       setLive(record.live);
-      if (event.event.type === 'speech.delta') timings.firstText ??= event.elapsedMs;
+      if (event.event.type === 'speech.delta' && event.event.delta.trim()) timings.firstText ??= event.elapsedMs;
       if (event.event.type === 'panel.state.updated') {
         setPendingMaterialPanel(null);
         setSelectedBlockId(''); setDocumentId(''); setDocumentVersion(0); setExcerpt('');

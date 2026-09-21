@@ -270,3 +270,55 @@ test('missing playback acknowledgements time out without retaining a waiter', as
   t.mock.timers.tick(45000); await failure;
   window.acknowledge(window.sent); await window.ready(new AbortController().signal);
 });
+
+test('focus waits for matching request and ignores old turn, version and request receipts', async () => {
+  const target = { documentId: 'story', version: 3, requestId: 'new' };
+  let resolved = false;
+  const f = fixture({ run: async (_input, _emit, signal, _trigger, runtime) => {
+    const view = await runtime.waitForNavigation(target, signal); resolved = true;
+    assert.equal(view.navigation.requestId, 'new'); return response;
+  } });
+  await f.session.listen('focus', {}); f.session.finish('focus'); await flush();
+  const view = { ...target, page: 1, navigation: { requestId: 'new', status: 'visible' } };
+  f.session.updateDocumentView('old-turn', view);
+  f.session.updateDocumentView('focus', { ...view, version: 2 });
+  f.session.updateDocumentView('focus', { ...view, navigation: { requestId: 'old', status: 'visible' } });
+  await flush(); assert.equal(resolved, false);
+  f.session.updateDocumentView('focus', view); await f.done; assert.equal(resolved, true); f.session.close();
+});
+
+test('focus confirmation times out for old clients and is cancelled on interruption', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let result = 'pending';
+  const f = fixture({ run: async (_input, _emit, signal, _trigger, runtime) => {
+    result = await runtime.waitForNavigation({ documentId: 'story', version: 1, requestId: 'focus' }, signal); return response;
+  } });
+  await f.session.listen('first', {}); f.session.finish('first'); await flush();
+  t.mock.timers.tick(2000); await f.done; assert.equal(result, undefined); f.session.close();
+  let cancelled = false;
+  const g = fixture({ run: async (_input, _emit, signal, _trigger, runtime) => {
+    try { await runtime.waitForNavigation({ documentId: 'story', version: 1, requestId: 'focus' }, signal); }
+    catch { cancelled = true; } return response;
+  } });
+  await g.session.listen('second', {}); g.session.finish('second'); await flush();
+  g.session.cancel('second'); await g.session.settled(); assert.equal(cancelled, true); g.session.close();
+});
+
+test('preamble starts synthesis while tool is pending and completed text does not replay it', async () => {
+  let finishTool;
+  const tool = new Promise(resolve => { finishTool = resolve; });
+  const f = fixture({ run: async (_input, emit) => {
+    emit({ type: 'speech.delta', messageId: 'mixed', delta: '我先查一下。' });
+    emit({ type: 'tool.started', toolCallId: 'lookup', name: 'read_document' });
+    await tool;
+    emit({ type: 'tool.completed', toolCallId: 'lookup', name: 'read_document', isError: false });
+    emit({ type: 'speech.delta', messageId: 'mixed', delta: '找到资料了。' });
+    emit({ type: 'speech.completed', messageId: 'mixed', text: '我先查一下。找到资料了。' });
+    return response;
+  } });
+  await f.session.listen('progress', {}); f.session.finish('progress'); await flush();
+  assert.deepEqual(f.spoken, ['我先查一下。']);
+  assert.ok(f.events.some(e => e.type === 'audio'));
+  assert.ok(!f.events.some(e => e.type === 'done'));
+  finishTool(); await f.done; assert.deepEqual(f.spoken, ['我先查一下。', '找到资料了。']); f.session.close();
+});

@@ -4,4 +4,5 @@ import type { DocumentView } from '@bio/contracts';
 export interface DocumentRuntime {
   beforeShow?: (signal?: AbortSignal) => Promise<void>;
   getView?: () => DocumentView | undefined;
+  waitForNavigation?: (target: { documentId: string; version: number; requestId: string }, signal?: AbortSignal) => Promise<DocumentView | undefined>;
 }

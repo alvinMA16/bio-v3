@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength, IsInt, Min, ValidateNested, IsDefined, IsArray, ArrayMaxSize, IsUrl, ValidateIf } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength, IsInt, IsNumber, Min, Max, ValidateNested, IsDefined, IsArray, ArrayMaxSize, IsUrl, ValidateIf } from 'class-validator';
 
 import { Type } from 'class-transformer';
 
@@ -63,7 +63,17 @@ export class VisibleDocumentRangeDto {
   @IsInt() @Min(0) start!: number;
   @IsInt() @Min(0) end!: number;
 }
+export class DocumentNavigationReceiptDto {
+  @IsUUID('4') requestId!: string;
+  @IsIn(['visible', 'failed']) status!: 'visible' | 'failed';
+  @IsOptional() @IsIn(['target_missing', 'not_visible', 'user_interrupted']) reason?: 'target_missing' | 'not_visible' | 'user_interrupted';
+  @IsInt() @Min(0) @Max(6) attempts!: number;
+  @IsNumber() @Min(0) @Max(10000000) scrollBefore!: number;
+  @IsNumber() @Min(0) @Max(10000000) scrollAfter!: number;
+}
 export class DocumentViewDto {
+  @IsOptional() @ValidateNested() @Type(() => DocumentNavigationReceiptDto)
+  navigation?: DocumentNavigationReceiptDto;
   @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => VisibleDocumentRangeDto)
   visibleRanges?: VisibleDocumentRangeDto[];
   @IsOptional() @IsBoolean() following?: boolean;

@@ -39,6 +39,12 @@ Web 与小程序展示连续全文，无页码、翻页按钮、选段或“改�
 
 服务端校验文稿归属、版本、段落及偏移，只从已保存正文提取 screen.visibleContent；拒绝旧版本和无效范围。空数组表示正文不在可视区域，null 表示尚无有效报告。新通话可用有效视口打开已有文稿；通话中的迟到报告不能切换文稿。滚动报告不写入 panel.json，也不改变朗读游标。模型每次调用前读取最新视口。
 
+## 精确定位回执
+
+Web 对 `show_document` 的 blockId / highlights 定位独立于朗读跟随：先等布局，再滚动，下一帧确认目标文字进入阅读区。目标暂未出现或滚动未生效时最多尝试 6 次，整个请求限时 1.2 秒；用户滚轮、触摸滑动、指针操作或翻页按键立即终止定位，新请求和组件卸载取消旧请求。确认之前不将请求标为完成。
+
+客户端在 `document.view` 的 navigation 字段回传 requestId、visible/failed、原因、尝试次数和滚动前后位置。语音服务等待最多 2 秒，核对轮次、文稿、版本及请求 ID；内容工具还校验可见范围并确认包含目标起点。show_document 返回 visible / failed / unconfirmed 和 rendered，只有 visible 才允许 Agent 声称已经定位到位。文稿已显示的旧回执不能确认新的定位。回执与可见范围保存在工具结果 Trace 中；没有回执通道的文字请求及旧客户端保持 unconfirmed，不阻断任务或假称成功。普通朗读推进不等待精确定位回执。
+
 ## 分段朗读与自动跟随
 
 内部保留每段最多 600 字的 documentPages、page/navigation、screen.readingPage 和 totalPages，作为朗读分段与旧客户端兼容协议，不向用户展示“页”。全文朗读从 show_document(page=1, follow=true) 开始，逐段输出并用 navigation=next 推进。当前可见内容朗读依据 visibleContent；不能将内部朗读分段等同于当前屏幕。

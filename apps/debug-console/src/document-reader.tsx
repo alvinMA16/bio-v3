@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { documentPages, documentTextSegments, type DocumentRange, type DocumentView, type PanelDocument } from '@bio/contracts';
+import { documentPages, documentTextSegments, type DocumentNavigationReceipt, type DocumentRange, type DocumentView, type PanelDocument } from '@bio/contracts';
+import { navigateDocumentFocus } from './document-navigation';
 import './document-highlight.css';
 
 // Small inline spans let us report visible text without changing paragraph layout.
@@ -30,6 +31,7 @@ export function DocumentReader({ document, view, onView }: {
   const following = useRef(true);
   const lastNavigation = useRef<{ documentId: string; page: number; followRequest?: number | undefined; focusId?: string | undefined } | undefined>(undefined);
   const current = useRef({ document, view, onView }); current.current = { document, view, onView };
+  const receipt = useRef<DocumentNavigationReceipt | undefined>(undefined);
   const report = useRef<() => void>(() => {});
   useEffect(() => {
     const root = content.current;
@@ -52,7 +54,8 @@ export function DocumentReader({ document, view, onView }: {
         else visibleRanges.push({ blockId, start, end });
       }
       const next: DocumentView = { documentId: document.id, version: document.version,
-        page: view?.page ?? 1, visibleRanges: visibleRanges.slice(0, 100), following: following.current };
+        page: view?.page ?? 1, visibleRanges: visibleRanges.slice(0, 100), following: following.current,
+        ...(receipt.current && receipt.current.requestId === view?.focus?.requestId ? { navigation: receipt.current } : {}) };
       const serialized = JSON.stringify(next);
       if (serialized !== last) { last = serialized; onView?.(next); }
     };
@@ -89,15 +92,11 @@ export function DocumentReader({ document, view, onView }: {
     const navigation = { documentId: document.id, page: view?.page ?? 1, followRequest: view?.followRequest, focusId: view?.focus?.requestId };
     lastNavigation.current = navigation;
     const resume = navigation.followRequest !== undefined && navigation.followRequest !== previous?.followRequest;
-    const focusRequested = navigation.focusId !== undefined && navigation.focusId !== previous?.focusId;
+    const focusRequested = navigation.focusId !== undefined && navigation.focusId !== receipt.current?.requestId;
     if (resume) following.current = true;
-    if (root && scroller && view?.focus && focusRequested) {
-      const focus = view.focus;
-      const target = Array.from(root.querySelectorAll<HTMLElement>('[data-block]')).find(span =>
-        span.dataset.block === focus.blockId && Number(span.dataset.start) <= focus.start && Number(span.dataset.end) > focus.start);
-      if (target) scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top - Math.min(80, scroller.clientHeight * .2);
-      report.current();
-      return;
+    if (root && view?.focus && focusRequested) {
+      receipt.current = undefined;
+      return navigateDocumentFocus(root, view.focus, value => { receipt.current = value; report.current(); });
     }
     if (previous?.documentId === document.id && previous.page === navigation.page && !resume) return;
     if (root && scroller && following.current) {
@@ -109,7 +108,7 @@ export function DocumentReader({ document, view, onView }: {
       } else scroller.scrollTop = 0;
     }
     report.current();
-  }, [document.id, view?.page, view?.followRequest, view?.focus?.requestId]);
+  }, [document.id, document.version, view?.page, view?.followRequest, view?.focus?.requestId]);
   useEffect(() => { report.current(); }, [document.version]);
   return <section className={`document-reader document-reader--${highlight?.kind ?? 'plain'}`} ref={content} aria-label="文稿阅读">
     <header className="document-heading"><h3>{titleBlock ? textSpans(titleBlock.text, titleBlock.id, ranges) : document.title}</h3><small>已保存 · 版本 {document.version}</small></header>

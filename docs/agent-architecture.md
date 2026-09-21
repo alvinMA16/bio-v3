@@ -148,6 +148,12 @@ Pi 历史（含已有压缩摘要、近期原文与完整工具调用/结果）
 
 实时语音已新增独立编排层，ASR 最终文本进入完整 Agent 工具循环，普通回复流送入 TTS；详情见 [实时语音设计](realtime-voice.md)。Web 调试页在语音模式下由实际播放驱动口型，小程序聊天页已有语音入口。
 
+## 工具前的流式过渡话术
+
+预计较慢的资料核实、搜索或整理任务，Agent 在同一条 assistant 消息内先输出一句完整的简短话术，再发起工具调用；普通快速工具无需逐次说明，也不通过额外模型轮次生成等待提示。Gemini 的文字与 functionCall 可共存，Pi 的 text_delta 直接进入现有 speech.delta、分句和 TTS 队列。读取或搜索执行期间可以继续播放话术；文稿修改和展示保留 beforeShow 的既有播放顺序约束。Google 内置搜索前后的 text_delta 同样可连续播报，但当前适配器不把服务商原生搜索事件转为普通 tool.started。
+
+已播前缀不会在 speech.completed 快照中重复合成；轮次取消沿用原有音频与任务取消机制。前端首个文字时延忽略空增量。本版不增加定时兜底播报。协议测试覆盖单条回复混合文字与工具调用，语音测试覆盖工具未结束时已经开始播报及完成快照去重。
+
 ## Gemini 请求级缓存观测
 
 每次 Gemini SDK 模型调用记录 `model.request` / `model.response`，包括工具循环中的后续调用；不新增模型请求或 prompt。记录位于原运行 Trace，运行结束后在 Web 调试台 Inspector 的“Gemini 请求与缓存观测”查看，也可使用已有鉴权接口 `GET /api/v1/agent/runs/:runId/trace`。旧运行没有新记录，失败/取消运行可按已知 runId 查询 Trace。没有部署之前，生产不会产生新记录。

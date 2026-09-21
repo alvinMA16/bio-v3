@@ -1,0 +1,841 @@
+{
+  "synthetic_raw_api": [
+    {
+      "model": "gemini-3.8-flash",
+      "endpoint": "generativelanguage.googleapis.com",
+      "syntheticBytes": 164994
+    },
+    {
+      "label": "identical-1",
+      "status": 200,
+      "ms": 3178,
+      "usage": {
+        "promptTokenCount": 51016,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 51017,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 51016
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "finish": "STOP"
+    },
+    {
+      "label": "identical-2",
+      "status": 200,
+      "ms": 2392,
+      "usage": {
+        "promptTokenCount": 51016,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 51017,
+        "cachedContentTokenCount": 45023,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 51016
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 45023
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "finish": "STOP"
+    },
+    {
+      "label": "identical-3",
+      "status": 200,
+      "ms": 1990,
+      "usage": {
+        "promptTokenCount": 51016,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 51017,
+        "cachedContentTokenCount": 45023,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 51016
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 45023
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "finish": "STOP"
+    },
+    {
+      "label": "search-tools-1",
+      "status": 200,
+      "ms": 2132,
+      "usage": {
+        "promptTokenCount": 51016,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 51017,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 51016
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "finish": "STOP"
+    },
+    {
+      "label": "search-tools-2",
+      "status": 200,
+      "ms": 4391,
+      "usage": {
+        "promptTokenCount": 51016,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 51017,
+        "cachedContentTokenCount": 48939,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 51016
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 48939
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "finish": "STOP"
+    },
+    {
+      "label": "explicit-create",
+      "status": 200,
+      "ms": 3122,
+      "usage": {
+        "totalTokenCount": 51016
+      },
+      "cacheFieldPresent": false,
+      "error": null
+    },
+    {
+      "label": "explicit-read-1",
+      "status": 200,
+      "ms": 6493,
+      "usage": {
+        "promptTokenCount": 51021,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 51022,
+        "cachedContentTokenCount": 51016,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 51021
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 51016
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "finish": "STOP"
+    },
+    {
+      "label": "explicit-read-2",
+      "status": 200,
+      "ms": 2189,
+      "usage": {
+        "promptTokenCount": 51021,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 51022,
+        "cachedContentTokenCount": 51016,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 51021
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 51016
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "finish": "STOP"
+    },
+    {
+      "label": "explicit-delete",
+      "status": 200,
+      "ms": 1666,
+      "usage": null,
+      "cacheFieldPresent": false,
+      "error": null
+    }
+  ],
+  "synthetic_layout": [
+    {
+      "model": "gemini-3.8-flash",
+      "endpoint": "generativelanguage.googleapis.com",
+      "syntheticBytes": 164994
+    },
+    {
+      "label": "head-0",
+      "status": 200,
+      "ms": 5475,
+      "usage": {
+        "promptTokenCount": 6798,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 6799,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6798
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "finish": "STOP"
+    },
+    {
+      "label": "head-1",
+      "status": 200,
+      "ms": 8741,
+      "usage": {
+        "promptTokenCount": 6798,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 6876,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6798
+          }
+        ],
+        "thoughtsTokenCount": 77,
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "finish": "STOP"
+    },
+    {
+      "label": "head-2",
+      "status": 200,
+      "ms": 2347,
+      "usage": {
+        "promptTokenCount": 6798,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 6848,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6798
+          }
+        ],
+        "thoughtsTokenCount": 49,
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "finish": "STOP"
+    },
+    {
+      "label": "tail-0",
+      "status": 200,
+      "ms": 3655,
+      "usage": {
+        "promptTokenCount": 6799,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 6800,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6799
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "finish": "STOP"
+    },
+    {
+      "label": "tail-1",
+      "status": 200,
+      "ms": 2292,
+      "usage": {
+        "promptTokenCount": 6799,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 6800,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6799
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "finish": "STOP"
+    },
+    {
+      "label": "tail-2",
+      "status": 200,
+      "ms": 1835,
+      "usage": {
+        "promptTokenCount": 6799,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 6882,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6799
+          }
+        ],
+        "thoughtsTokenCount": 82,
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "finish": "STOP"
+    },
+    {
+      "label": "short-identical-0",
+      "status": 200,
+      "ms": 1537,
+      "usage": {
+        "promptTokenCount": 6791,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 6834,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6791
+          }
+        ],
+        "thoughtsTokenCount": 42,
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": false,
+      "error": null,
+      "finish": "STOP"
+    },
+    {
+      "label": "short-identical-1",
+      "status": 200,
+      "ms": 1794,
+      "usage": {
+        "promptTokenCount": 6791,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 6880,
+        "cachedContentTokenCount": 3964,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6791
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 3964
+          }
+        ],
+        "thoughtsTokenCount": 88,
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "finish": "STOP"
+    },
+    {
+      "label": "short-identical-2",
+      "status": 200,
+      "ms": 1749,
+      "usage": {
+        "promptTokenCount": 6791,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 6792,
+        "cachedContentTokenCount": 3964,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6791
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 3964
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "cacheFieldPresent": true,
+      "error": null,
+      "finish": "STOP"
+    }
+  ],
+  "pi_streaming_adapter": [
+    {
+      "label": "pi-sdk-identical-0",
+      "ms": 3305,
+      "usage": {
+        "input": 5993,
+        "output": 1,
+        "cacheRead": 45024,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 51018,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "stopReason": "stop",
+      "error": null
+    },
+    {
+      "label": "pi-sdk-identical-1",
+      "ms": 9279,
+      "usage": {
+        "input": 5993,
+        "output": 1,
+        "cacheRead": 45024,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 51018,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "stopReason": "stop",
+      "error": null
+    },
+    {
+      "label": "pi-sdk-identical-2",
+      "ms": 16280,
+      "usage": {
+        "input": 5993,
+        "output": 1,
+        "cacheRead": 45024,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 51018,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "stopReason": "stop",
+      "error": null
+    }
+  ],
+  "historical_ab": [
+    {
+      "kind": "method",
+      "cases": 8,
+      "source": "historical message_end, tool results, panel states and submitted view",
+      "limitations": "Historical raw payload/system memory snapshot and intermediate viewport acknowledgements were not stored. Reconstructed runtime with production builder; fixed system without historical memory summary; same 128 output cap in both arms. No returned tool calls are executed."
+    },
+    {
+      "arm": "original",
+      "case": 1,
+      "ms": 4071,
+      "messageCount": 2,
+      "commonMessages": null,
+      "input": 7691,
+      "cached": 0,
+      "stopReason": "stop",
+      "error": null
+    },
+    {
+      "arm": "original",
+      "case": 2,
+      "ms": 7891,
+      "messageCount": 4,
+      "commonMessages": 0,
+      "input": 7898,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "original",
+      "case": 3,
+      "ms": 8962,
+      "messageCount": 6,
+      "commonMessages": 2,
+      "input": 10885,
+      "cached": 0,
+      "stopReason": "toolUse",
+      "error": null
+    },
+    {
+      "arm": "original",
+      "case": 4,
+      "ms": 5285,
+      "messageCount": 8,
+      "commonMessages": 2,
+      "input": 10847,
+      "cached": 0,
+      "stopReason": "stop",
+      "error": null
+    },
+    {
+      "arm": "original",
+      "case": 5,
+      "ms": 7183,
+      "messageCount": 10,
+      "commonMessages": 2,
+      "input": 11335,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "original",
+      "case": 6,
+      "ms": 6800,
+      "messageCount": 12,
+      "commonMessages": 8,
+      "input": 12551,
+      "cached": 0,
+      "stopReason": "stop",
+      "error": null
+    },
+    {
+      "arm": "original",
+      "case": 7,
+      "ms": 10316,
+      "messageCount": 14,
+      "commonMessages": 8,
+      "input": 12595,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "original",
+      "case": 8,
+      "ms": 4734,
+      "messageCount": 16,
+      "commonMessages": 12,
+      "input": 13897,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "tail",
+      "case": 1,
+      "ms": 9250,
+      "messageCount": 2,
+      "commonMessages": null,
+      "input": 7691,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "tail",
+      "case": 2,
+      "ms": 7111,
+      "messageCount": 4,
+      "commonMessages": 1,
+      "input": 7898,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "tail",
+      "case": 3,
+      "ms": 6459,
+      "messageCount": 6,
+      "commonMessages": 3,
+      "input": 10885,
+      "cached": 0,
+      "stopReason": "toolUse",
+      "error": null
+    },
+    {
+      "arm": "tail",
+      "case": 4,
+      "ms": 7830,
+      "messageCount": 8,
+      "commonMessages": 5,
+      "input": 10847,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "tail",
+      "case": 5,
+      "ms": 7242,
+      "messageCount": 10,
+      "commonMessages": 7,
+      "input": 11335,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "tail",
+      "case": 6,
+      "ms": 4596,
+      "messageCount": 12,
+      "commonMessages": 9,
+      "input": 12551,
+      "cached": 4242,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "tail",
+      "case": 7,
+      "ms": 6634,
+      "messageCount": 14,
+      "commonMessages": 11,
+      "input": 12595,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "tail",
+      "case": 8,
+      "ms": 8496,
+      "messageCount": 16,
+      "commonMessages": 13,
+      "input": 13897,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    }
+  ],
+  "historical_ba": [
+    {
+      "kind": "method",
+      "cases": 8,
+      "source": "historical message_end, tool results, panel states and submitted view",
+      "limitations": "Historical raw payload/system memory snapshot and intermediate viewport acknowledgements were not stored. Reconstructed runtime with production builder; fixed system without historical memory summary; same 128 output cap in both arms. No returned tool calls are executed."
+    },
+    {
+      "arm": "tail",
+      "case": 1,
+      "ms": 5374,
+      "messageCount": 2,
+      "commonMessages": null,
+      "input": 7691,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "tail",
+      "case": 2,
+      "ms": 11750,
+      "messageCount": 4,
+      "commonMessages": 1,
+      "input": 7898,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "tail",
+      "case": 3,
+      "ms": 7457,
+      "messageCount": 6,
+      "commonMessages": 3,
+      "input": 10885,
+      "cached": 0,
+      "stopReason": "toolUse",
+      "error": null
+    },
+    {
+      "arm": "tail",
+      "case": 4,
+      "ms": 4681,
+      "messageCount": 8,
+      "commonMessages": 5,
+      "input": 10847,
+      "cached": 4238,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "tail",
+      "case": 5,
+      "ms": 7805,
+      "messageCount": 10,
+      "commonMessages": 7,
+      "input": 11335,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "tail",
+      "case": 6,
+      "ms": 5070,
+      "messageCount": 12,
+      "commonMessages": 9,
+      "input": 12551,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "tail",
+      "case": 7,
+      "ms": 6226,
+      "messageCount": 14,
+      "commonMessages": 11,
+      "input": 12595,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "tail",
+      "case": 8,
+      "ms": 5241,
+      "messageCount": 16,
+      "commonMessages": 13,
+      "input": 13897,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "original",
+      "case": 1,
+      "ms": 4111,
+      "messageCount": 2,
+      "commonMessages": null,
+      "input": 7691,
+      "cached": 0,
+      "stopReason": "stop",
+      "error": null
+    },
+    {
+      "arm": "original",
+      "case": 2,
+      "ms": 7182,
+      "messageCount": 4,
+      "commonMessages": 0,
+      "input": 7898,
+      "cached": 3898,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "original",
+      "case": 3,
+      "ms": 7305,
+      "messageCount": 6,
+      "commonMessages": 2,
+      "input": 10885,
+      "cached": 0,
+      "stopReason": "toolUse",
+      "error": null
+    },
+    {
+      "arm": "original",
+      "case": 4,
+      "ms": 4839,
+      "messageCount": 8,
+      "commonMessages": 2,
+      "input": 10847,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "original",
+      "case": 5,
+      "ms": 6658,
+      "messageCount": 10,
+      "commonMessages": 2,
+      "input": 11335,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "original",
+      "case": 6,
+      "ms": 5018,
+      "messageCount": 12,
+      "commonMessages": 8,
+      "input": 12551,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "original",
+      "case": 7,
+      "ms": 4954,
+      "messageCount": 14,
+      "commonMessages": 8,
+      "input": 12595,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    },
+    {
+      "arm": "original",
+      "case": 8,
+      "ms": 5004,
+      "messageCount": 16,
+      "commonMessages": 12,
+      "input": 13897,
+      "cached": 0,
+      "stopReason": "length",
+      "error": null
+    }
+  ]
+}

@@ -31,7 +31,7 @@ test(`${modelId} native streaming executes tools with search=${searchEnabled}`, 
     for await (const chunk of req) raw += chunk;
     requests.push({ url: req.url, headers: req.headers, body: JSON.parse(raw) });
     const parts = requests.length === 1
-      ? [{ functionCall: { name: 'read_document', args: {} } }]
+      ? [{ text: '我先看看你的文稿。' }, { functionCall: { name: 'read_document', args: {} } }]
       : [{ text: 'Gemini 已读取内容。' }];
     res.writeHead(200, { 'content-type': 'text/event-stream' });
     res.end(`data: ${JSON.stringify({ candidates: [{ content: { role: 'model', parts }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 5, totalTokenCount: 17 } })}\n\n`);
@@ -44,7 +44,16 @@ test(`${modelId} native streaming executes tools with search=${searchEnabled}`, 
     const factory = new PiSessionFactory(config, new AgentStorage(config), {});
     session = await factory.create(randomUUID(), '请使用工具读取内容。', () => {}, undefined, undefined, undefined, undefined,
       (type, data) => observations.push({ type, data }));
+    const streamed = [];
+    session.subscribe(event => {
+      if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta' && event.assistantMessageEvent.delta.trim()) streamed.push('speech');
+      if (event.type === 'tool_execution_start') streamed.push('tool');
+    });
     await session.prompt('请读取内容');
+    const preamble = session.messages.find(message => message.role === 'assistant');
+    assert.ok(preamble.content.some(part => part.type === 'text' && part.text === '我先看看你的文稿。'));
+    assert.ok(preamble.content.some(part => part.type === 'toolCall' && part.name === 'read_document'));
+    assert.ok(streamed.indexOf('speech') < streamed.indexOf('tool'));
     assert.equal(requests.length, 2);
     assert.equal(observations.filter(e => e.type === 'model.request').length, 2);
     assert.equal(observations.filter(e => e.type === 'model.response').length, 2);

@@ -13,6 +13,7 @@ interface Turn {
   task: Promise<void>; state: VoiceState; audioBytes: number;
   speech: AbortController; window: PlaybackWindow; progress: VoicePlaybackSnapshot;
   segments: Array<{ end: number; segmentId: number; messageId: string; text: string }>;
+  viewListeners: Set<() => void>;
 }
 
 /** One connection, one active turn; all late callbacks are scoped to their owning turn. */
@@ -35,7 +36,7 @@ export class VoiceSession {
     if (this.playbackTurn && (!this.playbackTurn.progress.generated || this.playbackTurn.window.played < this.playbackTurn.window.sent)) this.report(this.playbackTurn, true);
     const turn: Turn = { id, request, abort: new AbortController(), started: performance.now(),
       task: Promise.resolve(), state: 'connecting', audioBytes: 0,
-      speech: new AbortController(), window: new PlaybackWindow(playbackFeedback), segments: [],
+      speech: new AbortController(), window: new PlaybackWindow(playbackFeedback), segments: [], viewListeners: new Set(),
       progress: { turnId: id, generated: false, sentSamples: 0, playedSamples: 0, interrupted: false } };
     this.current = turn;
     this.state(turn, 'connecting');
@@ -131,6 +132,7 @@ export class VoiceSession {
     const turn = this.current;
     if (!turn || turn.id !== id || !this.isCurrent(turn)) return;
     turn.request = { ...turn.request, context: { ...turn.request.context, documentView: view } };
+    for (const listener of turn.viewListeners) listener();
   }
 
   async settled(): Promise<void> { await this.lastTask.catch(() => undefined); }
@@ -200,6 +202,20 @@ export class VoiceSession {
         }
       }, turn.abort.signal, opening ? 'call_opening' : undefined, {
         getView: () => turn.request.context?.documentView,
+        waitForNavigation: (target, signal) => new Promise((resolve, reject) => {
+          const abortSignal = signal ? AbortSignal.any([turn.abort.signal, signal]) : turn.abort.signal;
+          const cleanup = () => { clearTimeout(timer); turn.viewListeners.delete(check); abortSignal.removeEventListener('abort', abort); };
+          const abort = () => { cleanup(); reject(new Error('Navigation cancelled')); };
+          const check = () => {
+            const view = turn.request.context?.documentView;
+            if (view?.documentId !== target.documentId || view.version !== target.version || view.navigation?.requestId !== target.requestId) return;
+            cleanup(); resolve(view);
+          };
+          const timer = setTimeout(() => { cleanup(); resolve(undefined); }, 2000);
+          turn.viewListeners.add(check);
+          abortSignal.addEventListener('abort', abort, { once: true });
+          if (abortSignal.aborted) abort(); else check();
+        }),
         beforeShow: async signal => {
           signal?.throwIfAborted();
           await ttsQueue;

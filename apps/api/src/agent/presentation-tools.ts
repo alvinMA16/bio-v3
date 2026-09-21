@@ -108,9 +108,22 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
         if (params.navigation && current?.documentId !== documentId) throw new Error('翻页需要先打开这篇文稿');
         const page = params.page ?? (focus ? pages.findIndex(item => item.fragments.some(fragment => fragment.blockId === focus.blockId && fragment.start <= focus.start && fragment.end >= focus.start)) + 1
           : params.navigation ? current!.page + (params.navigation === 'next' ? 1 : -1) : current?.documentId === documentId ? Math.min(current.page, pages.length) : 1);
-        return updated(workspace.showDocument(document, page, params.follow, {
+        const panel = workspace.showDocument(document, page, params.follow, {
           ...(ranges ? { highlight: { requestId: randomUUID(), kind: 'focus', ranges } } : {}),
-          ...(focus ? { focus } : {}), ...(params.clearHighlight ? { clearHighlight: true } : {}) }));
+          ...(focus ? { focus } : {}), ...(params.clearHighlight ? { clearHighlight: true } : {}) });
+        const sent = updated(panel);
+        const target = panel.documentView?.focus;
+        if (!target) return sent;
+        const view = await runtime?.waitForNavigation?.({ documentId, version: document.version, requestId: target.requestId }, signal);
+        signal?.throwIfAborted();
+        const matched = view?.documentId === documentId && view.version === document.version && view.navigation?.requestId === target.requestId;
+        const accepted = matched && view.visibleRanges !== undefined && workspace.acceptDocumentView(view);
+        const visible = accepted && view.navigation?.status === 'visible' && view.visibleRanges?.some(range =>
+          range.blockId === target.blockId && range.start <= target.start && range.end > target.start);
+        return result({ status: visible ? 'visible' : accepted ? 'failed' : 'unconfirmed', rendered: !!visible,
+          documentView: panel.documentView, navigation: accepted ? view.navigation : { requestId: target.requestId, reason: runtime?.waitForNavigation ? 'timeout_or_invalid_receipt' : 'client_feedback_unavailable' },
+          screen: workspace.context().screen,
+          note: visible ? '客户端确认目标文字已进入视口；不代表用户已经读过。' : '尚未确认目标文字进入视口。不要声称已滚动到位；说明位置并坦诚告知未确认。' });
       },
     }),
     defineTool({
