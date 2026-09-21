@@ -186,3 +186,46 @@ test('a viewport can open an owned document on a new call, but not through a lat
     assert.equal(workspace.state().documentView.followRequest, undefined, 'normal narration does not force follow');
   } finally { f.clean(); }
 });
+
+test('document tools reject escaped prose atomically and accept model correction without changing offsets', async () => {
+  const f = fixture(), conversationId = randomUUID();
+  try {
+    const workspace = new PanelWorkspace(f.storage.conversationDirectory(conversationId));
+    const events = [];
+    const tools = Object.fromEntries(createPresentationTools(workspace, event => events.push(event), undefined,
+      { store: f.store, conversationId }).map(tool => [tool.name, tool]));
+    await tools.edit_document.execute('create', create());
+    await tools.show_document.execute('show', { documentId: 'story' });
+    const saved = await f.store.get(undefined, 'story'), shown = structuredClone(workspace.state());
+    const eventCount = events.length;
+    for (const kind of ['paragraph', 'heading', 'quote', 'list']) {
+      for (const escaped of ['甲\\n乙', '甲\\r\\n乙', '甲\\n乙\n真实换行', '甲\\\\n乙']) {
+        await assert.rejects(tools.edit_document.execute('bad', { documentId: 'story', expectedVersion: 1, operations: [
+          { action: 'replace', targetId: 'p1', block: paragraph('p1', '不应部分保存') },
+          { action: 'replace', targetId: 'p2', block: { id: 'p2', kind, text: escaped } },
+        ] }), /p2.*本批次未保存.*相同 expectedVersion/);
+      }
+    }
+    assert.deepEqual(await f.store.get(undefined, 'story'), saved);
+    assert.equal((await f.store.history(undefined, 'story')).length, 1);
+    assert.deepEqual(workspace.state(), shown);
+    assert.equal(events.length, eventCount);
+    const corrected = '甲😀\n乙\r\n丙';
+    const literal = String.raw`const newline = "\n"; C:\new\report`;
+    await tools.edit_document.execute('corrected', { documentId: 'story', expectedVersion: 1, operations: [
+      { action: 'replace', targetId: 'p2', block: paragraph('p2', corrected) },
+      { action: 'insert', block: { id: 'code', kind: 'code', text: literal } },
+    ] });
+    const next = await f.store.get(undefined, 'story');
+    assert.equal(next.version, 2);
+    assert.equal(next.blocks.find(b => b.id === 'p2').text, corrected);
+    assert.equal(next.blocks.find(b => b.id === 'code').text, literal);
+    for (const fragment of documentPages(next).flatMap(page => page.fragments)) {
+      assert.equal(next.blocks.find(b => b.id === fragment.blockId).text.slice(fragment.start, fragment.end), fragment.text);
+    }
+    assert.equal((await f.store.history(undefined, 'story')).length, 2);
+    await assert.rejects(tools.edit_document.execute('bad-create', { documentId: 'bad', title: '新稿', expectedVersion: 0,
+      operations: [{ action: 'insert', block: paragraph('p1', '甲\\n乙') }] }), /未保存/);
+    await assert.rejects(f.store.get(undefined, 'bad'), /不存在/);
+  } finally { f.clean(); }
+});

@@ -8,7 +8,7 @@ import type { DocumentRuntime } from './document-runtime.js';
 import { randomUUID } from 'node:crypto';
 
 const id = Type.String({ pattern: '^[a-zA-Z0-9_-]{1,64}$' });
-const block = Type.Object({ id, kind: Type.Union(['paragraph', 'heading', 'list', 'quote', 'code'].map(value => Type.Literal(value))), text: Type.String({ maxLength: 12000 }) });
+const block = Type.Object({ id, kind: Type.Union(['paragraph', 'heading', 'list', 'quote', 'code'].map(value => Type.Literal(value))), text: Type.String({ maxLength: 12000, description: '原始正文字符串，不要再 JSON.stringify。排版使用真实换行字符（U+000A），不要写成反斜杠加 n 或 r；多个自然段优先拆成独立 block，list 各项以真实换行分隔。需原样保留转义示例、代码或路径时使用 kind=code。' }) });
 export interface AttachmentLibrary {
   list: (query?: string) => Promise<Array<{ attachmentId: string; title: string; kind: string; filename: string; createdAt: string }>>;
   load: (attachmentId: string) => Promise<PanelAttachment>;

@@ -13,6 +13,9 @@ export function editDocument(previous: PanelDocument | undefined, input: PanelUp
     const block = operation.block;
     if (block && (!/^[a-zA-Z0-9_-]{1,64}$/.test(block.id) || !['paragraph', 'heading', 'list', 'quote', 'code'].includes(block.kind)
       || typeof block.text !== 'string' || block.text.length > 12000)) throw new Error('无效段落');
+    if (block && block.kind !== 'code' && /\\[nr]/.test(block.text)) {
+      throw new Error(`段落 ${block.id} 含字面量换行转义（反斜杠加 n 或 r）。本批次未保存，版本未改变。请将排版换行改为真实换行字符，或拆成多个段落，使用相同 expectedVersion 重新提交完整操作批次；不要对 text 再做 JSON.stringify。若需原样展示转义示例、代码或含此序列的路径，请放入 kind=code 的独立块，保留原文。`);
+    }
     if (operation.action === 'insert') {
       if (!block || operation.targetId) throw new Error('插入需要 block，不接受 targetId');
       if (document.blocks.some(item => item.id === block.id)) throw new Error('段落 ID 重复');
