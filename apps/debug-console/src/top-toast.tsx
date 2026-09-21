@@ -17,10 +17,9 @@ export function ReadingFontToast({ feedback }: { feedback: ReadingFontFeedback }
   const title = unchanged ? current === 0 ? '已经是最小字号' : current === READING_FONT_SIZES.length - 1 ? '已经是最大字号' : `已经是${feedback.current}` : `${feedback.previous} → ${feedback.current}`;
   const detail = unchanged ? `第 ${current + 1} 档，共 ${READING_FONT_SIZES.length} 档` : `第 ${previous + 1} 档 → 第 ${current + 1} 档，共 ${READING_FONT_SIZES.length} 档`;
   return <TopToast label={`字号：${title}。${detail}`}>
-    <div className="font-toast-heading"><span>字号</span><strong>{unchanged ? title : feedback.current}</strong><small>{current + 1} / {READING_FONT_SIZES.length}</small></div>
     <div className="font-toast-scale" style={{ '--font-from': previous, '--font-to': current, '--font-stops': READING_FONT_SIZES.length } as CSSProperties}>
       <i className="font-toast-selection" />
-      {READING_FONT_SIZES.map((size, index) => <span key={size} className={index === current ? 'is-current' : ''}><i /><small>{size}</small></span>)}
+      {READING_FONT_SIZES.map((size, index) => <span key={size} className={index === current ? 'is-current' : ''}>{size}</span>)}
     </div>
   </TopToast>;
 }

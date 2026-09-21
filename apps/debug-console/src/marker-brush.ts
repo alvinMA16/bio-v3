@@ -2,9 +2,9 @@ import type { DocumentHighlight } from '@bio/contracts';
 
 export const MARKER_COLORS = { yellow: '#f2df38', green: '#8ddd68', purple: '#c59aef', blue: '#80cafa', pink: '#ff95b6' };
 const edges = [
-  'M1 7 L8 5 L20 6 L34 4 L47 6 L61 5 L76 7 L91 4 L99 6 L98 23 L87 25 L72 23 L59 26 L43 24 L28 25 L14 23 L2 25 Z',
-  'M2 5 L15 7 L29 4 L44 5 L60 7 L75 5 L89 6 L98 4 L100 22 L92 25 L77 24 L65 26 L48 23 L34 25 L19 24 L1 26 Z',
-  'M0 8 L11 5 L27 7 L42 5 L57 4 L70 6 L83 5 L99 7 L97 25 L84 23 L68 25 L54 24 L40 26 L24 23 L9 25 L2 23 Z',
+  'M0 7 L8 5 L20 6 L34 4 L47 6 L61 5 L76 7 L91 4 L100 6 L100 23 L87 25 L72 23 L59 26 L43 24 L28 25 L14 23 L0 25 Z',
+  'M0 5 L15 7 L29 4 L44 5 L60 7 L75 5 L89 6 L100 4 L100 22 L92 25 L77 24 L65 26 L48 23 L34 25 L19 24 L0 26 Z',
+  'M0 8 L11 5 L27 7 L42 5 L57 4 L70 6 L83 5 L100 7 L100 25 L84 23 L68 25 L54 24 L40 26 L24 23 L9 25 L0 23 Z',
 ];
 
 /** Native inline backgrounds clone at line breaks and resize with the text. */

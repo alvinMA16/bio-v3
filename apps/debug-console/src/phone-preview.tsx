@@ -26,7 +26,8 @@ interface Manifest {
   animations: Animation[];
 }
 
-export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, callOpen, callStartedAt, status, callFailed = false, motionState = 'listen', getMotionLevel = () => 0, getDialPhase = () => -1, mode, startDisabled, onStart, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
+export function PhonePreview({ backgroundDocument, readingFontFeedback, attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, callOpen, callStartedAt, status, callFailed = false, motionState = 'listen', getMotionLevel = () => 0, getDialPhase = () => -1, mode, startDisabled, onStart, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
+  backgroundDocument?: import('@bio/contracts').PanelDocument | undefined;
   readingFontFeedback?: ReadingFontFeedback | undefined;
   onManuscriptChat?: ((document: import('@bio/contracts').PanelDocument) => void) | undefined;
   attachment?: PanelAttachment | undefined; onAttachmentPage?: ((materialId: string, page: number) => void) | undefined;
@@ -117,6 +118,12 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
   return <div className="phone-preview" aria-label="手机用户界面预览">
     <link rel="preload" as="image" href={uiAsset('lingli-avatar.png')} />
     <div className={`phone-screen ${callOpen ? 'phone-screen--call' : ''} ${mode === 'attachment' ? 'phone-screen--attachment' : ''} ${mode === 'editor' ? 'phone-screen--editor' : ''} ${callOpen && mode === 'conversation' ? 'phone-screen--conversation' : ''} ${dialing ? 'phone-screen--dialing' : ''}`} style={{ aspectRatio: '320/692' }}>
+      {callOpen && !dialing && mode === 'editor' && backgroundDocument && <div className="document-glass-backdrop" aria-hidden="true" inert>
+        <div className="document-glass-backdrop__paper">
+          <h3>{backgroundDocument.title}</h3>
+          {backgroundDocument.blocks.map(block => <p key={block.id}>{block.text}</p>)}
+        </div>
+      </div>}
       {readingFontFeedback && <ReadingFontToast key={readingFontFeedback.id} feedback={readingFontFeedback} />}
       {!callOpen ? <>
         {artwork}
@@ -148,12 +155,11 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
             </div> : <div className="phone-panel-scroll">{children}</div>}
           </section>
         </>}
-        {!dialing && <div className="phone-call-dock">
-        <VoiceCallStatus state={motionState} getLevel={getMotionLevel} label="我在听" />
-        <footer className="phone-call-controls" aria-label="通话控制">
+        {!dialing && <VoiceCallStatus state={motionState} getLevel={getMotionLevel} label="我在听" />}
+        {!dialing && <footer className="phone-call-controls" aria-label="通话控制">
           <div className="document-call-state"><span>令狸</span><small>{dialing ? callFailed ? '未接通' : '等待接通' : callDuration}</small></div>
           <SlideToEnd key={`${mode}:${dialing}`} dialing={dialing} onEnd={onEnd} />
-        </footer></div>}
+        </footer>}
       </>}
       {receiptVisible && receipt && !callOpen && <ReceiptPrinter key={receipt.id} receipt={receipt} onClose={onReceiptClose} />}
     </div>

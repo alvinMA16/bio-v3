@@ -6,7 +6,9 @@
   background-size: 100% 100%;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
-  padding: .14em 0;
+  /* Paint past both glyph edges without moving text or changing line width. */
+  padding: .14em .18em;
+  margin-inline: -.18em;
   animation: document-highlight-arrive .5s cubic-bezier(.2,.65,.35,1) both;
 }
 .document-highlight-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #687a69; font-size: 11px; line-height: 1.7; margin: 0 0 18px; }

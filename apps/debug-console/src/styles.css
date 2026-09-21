@@ -573,32 +573,25 @@ body { min-width: 320px; }
   .manuscript-paper .panel-block, .manuscript-paper .panel-block h4, .manuscript-paper pre { transition: none; }
 }
 
-/* The paper continues behind this floating dock, providing a real optical backdrop. */
-.phone-call-dock { flex: 0 0 auto; position: relative; z-index: 6; }
-.phone-screen.phone-screen--editor:not(.phone-screen--dialing) .phone-content-panel {
-  position: absolute; inset: 0; margin: 0; border-radius: 0; box-shadow: none;
+/* Decorative enlarged document beneath the existing layout; never a reading surface. */
+.document-glass-backdrop {
+  position: absolute; inset: 0; z-index: 0; overflow: hidden;
+  pointer-events: none; user-select: none; background: #f5f7ef;
 }
-.phone-screen--editor:not(.phone-screen--dialing) .phone-content-panel .phone-panel-scroll {
-  border-radius: 0; padding: 24px 20px 180px; scroll-padding-bottom: 180px;
-  background: #fcfcf9;
+.document-glass-backdrop__paper {
+  position: absolute; inset: -24px; padding: 24px;
+  color: #59604f; background: #fcfcf9;
+  font: 32px/1.9 Georgia, 'Songti SC', serif;
+  overflow-wrap: anywhere; white-space: pre-wrap;
+  filter: blur(7px); opacity: .48;
 }
-.phone-screen--editor .phone-content-panel--document::after { display: none; }
-.phone-screen--editor .phone-call-dock {
-  position: absolute; left: 10px; right: 10px; bottom: max(10px, env(safe-area-inset-bottom));
-  border-radius: 30px; overflow: hidden;
-  background: linear-gradient(135deg, #ffffff80, #e5f0e34d 45%, #dcebdc66);
-  backdrop-filter: blur(12px) saturate(1.5); -webkit-backdrop-filter: blur(12px) saturate(1.5);
-  box-shadow: inset 0 1px 1px #fffffff2, inset 1px 0 1px #ffffff99, inset 0 -1px 1px #a3b8a34d, 0 8px 26px #344d3926;
+.document-glass-backdrop__paper h3 { font-size: 38px; }
+.document-glass-backdrop::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(135deg, #ffffff38, #dce8d552);
 }
-.phone-screen--editor .phone-call-dock::before {
-  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  background: linear-gradient(155deg, #ffffff59, transparent 35%, transparent 75%, #ffffff33);
+.phone-screen--editor .phone-call-controls { position: relative; z-index: 4; }
+.phone-screen.phone-screen--editor .phone-call-controls {
+  background: linear-gradient(130deg, #f5faf2a6, #d5e3d666);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
 }
-.phone-screen.phone-screen--editor .phone-call-dock .phone-call-controls { margin: 0 14px 12px; }
-.phone-screen--editor .phone-call-dock .phone-call-status--glass { margin-bottom: -6px; }
-.phone-screen--editor .phone-call-dock .slide-to-end {
-  background: linear-gradient(135deg, #ffffff99, #dcebdc66);
-  box-shadow: inset 0 1px 1px #ffffffd9, inset 0 -1px 1px #8ea18d33, 0 2px 8px #3045310d;
-  backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
-}
-@supports not (backdrop-filter: blur(1px)) { .phone-screen--editor .phone-call-dock { background: #eaf1e7f2; } }

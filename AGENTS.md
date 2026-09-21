@@ -23,6 +23,12 @@
 - Core CTA buttons use frosted glass with a subtle pale sage-green tint, soft optical highlights and translucent depth. Avoid opaque beige panels or conspicuous outline-button borders.
 - Keep related CTA text and character art grouped and centered; distribute actions rather than crowding the top of the screen.
 
+# UI change discipline
+
+- Present each piece of information only once. Omit headings, counts, status labels, and explanatory copy that add no actionable value; prefer the simplest control that communicates the state.
+- Preserve established layout, spacing, positions, and component hierarchy during visual refinements. Color, texture, glass, and highlight requests do not authorize layout redesigns. Implement decorative effects in non-interactive layers outside layout flow.
+- When the user requests a wireframe for approval, show it before implementing that component's revised design.
+
 # Agent behavior changes
 
 - Design prompt and Agent constraints as general principles and decision rules that apply across situations. Do not accumulate case-by-case instructions, keyword exceptions, or patches for individual examples. Examples belong in regression tests, not as substitutes for general rules.
