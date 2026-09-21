@@ -11,11 +11,12 @@
   position: relative; z-index: 1; display: grid; place-items: center;
   height: 40px; font-size: 12px; color: #52675a;
 }
+.font-toast-scale > span { transition: color 150ms ease; }
 .font-toast-scale .is-current { color: #294b36; font-weight: 600; }
 .font-toast-selection {
   position: absolute; width: calc(100% / var(--font-stops)); height: 100%; left: 0; top: 0;
   transform: translateX(calc(var(--font-to) * 100%));
-  animation: font-stop-move 550ms cubic-bezier(.22, .8, .25, 1) both;
+  animation: font-stop-move 600ms cubic-bezier(.4, 0, .2, 1) 440ms both;
 }
 .font-toast-selection::after {
   content: ''; position: absolute; inset: 0 1px; border-radius: 15px;

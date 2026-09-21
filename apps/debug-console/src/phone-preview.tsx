@@ -7,6 +7,7 @@ import { MaterialFolder } from './material-folder';
 import { uiAsset } from './ui-asset';
 import { ManuscriptFolder } from './manuscript-folder';
 import { ReceiptPrinter } from './receipt-printer';
+import { DocumentGlassBackdrop } from './document-glass-backdrop';
 import { ReadingFontToast } from './top-toast';
 import type { ReadingFontFeedback } from './use-reading-font';
 import type { Material, PanelAttachment } from '@bio/contracts';
@@ -26,8 +27,7 @@ interface Manifest {
   animations: Animation[];
 }
 
-export function PhonePreview({ backgroundDocument, readingFontFeedback, attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, callOpen, callStartedAt, status, callFailed = false, motionState = 'listen', getMotionLevel = () => 0, getDialPhase = () => -1, mode, startDisabled, onStart, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
-  backgroundDocument?: import('@bio/contracts').PanelDocument | undefined;
+export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, callOpen, callStartedAt, status, callFailed = false, motionState = 'listen', getMotionLevel = () => 0, getDialPhase = () => -1, mode, startDisabled, onStart, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
   readingFontFeedback?: ReadingFontFeedback | undefined;
   onManuscriptChat?: ((document: import('@bio/contracts').PanelDocument) => void) | undefined;
   attachment?: PanelAttachment | undefined; onAttachmentPage?: ((materialId: string, page: number) => void) | undefined;
@@ -59,6 +59,7 @@ export function PhonePreview({ backgroundDocument, readingFontFeedback, attachme
   const frameGate = useRef(new FoxFrameGate());
   const controllerRef = useRef<FoxAnimationController | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const documentScroller = useRef<HTMLDivElement>(null);
   const subtitleRef = useRef<HTMLDivElement>(null);
   const animation = manifest?.animations.find(item => item.id === (animationState?.action.id ?? 'blink'));
 
@@ -118,12 +119,7 @@ export function PhonePreview({ backgroundDocument, readingFontFeedback, attachme
   return <div className="phone-preview" aria-label="手机用户界面预览">
     <link rel="preload" as="image" href={uiAsset('lingli-avatar.png')} />
     <div className={`phone-screen ${callOpen ? 'phone-screen--call' : ''} ${mode === 'attachment' ? 'phone-screen--attachment' : ''} ${mode === 'editor' ? 'phone-screen--editor' : ''} ${callOpen && mode === 'conversation' ? 'phone-screen--conversation' : ''} ${dialing ? 'phone-screen--dialing' : ''}`} style={{ aspectRatio: '320/692' }}>
-      {callOpen && !dialing && mode === 'editor' && backgroundDocument && <div className="document-glass-backdrop" aria-hidden="true" inert>
-        <div className="document-glass-backdrop__paper">
-          <h3>{backgroundDocument.title}</h3>
-          {backgroundDocument.blocks.map(block => <p key={block.id}>{block.text}</p>)}
-        </div>
-      </div>}
+      {callOpen && !dialing && mode === 'editor' && <DocumentGlassBackdrop source={documentScroller} />}
       {readingFontFeedback && <ReadingFontToast key={readingFontFeedback.id} feedback={readingFontFeedback} />}
       {!callOpen ? <>
         {artwork}
@@ -152,7 +148,7 @@ export function PhonePreview({ backgroundDocument, readingFontFeedback, attachme
           <section className={`phone-content-panel ${mode !== 'conversation' ? 'phone-content-panel--document' : ''}`} aria-label={mode === 'conversation' ? '对话内容' : mode === 'attachment' ? '附件内容' : '编辑内容'}>
             {mode === 'attachment' && attachment ? <AttachmentViewer key={attachment.id} attachment={attachment} onPage={onAttachmentPage} /> : mode === 'conversation' ? <div className="phone-panel-scroll phone-dialogue" ref={subtitleRef}>
               <p>{subtitle || (running && phase !== 'listening' ? '让我想一想…' : '我在这里，慢慢讲。')}</p>
-            </div> : <div className="phone-panel-scroll">{children}</div>}
+            </div> : <div className="phone-panel-scroll" ref={documentScroller}>{children}</div>}
           </section>
         </>}
         {!dialing && <VoiceCallStatus state={motionState} getLevel={getMotionLevel} label="我在听" />}

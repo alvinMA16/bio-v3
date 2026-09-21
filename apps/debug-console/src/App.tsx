@@ -507,7 +507,6 @@ export function App() {
               motionState={audioPlaying ? 'speak' : voiceEnabled && micListening ? 'listen' : running ? 'think' : 'listen'}
               getDialPhase={() => voiceRef.current?.getDialPhase() ?? -1}
               getMotionLevel={() => voiceRef.current?.getMotionLevel() ?? 0}
-              backgroundDocument={shownPanel?.document}
               readingFontFeedback={readingFontFeedback}
               callOpen={callOpen} callFailed={!voiceEnabled} callStartedAt={callStartedAt} status={voiceStatus} mode={shownPanel?.mode ?? 'conversation'}
               onManuscriptChat={document => {

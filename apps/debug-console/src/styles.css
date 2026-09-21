@@ -579,19 +579,19 @@ body { min-width: 320px; }
   pointer-events: none; user-select: none; background: #f5f7ef;
 }
 .document-glass-backdrop__paper {
-  position: absolute; inset: -24px; padding: 24px;
-  color: #59604f; background: #fcfcf9;
-  font: 32px/1.9 Georgia, 'Songti SC', serif;
-  overflow-wrap: anywhere; white-space: pre-wrap;
-  filter: blur(7px); opacity: .48;
+  position: absolute; top: 0; left: 0;
+  transform-origin: top left; pointer-events: none;
+  filter: blur(4px) saturate(1.15); opacity: .55;
+  will-change: transform;
 }
-.document-glass-backdrop__paper h3 { font-size: 38px; }
 .document-glass-backdrop::after {
   content: ''; position: absolute; inset: 0;
-  background: linear-gradient(135deg, #ffffff38, #dce8d552);
+  background: linear-gradient(135deg, #ffffff24, #dce8d538);
 }
 .phone-screen--editor .phone-call-controls { position: relative; z-index: 4; }
 .phone-screen.phone-screen--editor .phone-call-controls {
-  background: linear-gradient(130deg, #f5faf2a6, #d5e3d666);
-  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  background: linear-gradient(130deg, #ffffff70, #e7f3df29 45%, #d5e3d638);
+  box-shadow: inset 0 1px 1px #fffffff2, inset 1px 0 1px #ffffffa6,
+    inset 0 -1px 1px #81977859, 0 3px 14px #233b2910;
+  -webkit-backdrop-filter: blur(7px) saturate(1.45); backdrop-filter: blur(7px) saturate(1.45);
 }
