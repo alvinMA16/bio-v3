@@ -43,6 +43,9 @@ importers:
       class-validator:
         specifier: ^0.14.2
         version: 0.14.4
+      diff:
+        specifier: 8.0.4
+        version: 8.0.4
       fastify:
         specifier: ^5.11.3
         version: 5.11.3

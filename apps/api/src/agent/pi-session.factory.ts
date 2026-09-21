@@ -157,8 +157,31 @@ export class PiSessionFactory {
     const { session } = await createAgentSession({
       cwd, agentDir: cwd, modelRuntime, model, thinkingLevel,
       settingsManager, resourceLoader, sessionManager,
-      tools: ['switch_mode', 'read_document', 'edit_document', 'show_document', 'restore_document', 'read_attachment', ...memoryTools.map(t => t.name)],
-      customTools: [...createPresentationTools(workspace, emit, refreshAttachments, { store: documents, user: scope?.userId, conversationId }, runtime), ...memoryTools],
+      tools: ['list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'restore_document', 'read_attachment', ...memoryTools.map(t => t.name)],
+      customTools: [...createPresentationTools(workspace, emit, refreshAttachments, { store: documents, user: scope?.userId, conversationId }, runtime, {
+        list: async query => {
+          const search = query?.trim().toLocaleLowerCase();
+          const items = (await this.materials.list(scope?.userId)).filter(item => !search || `${item.title} ${item.filename}`.toLocaleLowerCase().includes(search));
+          return Promise.all(items.map(async item => ({ attachmentId: (await this.materials.attachment(item.id, scope?.userId)).id,
+            title: item.title, kind: item.kind, filename: item.filename, createdAt: item.createdAt })));
+        },
+        load: async attachmentId => {
+          const known = workspace.context().availableAttachments.some(item => item.id === attachmentId);
+          const materialId = attachmentId.match(/^m_([0-9a-f-]{36})_/i)?.[1];
+          if (!materialId) {
+            if (!known) throw new Error('附件不存在，请先 list_attachments 获取有效 ID');
+            return workspace.read(undefined, undefined, attachmentId) as import('@bio/contracts').PanelAttachment;
+          }
+          // Resolve ownership before adding anything to this conversation or native model context.
+          const attachment = await this.materials.attachment(materialId, scope?.userId);
+          if (attachment.originalStatus && !known) throw new Error('原文件已删除，请重新上传后再打开');
+          if (attachment.id !== attachmentId && !known) throw new Error('附件信息已变化，请重新 list_attachments');
+          if (known) return workspace.read(undefined, undefined, attachmentId) as import('@bio/contracts').PanelAttachment;
+          workspace.addAttachment(attachment);
+          nativeAttachments.push({ attachmentId: attachment.id, materialId, title: attachment.title });
+          return attachment;
+        },
+      }), ...memoryTools],
     });
     return session;
   }

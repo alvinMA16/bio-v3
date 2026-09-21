@@ -26,7 +26,7 @@ test('bench replays full history through production context without leaking eval
       const runtime = payload.messages.filter(m => text(m)?.includes('"type":"bio_runtime_context"'));
       assert.equal(runtime.length, 1);
       assert.equal(JSON.parse(text(runtime[0])).scene, c.scene);
-      assert.deepEqual(payload.tools.map(t => t.function.name), ['switch_mode', 'read_document', 'edit_document', 'show_document', 'restore_document', 'read_attachment']);
+      assert.deepEqual(payload.tools.map(t => t.function.name), ['list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'restore_document', 'read_attachment']);
       if (c.scene === 'attachment_conversation') assert.ok(serialized.includes(c.attachment.text));
     }
   } finally { await rm(root, { recursive: true, force: true }); }

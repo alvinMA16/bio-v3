@@ -1,22 +1,20 @@
-import { useEffect, useRef } from 'react';
-import { documentPages, type DocumentView, type PanelDocument } from '@bio/contracts';
+import { useEffect, useRef, useState } from 'react';
+import { documentPages, documentTextSegments, type DocumentRange, type DocumentView, type PanelDocument } from '@bio/contracts';
+import './document-highlight.css';
 
 // Small inline spans let us report visible text without changing paragraph layout.
-function textSpans(text: string, blockId: string, base = 0) {
-  let offset = base;
-  const characters = Array.from(text);
-  return Array.from({ length: Math.ceil(characters.length / 80) }, (_, index) => {
-    const part = characters.slice(index * 80, (index + 1) * 80).join('');
-    const start = offset; offset += part.length;
-    return <span key={start} data-block={blockId} data-start={start} data-end={offset}>{part}</span>;
-  });
+function textSpans(text: string, blockId: string, ranges: DocumentRange[], base = 0) {
+  return documentTextSegments(text, blockId, ranges, base).map(part =>
+    <span key={part.start} data-block={blockId} data-start={part.start} data-end={part.end}>
+      {part.highlighted ? <mark className="document-highlight">{part.text}</mark> : part.text}
+    </span>);
 }
 
-function listItems(text: string, blockId: string) {
+function listItems(text: string, blockId: string, ranges: DocumentRange[]) {
   let offset = 0;
   return text.split('\n').map((line, index) => {
     const start = offset; offset += line.length + 1;
-    return <li key={index}>{textSpans(line, blockId, start)}</li>;
+    return <li key={index}>{textSpans(line, blockId, ranges, start)}</li>;
   });
 }
 
@@ -24,8 +22,13 @@ export function DocumentReader({ document, view, onView }: {
   document: PanelDocument; view?: DocumentView | undefined;
   onView?: ((view: DocumentView) => void) | undefined;
 }) {
+  const [dismissed, setDismissed] = useState<string>();
+  const highlight = view?.version === document.version && view.highlight?.requestId !== dismissed ? view.highlight : undefined;
+  const ranges = highlight?.ranges ?? [];
+  const titleBlock = document.blocks[0]?.kind === 'heading' && document.blocks[0].text.trim() === document.title.trim() ? document.blocks[0] : undefined;
   const content = useRef<HTMLElement>(null);
   const following = useRef(true);
+  const lastNavigation = useRef<{ documentId: string; page: number; followRequest?: number | undefined; focusId?: string | undefined } | undefined>(undefined);
   const current = useRef({ document, view, onView }); current.current = { document, view, onView };
   const report = useRef<() => void>(() => {});
   useEffect(() => {
@@ -82,7 +85,21 @@ export function DocumentReader({ document, view, onView }: {
   useEffect(() => {
     const root = content.current;
     const scroller = root?.closest<HTMLElement>('.phone-panel-scroll');
-    if (view?.followRequest !== undefined) following.current = true;
+    const previous = lastNavigation.current;
+    const navigation = { documentId: document.id, page: view?.page ?? 1, followRequest: view?.followRequest, focusId: view?.focus?.requestId };
+    lastNavigation.current = navigation;
+    const resume = navigation.followRequest !== undefined && navigation.followRequest !== previous?.followRequest;
+    const focusRequested = navigation.focusId !== undefined && navigation.focusId !== previous?.focusId;
+    if (resume) following.current = true;
+    if (root && scroller && view?.focus && focusRequested) {
+      const focus = view.focus;
+      const target = Array.from(root.querySelectorAll<HTMLElement>('[data-block]')).find(span =>
+        span.dataset.block === focus.blockId && Number(span.dataset.start) <= focus.start && Number(span.dataset.end) > focus.start);
+      if (target) scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top - Math.min(80, scroller.clientHeight * .2);
+      report.current();
+      return;
+    }
+    if (previous?.documentId === document.id && previous.page === navigation.page && !resume) return;
     if (root && scroller && following.current) {
       const anchor = documentPages(document)[(view?.page ?? 1) - 1]?.fragments[0];
       const target = anchor && Array.from(root.querySelectorAll<HTMLElement>('[data-block]')).find(span =>
@@ -92,17 +109,23 @@ export function DocumentReader({ document, view, onView }: {
       } else scroller.scrollTop = 0;
     }
     report.current();
-  }, [document.id, view?.page, view?.followRequest]);
+  }, [document.id, view?.page, view?.followRequest, view?.focus?.requestId]);
   useEffect(() => { report.current(); }, [document.version]);
-  return <section className="document-reader" ref={content} aria-label="文稿阅读">
-    <header className="document-heading"><h3>{document.title}</h3><small>已保存 · 版本 {document.version}</small></header>
+  return <section className={`document-reader document-reader--${highlight?.kind ?? 'plain'}`} ref={content} aria-label="文稿阅读">
+    <header className="document-heading"><h3>{titleBlock ? textSpans(titleBlock.text, titleBlock.id, ranges) : document.title}</h3><small>已保存 · 版本 {document.version}</small></header>
+    {highlight && <aside className="document-highlight-note" aria-label="文稿标记">
+      <span><i aria-hidden="true" />{highlight.kind === 'focus' ? '已标出你要找的片段' : highlight.ranges.length ? '已标出本次文字改动' : highlight.deletions?.length ? '本次移除了文字' : '本次未标记正文文字'}</span>
+      <button type="button" aria-label="清除高亮" onClick={() => setDismissed(highlight.requestId)}>清除</button>
+      {!!highlight.deletions?.length && <details><summary>查看移除的文字</summary><div>{highlight.deletions.map((item, index) => <del key={index}>{item.text}</del>)}</div></details>}
+      {highlight.notice && <small>{highlight.notice}</small>}
+    </aside>}
     {document.blocks.filter((block, index) => !(index === 0 && block.kind === 'heading' && block.text.trim() === document.title.trim())).map(block =>
       <section key={block.id} className="panel-block">
-        {block.kind === 'heading' ? <h4>{textSpans(block.text, block.id)}</h4>
-          : block.kind === 'quote' ? <blockquote>{textSpans(block.text, block.id)}</blockquote>
-          : block.kind === 'list' ? <ul>{listItems(block.text, block.id)}</ul>
-          : block.kind === 'code' ? <pre><code>{textSpans(block.text, block.id)}</code></pre>
-          : <p style={{ whiteSpace: 'pre-wrap' }}>{textSpans(block.text, block.id)}</p>}
+        {block.kind === 'heading' ? <h4>{textSpans(block.text, block.id, ranges)}</h4>
+          : block.kind === 'quote' ? <blockquote>{textSpans(block.text, block.id, ranges)}</blockquote>
+          : block.kind === 'list' ? <ul>{listItems(block.text, block.id, ranges)}</ul>
+          : block.kind === 'code' ? <pre><code>{textSpans(block.text, block.id, ranges)}</code></pre>
+          : <p style={{ whiteSpace: 'pre-wrap' }}>{textSpans(block.text, block.id, ranges)}</p>}
       </section>)}
   </section>;
 }

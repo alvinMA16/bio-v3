@@ -130,7 +130,7 @@ test('existing endpoint uses Pi, persists history and isolates conversations', a
   assert.equal(result.usage.promptTokens, 12);
   assert.equal(result.usage.promptCacheHitTokens, 2);
   const request = requests.at(-1);
-  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['switch_mode', 'read_document', 'edit_document', 'show_document', 'restore_document', 'read_attachment']);
+  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'restore_document', 'read_attachment']);
   assert.deepEqual(request.thinking, { type: 'disabled' });
   assert.ok(JSON.stringify(request.messages).includes('TEST_PERSONA'));
   assert.ok(!JSON.stringify(request.messages).includes('Compound Codex'));

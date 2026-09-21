@@ -1,5 +1,6 @@
 import type { AgentScene, PanelAttachment, PanelBlock, PanelDocument, PanelState } from '@bio/contracts';
-import { documentPages, type DocumentView } from '@bio/contracts';
+import { documentPages, type DocumentView, type DocumentHighlight, type DocumentRange } from '@bio/contracts';
+import { changedText } from './document-highlight.js';
 import { existsSync, readFileSync, renameSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -55,6 +56,14 @@ export class PanelWorkspace {
     return true;
   }
 
+  addAttachment(attachment: PanelAttachment): void {
+    if (this.value.attachments.some(item => item.id === attachment.id)) return;
+    if (this.value.attachments.length >= 100) throw new Error('本会话附件数量已达上限');
+    const next = structuredClone(this.value);
+    next.attachments.push(structuredClone(attachment));
+    this.commit(next);
+  }
+
   private attachmentView(attachment: PanelAttachment): PanelAttachment {
     const originalStatus = this.originalStatuses.get(attachment.id);
     const view = structuredClone(attachment);
@@ -84,6 +93,7 @@ export class PanelWorkspace {
       }
       else { delete next.panel.document; delete next.panel.documentView; }
       if (next.panel.document) next.panel.documentView = {
+        ...(next.panel.documentView?.version === next.panel.document.version ? next.panel.documentView : {}),
         documentId: next.panel.document.id, version: next.panel.document.version,
         page: Math.min(next.panel.documentView?.page ?? 1, documentPages(next.panel.document).length),
       };
@@ -115,13 +125,18 @@ export class PanelWorkspace {
     this.acknowledgedView = { ...view }; return true;
   }
 
-  showDocument(document: PanelDocument, page = 1, follow = false): PanelState {
+  showDocument(document: PanelDocument, page = 1, follow = false, presentation?: { highlight?: DocumentHighlight; focus?: DocumentRange; clearHighlight?: boolean }): PanelState {
     const pages = documentPages(document);
     if (!Number.isInteger(page) || page < 1 || page > pages.length) throw new Error(`页码超出范围，共 ${pages.length} 页`);
     const next = structuredClone(this.value);
+    const previousHighlight = next.panel.documentView?.documentId === document.id && next.panel.documentView.version === document.version
+      ? next.panel.documentView.highlight : undefined;
+    const highlight = presentation?.clearHighlight ? undefined : presentation?.highlight ?? previousHighlight;
     next.documents = [...next.documents.filter(item => item.id !== document.id), document];
     next.panel = { mode: 'editor', revision: next.panel.revision + 1, document,
-      documentView: { documentId: document.id, version: document.version, page, ...(follow ? { followRequest: next.panel.revision + 1 } : {}) } };
+      documentView: { documentId: document.id, version: document.version, page, ...(follow ? { followRequest: next.panel.revision + 1 } : {}),
+        ...(highlight ? { highlight } : {}),
+        ...(presentation?.focus ? { focus: { ...presentation.focus, requestId: randomUUID() } } : {}) } };
     this.commit(next); return this.state();
   }
 
@@ -137,7 +152,8 @@ export class PanelWorkspace {
       const anchoredPage = anchor ? pages.findIndex(item => item.fragments.some(fragment => fragment.blockId === anchor.blockId && fragment.start <= anchor.start && fragment.end >= anchor.start)) : -1;
       next.panel.document = document;
       next.panel.documentView = { documentId: document.id, version: document.version,
-        page: anchoredPage >= 0 ? anchoredPage + 1 : Math.min(next.panel.documentView?.page ?? 1, pages.length) };
+        page: anchoredPage >= 0 ? anchoredPage + 1 : Math.min(next.panel.documentView?.page ?? 1, pages.length),
+        highlight: changedText(previous, document) };
       next.panel.lastChange = { documentId: document.id, fromVersion: previous?.version ?? 0, toVersion: document.version,
         before: (previous?.blocks ?? []).filter(block => JSON.stringify(block) !== JSON.stringify(document.blocks.find(item => item.id === block.id))),
         after: document.blocks.filter(block => JSON.stringify(block) !== JSON.stringify(previous?.blocks.find(item => item.id === block.id))) };
@@ -199,6 +215,7 @@ export class PanelWorkspace {
         targetId: panel.attachment?.id ?? panel.document?.id ?? null,
         title: panel.attachment?.title ?? panel.document?.title ?? null,
         documentVersion: panel.document?.version ?? null,
+        highlight: panel.documentView?.highlight ?? null,
         readingPage: panel.document ? documentPages(panel.document)[(panel.documentView?.page ?? 1) - 1] : null,
         totalPages: panel.document ? documentPages(panel.document).length : null,
       },

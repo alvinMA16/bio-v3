@@ -6,7 +6,6 @@ export type NativeAttachment = MaterialReference;
 /** Pi stores stable material IDs, while each request resolves expiring Google references. */
 export function geminiAttachmentContext(files: GeminiFiles, attachments: NativeAttachment[], user?: string, onUnavailable?: (item: NativeAttachment) => void): ExtensionFactory {
   const marker = ({ attachmentId, materialId, title }: NativeAttachment) => JSON.stringify({ type: 'bio_native_file', attachmentId, materialId, title });
-  const lookup = new Map(attachments.map(item => [marker(item), item]));
   return pi => {
     pi.on('context', event => {
       const seen = new Set<string>();
@@ -23,6 +22,8 @@ export function geminiAttachmentContext(files: GeminiFiles, attachments: NativeA
       return { messages: [...missing, ...messages] };
     });
     pi.on('before_provider_request', async event => {
+      // Tools can load library attachments during an already-running session.
+      const lookup = new Map(attachments.map(item => [marker(item), item]));
       const payload = event.payload as { contents?: { parts?: { text?: string; fileData?: { fileUri: string; mimeType: string } }[] }[] };
       if (!Array.isArray(payload.contents)) return;
       try {

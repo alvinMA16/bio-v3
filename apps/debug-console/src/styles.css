@@ -530,7 +530,7 @@ body { min-width: 320px; }
 .phone-screen.phone-screen--dialing { background: radial-gradient(ellipse at 50% 15%, #293839, #151e23 75%); color: #edf0e9; }
 .phone-art-actors { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 .phone-conversation-window { position: relative; flex: 0 0 auto; width: 82%; aspect-ratio: 1 / 1.08; margin: 9% auto 0; overflow: hidden; border-radius: 50% 50% 12px 12px / 46% 46% 12px 12px; background: #b6b49d; box-shadow: 0 16px 40px #00000026; }
-.phone-conversation-scene { position: absolute; width: 100%; aspect-ratio: 320 / 692; top: -18%; left: 0; pointer-events: none; }
+.phone-conversation-scene { position: absolute; width: 130%; aspect-ratio: 320 / 692; top: -32%; left: -15%; pointer-events: none; }
 .phone-screen--conversation:not(.phone-screen--dialing) .phone-content-panel { margin: 18px 20px 0; padding: 0; }
 .phone-screen--conversation .phone-dialogue p { font-family: inherit; font-size: 16px; line-height: 1.85; color: #e0e5df; }
 .phone-screen.phone-screen--call .phone-call-controls { position: relative; z-index: 4; display: grid; grid-template-columns: minmax(44px, 1fr) 112px; align-items: center; margin: 0 16px 16px; padding: 0; gap: 8px; border-radius: 0; background: none; box-shadow: none; backdrop-filter: none; }

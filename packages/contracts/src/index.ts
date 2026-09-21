@@ -1,6 +1,6 @@
 import type { DocumentView, DocumentPage } from './documents.js';
-export { documentPages } from './documents.js';
-export type { DocumentView, DocumentPage } from './documents.js';
+export { documentPages, documentTextSegments } from './documents.js';
+export type { DocumentView, DocumentPage, DocumentRange, DocumentHighlight } from './documents.js';
 export type ChatRole = 'user' | 'assistant' | 'system';
 
 

@@ -1,0 +1,26 @@
+.document-highlight {
+  color: inherit;
+  background: linear-gradient(180deg, #c2dac31a 8%, #c2dac39c 46%, #b8d1baab 92%, #c2dac326 100%);
+  border-radius: .16em .24em .18em .12em;
+  box-shadow: 0 1px 0 #72957932;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  padding: .09em 0;
+  animation: document-highlight-arrive .55s ease-out both;
+}
+.document-reader--focus .document-highlight {
+  background: linear-gradient(180deg, #efd99718 8%, #ecd48c91 46%, #e7cc82a3 92%, #efd99720 100%);
+  box-shadow: 0 1px 0 #b5984a35;
+}
+.document-highlight-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #687a69; font-size: 11px; line-height: 1.7; margin: 0 0 18px; }
+.document-highlight-note > span { display: inline-flex; align-items: center; gap: 7px; }
+.document-highlight-note i { width: 7px; height: 7px; border-radius: 50%; background: #9fbda2; box-shadow: 0 0 0 3px #b8d1ba24; }
+.document-reader--focus .document-highlight-note i { background: #cfb667; box-shadow: 0 0 0 3px #e7cc8224; }
+.document-highlight-note button { margin-left: auto; min-height: 32px; padding: 0 8px; color: #718074; background: transparent; border: 0; cursor: pointer; font: inherit; }
+.document-highlight-note button:hover { color: #354d3b; background: #b8d1ba24; border-radius: 8px; }
+.document-highlight-note details, .document-highlight-note > small { flex-basis: 100%; }
+.document-highlight-note summary { cursor: pointer; }
+.document-highlight-note details > div { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; max-height: 150px; overflow: auto; }
+.document-highlight-note del { color: #876e65; background: #e1c7ba26; padding: 1px 4px; border-radius: 3px; white-space: pre-wrap; }
+@keyframes document-highlight-arrive { from { opacity: .25; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .document-highlight { animation: none; } }
