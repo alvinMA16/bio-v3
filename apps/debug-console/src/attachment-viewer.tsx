@@ -28,7 +28,7 @@ export function AttachmentViewer({ attachment, onPage }: { attachment: PanelAtta
   }, [material, id, page]);
   useEffect(() => { if (id && image && !loading && !originalStatus) pageCallback.current?.(id, page); }, [id, image, loading, page, originalStatus]);
   return <section className="attachment-viewer" aria-label="资料预览">
-    <header className="attachment-heading"><h3>{attachment.title}</h3><small>{attachment.kind === 'image' ? '照片' : '附件'} · 原件预览</small></header>
+    <header className="attachment-heading"><h3 title={attachment.title}>{attachment.title}</h3></header>
     <div className="attachment-viewer-stage" aria-busy={loading} aria-label="文件预览">
       {originalStatus ? <div role="status"><p>{originalStatus === 'deleted' ? '原文件已删除' : '原文件不可用'}</p><p>已有对话仍保留，可以继续聊。查看或核对原文需重新上传。</p></div> : loading || original.loading ? <p role="status">正在展开资料…</p> : error || original.error ? <div role="alert">{error || original.error}<button onClick={original.retry}>重试</button></div> : image ? <img draggable={false} src={image} alt={`${attachment.title}，第 ${page} 页`} onError={() => {
         setError('原件加载失败，请重试');

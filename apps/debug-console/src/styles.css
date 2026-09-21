@@ -516,10 +516,9 @@ body { min-width: 320px; }
 .phone-screen--call .phone-control-button--end::before { inset: 0; border: 0; background: #a75e61; }
 .phone-screen--conversation .phone-content-panel { background: transparent; border: 0; margin: 0 20px 16px; padding: 12px 8px; }
 .phone-screen--conversation .phone-dialogue p { text-align: center; font-family: Georgia,'Songti SC',serif; font-size: 19px; }
-.phone-screen.phone-screen--attachment .phone-content-panel { margin: 0; padding: 22px 20px 12px; }
-.attachment-heading { flex: 0 0 auto; margin-bottom: 12px; }
-.phone-content-panel .attachment-heading h3 { font-size: 18px; font-weight: 500; line-height: 1.55; margin: 0 0 8px; overflow-wrap: anywhere; }
-.attachment-heading small { font-size: 11px; color: #768277; }
+.phone-screen.phone-screen--attachment .phone-content-panel { margin: 0; padding: 8px 8px 0; }
+.attachment-heading { flex: 0 0 36px; min-width: 0; display: flex; align-items: center; padding: 0 4px; }
+.phone-content-panel .attachment-heading h3 { min-width: 0; font-size: 14px; font-weight: 500; line-height: 1.5; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Dark call stage: felt artwork stays inside the arched video window. */
 .phone-screen.phone-screen--conversation,
 .phone-screen.phone-screen--dialing { background: radial-gradient(ellipse at 50% 15%, #293839, #151e23 75%); color: #edf0e9; }
@@ -529,6 +528,7 @@ body { min-width: 320px; }
 .phone-screen--conversation:not(.phone-screen--dialing) .phone-content-panel { margin: 18px 20px 0; padding: 0; }
 .phone-screen--conversation .phone-dialogue p { font-family: inherit; font-size: 16px; line-height: 1.85; color: #e0e5df; }
 .phone-screen.phone-screen--call .phone-call-controls { position: relative; z-index: 4; display: grid; grid-template-columns: minmax(44px, 1fr) 112px; align-items: center; margin: 0 16px 16px; padding: 0; gap: 8px; border-radius: 0; background: none; box-shadow: none; backdrop-filter: none; }
+.phone-screen.phone-screen--attachment .phone-call-controls { margin: 0 12px 8px; }
 .phone-call-controls .document-call-state { min-width: 44px; text-align: left; font-size: 14px; color: inherit; }
 .phone-call-controls .document-call-state small { display: block; font-size: 11px; margin-top: 5px; color: inherit; opacity: .55; font-variant-numeric: tabular-nums; }
 .phone-screen--conversation .slide-to-end { background: #ffffff0e; box-shadow: inset 0 1px 0 #ffffff12; }
