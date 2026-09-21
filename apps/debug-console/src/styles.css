@@ -486,8 +486,9 @@ body { min-width: 320px; }
 
 /* The manuscript is the call canvas; only the reading area scrolls. */
 .phone-screen.phone-screen--editor { background: #fcfcf9; color: #303a32; }
-.phone-screen--editor .phone-content-panel.phone-content-panel--document { margin: 0; padding: 0; background: transparent; border: 0; }
-.phone-screen--editor .phone-content-panel .phone-panel-scroll { padding: 22px 20px 12px; border-radius: 0; background: transparent; color: inherit; }
+.phone-screen--editor .phone-content-panel.phone-content-panel--document { margin: 8px 8px 0; padding: 0; background: #fcfcf9; border: 0; border-radius: 14px; overflow: hidden; box-shadow: 0 2px 8px #344c3c0d; }
+.phone-screen--editor .phone-content-panel .phone-panel-scroll { padding: 14px 12px 24px; border-radius: 14px; background: #fcfcf9; color: inherit; }
+.phone-screen--editor .phone-content-panel--document::after { content: ''; position: absolute; inset: auto 0 0; height: 16px; background: linear-gradient(transparent, #fcfcf9); pointer-events: none; }
 .phone-screen--editor .phone-content-panel .work-panel { padding: 0; }
 .document-heading { margin-bottom: 20px; }
 .document-heading small { font-size: 11px; color: #768277; }
@@ -529,6 +530,11 @@ body { min-width: 320px; }
 .phone-screen--conversation .phone-dialogue p { font-family: inherit; font-size: 16px; line-height: 1.85; color: #e0e5df; }
 .phone-screen.phone-screen--call .phone-call-controls { position: relative; z-index: 4; display: grid; grid-template-columns: minmax(44px, 1fr) 112px; align-items: center; margin: 0 16px 16px; padding: 0; gap: 8px; border-radius: 0; background: none; box-shadow: none; backdrop-filter: none; }
 .phone-screen.phone-screen--attachment .phone-call-controls { margin: 0 12px 8px; }
+/* Keep the full waveform canvas; reclaim only the quiet space around the dock. */
+.phone-screen.phone-screen--call:is(.phone-screen--editor, .phone-screen--attachment):not(.phone-screen--dialing) { background: radial-gradient(ellipse at 12% 85%, #f7faf4b3, transparent 55%), linear-gradient(145deg, #e8ede9, #dfe8e2); }
+.phone-screen--call:is(.phone-screen--editor, .phone-screen--attachment) .phone-call-status--glass { margin-bottom: -8px; }
+.phone-screen.phone-screen--call:is(.phone-screen--editor, .phone-screen--attachment) .phone-call-controls { margin: 0 12px 8px; }
+.phone-screen--call:is(.phone-screen--editor, .phone-screen--attachment) .slide-to-end { background: linear-gradient(135deg, #f6faf3b8, #d2e0d5b3); box-shadow: inset 0 1px 0 #ffffffc9, 0 3px 12px #354b3810; backdrop-filter: blur(16px); }
 .phone-call-controls .document-call-state { min-width: 44px; text-align: left; font-size: 14px; color: inherit; }
 .phone-call-controls .document-call-state small { display: block; font-size: 11px; margin-top: 5px; color: inherit; opacity: .55; font-variant-numeric: tabular-nums; }
 .phone-screen--conversation .slide-to-end { background: #ffffff0e; box-shadow: inset 0 1px 0 #ffffff12; }
