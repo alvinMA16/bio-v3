@@ -1,4 +1,5 @@
 import { GeminiFiles } from '../materials/gemini-files.js';
+import { ModelObservations } from './model-observation.js';
 import { geminiAttachmentContext } from '../materials/gemini-attachment-context.js';
 import { materialHistoryContext, originalUnavailableNotice, unavailableOriginal, type MaterialReference } from '../materials/material-history-context.js';
 import { MaterialsService } from '../materials/materials.service.js';
@@ -27,9 +28,10 @@ import type { AgentContextSnapshot, ModelProvider } from '@bio/contracts';
 @Injectable()
 export class PiSessionFactory {
   private nativeFiles?: GeminiFiles;
+  private readonly observations = new ModelObservations();
   constructor(private readonly config: ConfigService, private readonly storage: AgentStorage, private readonly materials: MaterialsService, @Optional() private readonly memory?: MemoryService, @Optional() private readonly documents?: DocumentStore) {}
 
-  async create(conversationId: string, systemPrompt: string | undefined, emit: (event: AgentEventPayload) => void, provider?: ModelProvider, context?: AgentContextSnapshot, scope?: MemoryScope, runtime?: DocumentRuntime) {
+  async create(conversationId: string, systemPrompt: string | undefined, emit: (event: AgentEventPayload) => void, provider?: ModelProvider, context?: AgentContextSnapshot, scope?: MemoryScope, runtime?: DocumentRuntime, observe?: (type: string, data: unknown) => void) {
     const cwd = this.storage.conversationDirectory(conversationId, scope?.userId);
     const previous = new PanelWorkspace(cwd);
     const existingAttachments = new Set(previous.context().availableAttachments.map(item => item.id));
@@ -119,7 +121,8 @@ export class PiSessionFactory {
           view.attachment.textTruncated = false;
         }
         return buildRuntimeContext(context, view) + (recoveryContext ? `\n${recoveryContext}` : '');
-      }), ...(nativeGemini ? [geminiAttachmentContext(this.nativeFiles, nativeAttachments, scope?.userId, onUnavailable)] : [])],
+      }), ...(nativeGemini ? [geminiAttachmentContext(this.nativeFiles, nativeAttachments, scope?.userId, onUnavailable),
+        ...(observe ? [this.observations.extension(cwd, observe)] : [])] : [])],
     });
     await resourceLoader.reload();
     const sessionManager = SessionManager.open(join(cwd, 'session.jsonl'), cwd, cwd);

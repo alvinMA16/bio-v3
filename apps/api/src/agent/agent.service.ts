@@ -40,6 +40,8 @@ export class AgentService {
     let session: AgentSession | undefined;
     let release: (() => Promise<void>) | undefined;
     let archiveQueue = Promise.resolve();
+    let observationQueue = Promise.resolve();
+    let observationBytes = 0;
     let unsubscribe: (() => void) | undefined;
     let lastAssistant: AssistantMessage | undefined;
     let eventError: unknown;
@@ -91,6 +93,12 @@ export class AgentService {
           try { await runtime.beforeShow?.(toolSignal); }
           finally { timer = armTimer(); }
         },
+      }, (type, data) => {
+        const entry = { runId, conversationId, sequence: ++sequence, timestamp: new Date().toISOString(), source: 'pi' as const, type, data };
+        observationBytes += Buffer.byteLength(JSON.stringify(entry));
+        if (observationBytes > 2 * 1024 * 1024) return;
+        observationQueue = observationQueue.then(() => this.storage.appendObservation(entry))
+          .catch(() => { this.logger.warn(`Model observation write failed for run ${runId}`); });
       });
       if (signal?.aborted || timedOut) throw new Error('Run cancelled');
       unsubscribe = session.subscribe((event: AgentSessionEvent) => {
@@ -174,6 +182,7 @@ export class AgentService {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
       unsubscribe?.();
+      await observationQueue;
       try {
         try { await archiveQueue; session?.dispose(); }
         finally { await release?.(); }

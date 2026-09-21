@@ -1,4 +1,5 @@
 import { MemoryInspector } from './memory-inspector';
+import { ModelObservations } from './model-observations';
 import { DocumentReader } from './document-reader';
 import type { DocumentView } from '@bio/contracts';
 import { useMaterialOriginal } from './use-material-original';
@@ -943,6 +944,7 @@ function InspectorView({ run }: { run: RunRecord | undefined }) {
 
   return (
     <div className="inspector-grid">
+      <ModelObservations runId={run.response?.runId} />
       <section className="code-card">
         <div className="code-heading"><span>Request</span><code>POST /api/v1/agent/runs/stream</code></div>
         <pre>{JSON.stringify(run.request, null, 2)}</pre>

@@ -1,0 +1,19 @@
+.manuscript-cover-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; font-family: 'Songti SC', 'STSong', serif; font-size: 14px; line-height: 1.65; text-align: center; color: #60695c; }
+.manuscript-folder .material-paper-sprig { flex-shrink: 0; }
+.manuscript-folder .material-paper-lines { flex-shrink: 0; }
+.manuscript-paper { padding: 22px 18px; background: #f6f6f2; color: #50594e; overflow-wrap: anywhere; }
+.manuscript-paper .document-heading h3 { margin: 0 0 8px; font-family: 'Songti SC', 'STSong', serif; font-size: 18px; font-weight: 500; line-height: 1.6; }
+.manuscript-paper .panel-block { padding: 0; margin: 0 0 16px; border: 0; font-family: 'Songti SC', 'STSong', serif; font-size: 14px; line-height: 1.95; }
+.manuscript-paper .panel-block p { line-height: inherit; }
+.manuscript-paper .panel-block h4 { margin: 20px 0 8px; font-size: 16px; }
+.manuscript-paper blockquote { margin: 12px 0; padding-left: 12px; border-left: 2px solid #adb7a4; color: #798171; }
+.manuscript-paper ul { padding-left: 22px; }
+.manuscript-paper pre { font-size: 12px; }
+.manuscript-empty { padding-top: 60px; justify-items: center; }
+.manuscript-empty .material-paper-sprig { margin-bottom: 18px; }
+@container (max-width: 280px) {
+  .manuscript-folder .material-paper-content { padding: 10px 7px; gap: 8px; }
+  .manuscript-folder .material-paper-content .material-paper-sprig { display: none; }
+  .manuscript-cover-title { font-size: 11px; -webkit-line-clamp: 2; }
+  .manuscript-folder .material-cover-caption { padding: 5px 4px; font-size: 7px; }
+}

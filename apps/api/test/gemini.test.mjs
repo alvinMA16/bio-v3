@@ -25,6 +25,7 @@ for (const [modelId, thinkingLevel, searchEnabled] of [['gemini-3.8-flash', 'LOW
 test(`${modelId} native streaming executes tools with search=${searchEnabled}`, { timeout: 20000 }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'bio-gemini-'));
   const requests = [];
+  const observations = [];
   const mock = createServer(async (req, res) => {
     let raw = '';
     for await (const chunk of req) raw += chunk;
@@ -41,9 +42,14 @@ test(`${modelId} native streaming executes tools with search=${searchEnabled}`, 
     await once(mock, 'listening');
     const config = new ConfigService({ GEMINI_MODEL: modelId, ...(!searchEnabled ? { GEMINI_GOOGLE_SEARCH_ENABLED: 'false' } : {}), GEMINI_API_KEY: 'gemini-local-test-key', GEMINI_BASE_URL: `http://127.0.0.1:${mock.address().port}/v1beta`, AGENT_DATA_DIR: root });
     const factory = new PiSessionFactory(config, new AgentStorage(config), {});
-    session = await factory.create(randomUUID(), '请使用工具读取内容。', () => {});
+    session = await factory.create(randomUUID(), '请使用工具读取内容。', () => {}, undefined, undefined, undefined, undefined,
+      (type, data) => observations.push({ type, data }));
     await session.prompt('请读取内容');
     assert.equal(requests.length, 2);
+    assert.equal(observations.filter(e => e.type === 'model.request').length, 2);
+    assert.equal(observations.filter(e => e.type === 'model.response').length, 2);
+    assert.equal(observations.find(e => e.type === 'model.response').data.inputTokens, 12);
+    assert.ok(!JSON.stringify(observations).includes('gemini-local-test-key'));
     assert.equal(requests[0].url, `/v1beta/models/${modelId}:streamGenerateContent?alt=sse`);
     assert.equal(requests[0].body.generationConfig.thinkingConfig.thinkingLevel, thinkingLevel);
     assert.equal(requests[0].headers['x-goog-api-key'], 'gemini-local-test-key');

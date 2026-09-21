@@ -21,5 +21,6 @@ ENV NODE_ENV=production
 WORKDIR /app/apps/api
 USER node
 ARG BIO_COMMIT
+ENV BIO_COMMIT=$BIO_COMMIT
 LABEL org.opencontainers.image.revision=$BIO_COMMIT
 CMD ["node", "dist/main.js"]

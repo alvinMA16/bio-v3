@@ -124,12 +124,10 @@ export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, c
           <header className="phone-folder-nav" inert={folderSearchOpen}><button type="button" autoFocus aria-label="返回书桌" onClick={() => setDrawer(null)}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m14 6-6 6 6 6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg></button><h2>资料夹</h2><button className="phone-folder-search-toggle" type="button" aria-label={folderSearchOpen ? '收起搜索' : '搜索资料'} aria-expanded={folderSearchOpen} onClick={() => setFolderSearchOpen(value => !value)}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="1.8" /><path d="m16 16 5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg></button></header>
           <div className="phone-folder-scroll"><MaterialFolder onCloseSearch={() => setFolderSearchOpen(false)} searchOpen={folderSearchOpen} disabled={startDisabled} onChat={item => { setDrawer(null); onMaterialChat(item); }} /></div>
         </section>}
-        {drawer === 'manuscripts' && <div className="phone-desk-backdrop" onClick={() => setDrawer(null)}>
-          <section className="phone-desk-drawer" role="dialog" aria-modal="true" aria-label="文稿集" onClick={event => event.stopPropagation()} onKeyDown={event => { if (event.key === 'Escape') setDrawer(null); }}>
-            <button type="button" autoFocus aria-label="关闭" onClick={() => setDrawer(null)}>×</button>
-            <h2>文稿集</h2><ManuscriptFolder onChat={onManuscriptChat ? document => { setDrawer(null); onManuscriptChat(document); } : undefined} />
-          </section>
-        </div>}
+        {drawer === 'manuscripts' && <section className="phone-folder-page" aria-label="文稿集" onKeyDown={event => { if (event.key === 'Escape') setDrawer(null); }}>
+          <header className="phone-folder-nav"><button type="button" autoFocus aria-label="返回书桌" onClick={() => setDrawer(null)}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m14 6-6 6 6 6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg></button><h2>文稿集</h2></header>
+          <div className="phone-folder-scroll"><ManuscriptFolder disabled={startDisabled} onChat={onManuscriptChat ? document => { setDrawer(null); onManuscriptChat(document); } : undefined} /></div>
+        </section>}
 
       </> : <>
         {dialing ? <section className="phone-dialing" aria-label="呼叫令狸" aria-busy={!callFailed}>

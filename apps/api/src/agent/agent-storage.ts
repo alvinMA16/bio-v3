@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { AgentTraceEntry } from '@bio/contracts';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { appendFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -35,6 +36,12 @@ export class AgentStorage {
     appendFileSync(join(directory, `${entry.runId}.jsonl`), `${JSON.stringify(entry)}\n`, { mode: 0o600 });
   }
 
+  /** The run.started trace has already created the directory. */
+  async appendObservation(entry: AgentTraceEntry): Promise<void> {
+    this.assertId(entry.runId);
+    await appendFile(join(this.root, 'traces', `${entry.runId}.jsonl`), `${JSON.stringify(entry)}\n`, { mode: 0o600 });
+  }
+
   localManuscripts() {
     const root = join(this.root, 'conversations');
     if (!existsSync(root)) return [];
@@ -51,6 +58,6 @@ export class AgentStorage {
     const path = join(this.root, 'traces', `${runId}.jsonl`);
     if (!existsSync(path)) throw new NotFoundException('Run not found');
     return readFileSync(path, 'utf8').trim().split('\n').filter(Boolean)
-      .map((line) => JSON.parse(line) as AgentTraceEntry);
+      .map((line) => JSON.parse(line) as AgentTraceEntry).sort((a, b) => a.sequence - b.sequence);
   }
 }
