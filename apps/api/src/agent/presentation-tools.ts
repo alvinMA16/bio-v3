@@ -63,9 +63,9 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
       },
     }),
     defineTool({
-      name: 'show_document', label: '展示文稿或翻页',
-      description: '只改变用户看到哪份文稿、哪一页，绝不修改正文或增加文稿版本。指定 documentId 打开；page 指定页，navigation=next/previous 翻当前文稿，blockId 定位到段落所在页，三种定位最多一种。返回当前页精确原文和总页数。朗读全文时先展示第一页，按原文输出这一页，随后调用本工具翻下一页再继续；语音连接会等待前面的声音实际播放完再翻页，失败/取消时停止朗读。不要一次输出跨越多页的正文。',
-      parameters: Type.Object({ documentId: Type.Optional(id), page: Type.Optional(Type.Integer({ minimum: 1 })), navigation: Type.Optional(Type.Union([Type.Literal('next'), Type.Literal('previous')])), blockId: Type.Optional(id) }),
+      name: 'show_document', label: '展示文稿或移动阅读位置',
+      description: '展示文稿、定位段落或推进朗读，不修改正文。界面是连续滚动正文，没有用户可见页码。page/navigation 为内部朗读分段游标，不等于用户实际看见的内容；实际可见内容以 screen.visibleContent 为准。blockId 定位段落。三种定位最多一种。全文朗读先 page=1、follow=true 恢复跟随，输出 screen.readingPage 原文，再 navigation=next 继续；工具等待前文实际播放完。用户手动滑动后客户端停止跟随，后续推进不要传 follow=true 强行拉回；只有用户明确要求跟随或重新从头朗读时才恢复。',
+      parameters: Type.Object({ documentId: Type.Optional(id), page: Type.Optional(Type.Integer({ minimum: 1 })), navigation: Type.Optional(Type.Union([Type.Literal('next'), Type.Literal('previous')])), blockId: Type.Optional(id), follow: Type.Optional(Type.Boolean()) }),
       execute: async (_id, params, signal) => {
         if ([params.page, params.navigation, params.blockId].filter(value => value !== undefined).length > 1) throw new Error('只能指定一种定位方式');
         await runtime?.beforeShow?.(signal); signal?.throwIfAborted();
@@ -77,7 +77,7 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
         if (params.navigation && current?.documentId !== documentId) throw new Error('翻页需要先打开这篇文稿');
         const page = params.page ?? (params.blockId ? pages.findIndex(item => item.fragments.some(fragment => fragment.blockId === params.blockId)) + 1
           : params.navigation ? current!.page + (params.navigation === 'next' ? 1 : -1) : current?.documentId === documentId ? Math.min(current.page, pages.length) : 1);
-        return updated(workspace.showDocument(document, page));
+        return updated(workspace.showDocument(document, page, params.follow));
       },
     }),
     defineTool({

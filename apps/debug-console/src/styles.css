@@ -277,7 +277,6 @@ body { min-width: 320px; }
 .phone-content-panel .panel-block { padding: 7px 4px; font-size: 12px; line-height: 1.8; border-left: 2px solid transparent; }
 .phone-content-panel .panel-block p,.phone-content-panel .panel-block h4 { margin: 3px 0; }
 .phone-content-panel .panel-block button { font-size: 10px; border: 0; border-radius: 5px; background: #e5e2d6; color: #6e745b; padding: 3px 7px; }
-.phone-content-panel .panel-block--selected { background: #dfe6cd; border-left-color: #768457; }
 .phone-content-panel small,.phone-content-panel summary { font-size: 10px; line-height: 1.6; }
 .phone-content-panel details { margin: 8px 0; }
 .phone-content-panel .answer-content,.phone-content-panel .panel-added,.phone-content-panel .panel-removed { font-size: 12px; line-height: 1.7; }
@@ -488,9 +487,6 @@ body { min-width: 320px; }
 .manuscript-folder small { display: block; margin-top: 6px; color: #796349; font-size: 11px; }
 .manuscript-folder article { overflow-wrap: anywhere; line-height: 1.7; }
 .document-reader { min-width: 0; overflow-wrap: anywhere; }
-.document-pagination { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 18px; font-size: 13px; }
-.document-pagination button { border: 0; border-radius: 16px; padding: 9px 12px; color: #344639; background: linear-gradient(140deg, rgba(255,255,255,.82), rgba(207,225,211,.45)); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 2px 8px rgba(35,59,41,.07); backdrop-filter: blur(12px); }
-.document-pagination button:disabled { opacity: .4; }
 .document-reader pre { white-space: pre-wrap; }
 
 /* The manuscript is the call canvas; only the reading area scrolls. */
@@ -503,14 +499,6 @@ body { min-width: 320px; }
 .phone-screen--editor .document-heading h3 { font-family: Georgia, 'Songti SC', serif; font-size: 18px; font-weight: 500; line-height: 1.55; margin: 0 0 8px; }
 .document-reader .panel-block { position: relative; }
 .phone-screen--editor .phone-content-panel .panel-block { clear: both; padding: 7px 0; margin-bottom: 10px; border: 0; font-family: Georgia, 'Songti SC', serif; font-size: 16px; line-height: 1.95; }
-.phone-screen--editor .panel-block--selected { background: #eaf0e6; box-shadow: -3px 0 0 #8b9e87; border-radius: 3px; }
-.document-reader .panel-block .document-select-block { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 3px; background: transparent; cursor: pointer; }
-.document-select-block:focus-visible { outline: 2px solid #7d967b; outline-offset: 3px; }
-.document-block-action { position: relative; z-index: 1; display: flex; align-items: flex-start; flex-direction: column; gap: 6px; padding: 8px 4px; }
-.phone-content-panel .document-block-action button { min-height: 36px; padding: 6px 12px; border-radius: 18px; background: linear-gradient(140deg,#ffffffd9,#cfe1d373); box-shadow: inset 0 1px 0 #ffffffef, 0 2px 8px #233b2912; color: #344c3d; font-family: inherit; font-size: 12px; }
-.document-block-action small { font-family: sans-serif; font-size: 11px; }
-.phone-screen--editor .document-pagination { justify-content: center; gap: 12px; margin: 12px 0 0; color: #6c786e; font-size: 11px; }
-.phone-screen--editor .document-pagination button { min-height: 44px; padding: 8px; background: transparent; box-shadow: none; font-size: 12px; }
 .document-call-subtitle { flex: 0 0 auto; max-height: 44px; overflow-y: auto; margin: 0 20px 6px; font-size: 11px; line-height: 1.7; color: #6c786e; overflow-wrap: anywhere; scrollbar-width: thin; }
 .document-call-subtitle > span { color: #425b49; }
 .phone-screen--editor .phone-call-controls { align-items: center; justify-content: flex-end; gap: 2px; margin: 0 12px 14px; padding: 6px 8px 6px 12px; border-radius: 26px; background: linear-gradient(130deg,#eef5eddf,#d5e3d6af); box-shadow: inset 0 1px 0 #ffffffef, 0 3px 14px #233b2910; backdrop-filter: blur(18px); }

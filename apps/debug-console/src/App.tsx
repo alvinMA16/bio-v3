@@ -19,7 +19,6 @@ import type {
   ChatCompletionResponse,
   AgentEvent,
   PanelState,
-  PanelBlock,
   PanelAttachment,
 } from '@bio/contracts';
 
@@ -276,7 +275,7 @@ export function App() {
     const client = new BrowserVoice({
       prepare: () => prepareCallUi(initialMaterialId),
       connected: () => { setCallStartedAt(value => value ?? Date.now()); if (receiptCall.current) receiptCall.current.startedAt = Date.now(); },
-      request: () => ({ ...voiceContext.current }),
+      request: () => { window.dispatchEvent(new Event('bio:document-view-request')); return { ...voiceContext.current }; },
       start: (id, request) => {
         startedRef.current = performance.now(); followThread.current = true;
         const currentLive = { ...emptyLiveRun(), ...(voiceTurn.current?.record.panel ? { panel: voiceTurn.current.record.panel } : shownPanel ? { panel: shownPanel } : {}) };
@@ -288,7 +287,7 @@ export function App() {
       microphoneError: setVoiceStatus,
       status: setVoiceStatus,
       listening: setMicListening,
-      speaking: setUserSpeaking,
+      speaking: value => { if (value) window.dispatchEvent(new Event('bio:document-view-request')); setUserSpeaking(value); },
       playback: (playing, text) => {
         setAudioPlaying(playing);
         if (text) setSpokenSubtitle(text);
@@ -322,6 +321,7 @@ export function App() {
 
   async function runAgent(): Promise<void> {
     if (!message.trim() || busy) return;
+    window.dispatchEvent(new Event('bio:document-view-request'));
     const request = prepareRequest(message.trim());
     const id = crypto.randomUUID();
     const startedAt = new Date().toISOString();
@@ -445,21 +445,6 @@ export function App() {
     setAttachmentUrl(''); setAttachmentText(''); setLive(emptyLiveRun());
   }
 
-  function selectBlock(panel: PanelState, block: PanelBlock): void {
-    if (!panel.document) return;
-    if (selectedRun) setConversationId(conversationOf(selectedRun) ?? '');
-    setDocumentId(panel.document.id); setDocumentVersion(panel.document.version);
-    setSelectedBlockId(block.id); setExcerpt(block.text);
-    if (voiceEnabled) {
-      // interrupt() starts listening synchronously, before React applies the selection.
-      voiceContext.current = { ...voiceContext.current, context: { ...voiceContext.current.context,
-        workspace: { documentId: panel.document.id, version: panel.document.version, selectedBlockId: block.id, excerpt: block.text },
-      } };
-      voiceRef.current?.interrupt();
-    }
-    else inputRef.current?.focus();
-  }
-
   function clearHistory(): void {
     setHistory([]);
     setSelectedRunId(null);
@@ -526,14 +511,13 @@ export function App() {
               startDisabled={busy} onStart={startVoice}
               onEnd={endCall}
               receipt={receipt} receiptVisible={receiptVisible} onReceiptClose={() => setReceiptVisible(false)}>
-              {shownPanel ? <WorkspacePanel panel={shownPanel} selectedBlockId={selectedBlockId}
-                onDocumentView={(view, manual) => {
+              {shownPanel ? <WorkspacePanel panel={shownPanel}
+                onDocumentView={view => {
                   documentView.current = view;
                   voiceRef.current?.updateDocumentView(view);
                   voiceContext.current = { ...voiceContext.current, context: { ...voiceContext.current.context, documentView: view } };
-                  if (manual && (audioPlaying || running)) voiceRef.current?.interrupt();
                 }}
-                {...(!running || voiceEnabled ? { onSelectBlock: selectBlock } : {})} />
+                />
                 : <div className="phone-empty"><strong>今天想聊点什么？</strong><p>我在这里，陪你慢慢讲。</p></div>}
             </PhonePreview>
             <p className="lab-preview-note">{voiceEnabled ? '语音模式 · 动作跟随实际播放' : '文字模式 · 动作跟随文本生成'}</p>
@@ -1027,11 +1011,9 @@ function HistoricalAttachment({ attachment }: { attachment: PanelAttachment }) {
   </>;
 }
 
-function WorkspacePanel({ panel, onSelectBlock, selectedBlockId, onDocumentView }: {
+function WorkspacePanel({ panel, onDocumentView }: {
   panel: PanelState;
-  selectedBlockId?: string;
-  onSelectBlock?: (panel: PanelState, block: PanelBlock) => void;
-  onDocumentView?: (view: DocumentView, manual: boolean) => void;
+  onDocumentView?: (view: DocumentView) => void;
 }) {
   const modes = { conversation: '纯对话', attachment: '附件查看', editor: '共同编辑' };
   return <article className="answer-card work-panel">
@@ -1040,8 +1022,7 @@ function WorkspacePanel({ panel, onSelectBlock, selectedBlockId, onDocumentView 
     {panel.mode === 'attachment' && panel.attachment && <HistoricalAttachment key={panel.attachment.id} attachment={panel.attachment} />}
     {panel.mode === 'editor' && !panel.document && <p>还没有文档内容。</p>}
     {panel.mode === 'editor' && panel.document && <>
-      <DocumentReader document={panel.document} view={panel.documentView} navigationKey={panel.revision} onView={onDocumentView}
-        selectedBlockId={selectedBlockId} onSelectBlock={onSelectBlock ? block => onSelectBlock(panel, block) : undefined} />
+      <DocumentReader document={panel.document} view={panel.documentView} onView={onDocumentView} />
       {panel.lastChange && <details><summary>查看本次修改</summary>
         {panel.lastChange.before.map(block => <p className="panel-removed" key={`before-${block.id}`}>修改前：{block.text}</p>)}
         {panel.lastChange.after.map(block => <p className="panel-added" key={`after-${block.id}`}>修改后：{block.text}</p>)}

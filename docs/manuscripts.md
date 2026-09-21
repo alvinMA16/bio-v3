@@ -31,27 +31,21 @@
 
 例：edit_document(expectedVersion=0,title,operations) → show_document(documentId,page=1)。改一段：read_document(documentId,blockId) → edit_document(documentId,expectedVersion,operations)。工具层与只读 HTTP 文稿 API 共用存储；没有用户直接写正文的 API。
 
-## 阅读页与客户端反馈
+## 连续阅读与客户端反馈
 
-packages/contracts/src/documents.ts 提供共享分页：尽量保留完整段落，每页最多 600 个 Unicode 码点，超长段落分片并携带 blockId/start/end（UTF-16 偏移）。空文档也有一页。小屏可在一页内滚动，阅读页不是“屏幕恰好一屏”或 PDF 页。
+Web 与小程序展示连续全文，无页码、翻页按钮、选段或“改这段”入口。用户直接口述修改目标；指代不明确时 Agent 用口头问题澄清。
 
-PanelState.documentView 保存 documentId/version/page；展示事件包含完整文稿与派生 readingPages，方便微信端无运行时包依赖地渲染。Web 使用同一个分页函数。改稿后按原页首段落及位置定位；若删除则夹取有效页码。
+客户端滚动停止 180ms 后上报 documentView.visibleRanges（blockId + UTF-16 start/end）和 following。正文用最多 80 个 Unicode 字符的行内片段测量与视口的交集，边缘可能包含少量屏外文字；不是逐字可见性或眼动追踪。客户端开口检测时刷新位置；Web 在获取下一轮请求时也同步刷新，小程序文字发送前等待测量。位置同步复用 document.view，不发起模型调用，不打断当前语音。
 
-客户端在渲染后和手动翻页时提交 context.documentView；语音中通过 document.view 消息更新。服务端验证文稿属于当前用户、版本与页码有效后才接纳，不接受客户端上传正文覆盖原稿。模型每次调用前更新上下文，screen.readingPage 包含当前页精确片段，totalPages 给出总页数。renderAcknowledged 只表示收到匹配的客户端显示报告，不代表用户看过或理解。
+服务端校验文稿归属、版本、段落及偏移，只从已保存正文提取 screen.visibleContent；拒绝旧版本和无效范围。空数组表示正文不在可视区域，null 表示尚无有效报告。新通话可用有效视口打开已有文稿；通话中的迟到报告不能切换文稿。滚动报告不写入 panel.json，也不改变朗读游标。模型每次调用前读取最新视口。
 
-文稿集可打开文稿并选择“和令狸一起看这篇”，新通话可以继续处理已有文稿。手动翻页时若正在回复，客户端打断旧轮，防止旧朗读随后自动把用户翻回去。
+## 分段朗读与自动跟随
 
-Web 文稿通话页以正文铺满背景，标题独占整行，重复的首段标题只展示一次（不改正文存储），底部使用通用彩色玻璃状态，正文独立滚动；底部只保留玻璃状态、时长和挂断，不显示 Agent 回复字幕，不另设专注模式或麦克风、扬声器开关。点击段落后才展示“和令狸改这段”；确认后将原文、blockId 和版本交给 Agent。语音中选择段落会打断当前轮，并在新一轮监听开始前同步选区上下文。用户仍通过 Agent 改稿，前端不直接编辑正文。
+内部保留每段最多 600 字的 documentPages、page/navigation、screen.readingPage 和 totalPages，作为朗读分段与旧客户端兼容协议，不向用户展示“页”。全文朗读从 show_document(page=1, follow=true) 开始，逐段输出并用 navigation=next 推进。当前可见内容朗读依据 visibleContent；不能将内部朗读分段等同于当前屏幕。
 
-## 逐页朗读
+VoiceSession 的 beforeShow 等待此前 TTS 队列及客户端播放回执完成后再推进。等待保留 45 秒无进展超时；用户开口打断、断线或播放失败会取消。普通滚动不打断声音，只停止客户端自动跟随；正常推进不能强制恢复跟随。用户明确要求重新从头读或恢复跟随时才传 follow=true。新打开文稿默认跟随。正文版本更新后重新测量，手动浏览位置尽量由浏览器滚动锚定保留。
 
-保留普通 Agent 文本 → TTS，不新增朗读工具，不让播放器自行决定文稿内容。指引要求模型根据当前页逐字输出原文；全文朗读用 show_document(page=1) → 输出当前页 → show_document(next) → 输出下一页。
-
-VoiceSession 给 Agent 工具提供运行时 beforeShow 回调。show_document、edit_document、restore_document 在变更展示/正在阅读的正文前，等待此前回复的 TTS 队列完成，并等待客户端累计播放样本回执覆盖已发送音频。翻页工具随后返回，模型继续下一页；不需要伪造用户消息或另建朗读模型。
-
-等待播放期间暂停 Agent 的执行超时，播放自身保留 45 秒无进展超时。用户打断、断线、播放器失败会取消等待，不翻下一页。没有播放回执的旧客户端在存在未播音频时拒绝自动翻页。Agent 完成与播放器播放完仍是不同事件。
-
-边界：模型逐字复述可能出现漏字/改词。普通通话的每轮语音预算仍为 20,000 字符；打开文稿后为 50,000 字符，覆盖当前最大 40,000 字符原稿及简短说明。本次没有做逐字时间对齐、无限长度续轮、自动人声抢话或暂停后自动恢复整篇朗读。真实模型和设备需要体验验证；自动化使用确定性的模型/ASR/TTS 替身验证时序与持久化。
+边界：自动跟随按朗读分段推进，未做逐字音频时间对齐。模型逐字复述仍可能漏字或改词。语音预算与播放回执机制保持原有约束。
 
 ## 验证
 

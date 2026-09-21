@@ -140,3 +140,49 @@ test('PostgreSQL migrations, atomic history, cross-session conflicts and ownersh
     await memory.onModuleDestroy(); f.clean();
   }
 });
+
+test('viewport reports validate ranges and never move the narration cursor', async () => {
+  const f = fixture();
+  try {
+    const document = await f.store.edit(undefined, randomUUID(), create());
+    const workspace = new PanelWorkspace(f.storage.conversationDirectory(randomUUID()));
+    workspace.showDocument(document, 1);
+    const before = workspace.state();
+    const view = { documentId: document.id, version: 1, page: 1, following: false,
+      visibleRanges: [{ blockId: 'p3', start: 10, end: 20 }] };
+    assert.equal(workspace.acceptDocumentView(view), true);
+    assert.deepEqual(workspace.state(), before, 'scroll reports do not persist or emit display changes');
+    assert.equal(workspace.context().screen.visibleContent[0].text, '乙'.repeat(10));
+    assert.equal(workspace.context().screen.following, false);
+    workspace.showDocument(document, 2);
+    assert.equal(workspace.context().screen.visibleContent[0].blockId, 'p3');
+    workspace.acceptDocumentView({ ...view, visibleRanges: [{ blockId: 'p1', start: 0, end: 3 }] });
+    assert.equal(workspace.state().documentView.page, 2, 'manual scrolling cannot rewind narration');
+    assert.equal(workspace.acceptDocumentView({ ...view, version: 999 }), false);
+    for (const range of [{ blockId: 'foreign', start: 0, end: 1 }, { blockId: 'p1', start: -1, end: 1 },
+      { blockId: 'p1', start: 2, end: 1 }, { blockId: 'p1', start: 0, end: 501 }]) {
+      assert.equal(workspace.acceptDocumentView({ ...view, visibleRanges: [range] }), false);
+    }
+    workspace.showDocument({ ...document, version: 2 }, 1);
+    assert.equal(workspace.context().screen.visibleContent, null, 'edits invalidate old viewport text');
+    assert.equal(workspace.acceptDocumentView({ ...view, version: 2, visibleRanges: [] }), true);
+    assert.deepEqual(workspace.context().screen.visibleContent, []);
+  } finally { f.clean(); }
+});
+
+test('a viewport can open an owned document on a new call, but not through a late scroll report', async () => {
+  const f = fixture();
+  try {
+    const document = await f.store.edit(undefined, randomUUID(), create());
+    const workspace = new PanelWorkspace(f.storage.conversationDirectory(randomUUID()));
+    workspace.hydrateDocuments([document]);
+    const view = { documentId: document.id, version: 1, page: 1, visibleRanges: [{ blockId: 'p2', start: 0, end: 6 }] };
+    assert.equal(workspace.acceptDocumentView(view), false);
+    assert.equal(workspace.acceptDocumentView(view, document), true);
+    assert.equal(workspace.scene(), 'revision');
+    workspace.showDocument(document, 1, true);
+    assert.ok(workspace.state().documentView.followRequest > 0);
+    workspace.showDocument(document, 2);
+    assert.equal(workspace.state().documentView.followRequest, undefined, 'normal narration does not force follow');
+  } finally { f.clean(); }
+});

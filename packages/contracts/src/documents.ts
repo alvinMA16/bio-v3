@@ -1,10 +1,15 @@
 import type { PanelDocument } from './index.js';
 
-/** Logical reading pages, independent of screen height and export pagination. */
+/** page is an internal narration chunk, not a user-facing page. */
 export interface DocumentView {
   documentId: string;
   version: number;
   page: number;
+  /** Text ranges intersecting the viewport; offsets use UTF-16. */
+  visibleRanges?: Array<{ blockId: string; start: number; end: number }>;
+  following?: boolean;
+  /** Explicit request to resume following, distinct from normal narration movement. */
+  followRequest?: number;
 }
 export interface DocumentPage {
   page: number;

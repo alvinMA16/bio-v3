@@ -4,7 +4,7 @@ import { requireAccount, handleUnauthorized } from '../../lib/account';
 import { MiniVoiceClient } from '../../lib/voice-client';
 import { createReceipt, queueReceipt } from '../../lib/session-receipt';
 let voiceClient: MiniVoiceClient | null = null;
-import type { AgentEvent, PanelState } from '@bio/contracts';
+import type { AgentEvent, PanelState, DocumentView } from '@bio/contracts';
 
 function localPanel(panel: PanelState): PanelState {
   if (!panel.attachment?.url?.startsWith('/api/v1/')) return panel;
@@ -25,6 +25,9 @@ interface ChatCompletionResponse {
 }
 
 Page({
+  documentViewport: undefined as DocumentView | undefined,
+  documentFollowing: true,
+  documentScrollTimer: null as ReturnType<typeof setTimeout> | null,
   attachmentView: undefined as { materialId: string; page: number } | undefined,
   materialIds: [] as string[],
   animationController: null as FoxAnimationController | null,
@@ -52,9 +55,8 @@ Page({
     conversationId: '',
     messages: [] as ChatMessage[],
     panel: { mode: 'conversation', revision: 0 } as PanelState,
-    documentPage: [] as Array<{ blockId: string; kind: string; text: string; start: number; end: number }>,
-    documentPageCount: 1,
-    selectedBlockId: '',
+    documentBlocks: [] as Array<{ id: string; kind: string; fragments: Array<{ id: string; blockId: string; text: string; start: number; end: number }> }>,
+    documentScrollAnchor: '',
   },
 
   async onLoad(options: Record<string, string | undefined> = {}): Promise<void> {
@@ -136,12 +138,10 @@ Page({
     this.updateCallAnimation();
     voiceClient = new MiniVoiceClient(getApp<IAppOption>().globalData.apiBaseUrl, {
       request: () => {
-        const document = this.data.panel.document;
-        const selected = document?.blocks.find(block => block.id === this.data.selectedBlockId);
         return {
           ...(this.data.conversationId ? { conversationId: this.data.conversationId } : {}),
           ...(this.materialIds.length ? { provider: 'gemini' as const } : {}),
-          context: { ...(this.data.panel.mode === 'editor' && this.data.panel.documentView ? { documentView: this.data.panel.documentView } : {}), ...(this.attachmentView ? { attachmentView: this.attachmentView } : {}), materialIds: this.materialIds, ...(this.materialIds.length ? { scene: 'attachment_conversation' as const } : {}), ...(document && selected ? { workspace: { documentId: document.id, version: document.version, selectedBlockId: selected.id, excerpt: selected.text } } : {}) },
+          context: { ...(this.data.panel.mode === 'editor' && this.data.panel.documentView ? { documentView: this.documentViewport ?? this.data.panel.documentView } : {}), ...(this.attachmentView ? { attachmentView: this.attachmentView } : {}), materialIds: this.materialIds, ...(this.materialIds.length ? { scene: 'attachment_conversation' as const } : {}) },
         };
       },
       event: event => {
@@ -176,7 +176,7 @@ Page({
         }
         if (event.type === 'error') { this.setData({ voiceStatus: event.message }); this.showRequestError(event.message); }
       },
-      speaking: speaking => { if (!this.unloaded) { this.userSpeaking = speaking; this.updateCallAnimation(); } },
+      speaking: speaking => { if (!this.unloaded) { if (speaking) void this.reportDocumentViewport(); this.userSpeaking = speaking; this.updateCallAnimation(); } },
       playback: playing => { if (!this.unloaded) { this.setData({ audioPlaying: playing }); this.updateCallAnimation(); } },
       error: message => { if (!this.unloaded) { this.setData({ voiceStatus: message }); this.showRequestError(message); } },
       ended: () => { this.stopCallTimer(); this.animationController?.setActivity({ phase: 'idle', notebook: false, reducedMotion: false, speech: 'silent' }); if (!this.unloaded) this.setData({ voiceActive: false, audioPlaying: false, agentWorking: false, callDuration: '已断开' }); voiceClient = null; },
@@ -194,6 +194,7 @@ Page({
   stopVoice(): void { voiceClient?.close(); },
   onHide(): void { this.hidden = true; this.pauseTimer(); voiceClient?.close(false, 'page_hidden'); this.stopCallTimer(); this.animationController?.suspend(); },
   onUnload(): void {
+    if (this.documentScrollTimer) clearTimeout(this.documentScrollTimer);
     this.pauseTimer();
     this.unloaded = true;
     this.stopCallTimer();
@@ -215,20 +216,14 @@ Page({
     this.setData({ input: event.detail.value });
   },
 
-  selectBlock(event: WechatMiniprogram.TouchEvent): void {
-    this.setData({ selectedBlockId: String(event.currentTarget.dataset.id) });
-  },
-
   clearMaterial(): void {
     this.materialIds = []; this.setData({ materialTitle: '' });
   },
 
-  sendMessage(): void {
+  async sendMessage(): Promise<void> {
+    await this.reportDocumentViewport();
     const message = this.data.input.trim();
-    if (!message || this.data.sending || this.data.voiceActive) return;
-
-    const document = this.data.panel.document;
-    const selected = document?.blocks.find(block => block.id === this.data.selectedBlockId);
+    if (!message || this.data.sending || this.data.voiceActive || this.unloaded) return;
 
     this.setData({
       input: '',
@@ -246,9 +241,7 @@ Page({
       data: {
         message,
         ...(this.materialIds.length ? { provider: 'gemini' as const } : {}),
-          context: { ...(this.data.panel.mode === 'editor' && this.data.panel.documentView ? { documentView: this.data.panel.documentView } : {}), ...(this.attachmentView ? { attachmentView: this.attachmentView } : {}), materialIds: this.materialIds, ...(this.materialIds.length ? { scene: 'attachment_conversation' as const } : {}), ...(document && selected ? { workspace: {
-          documentId: document.id, version: document.version, selectedBlockId: selected.id, excerpt: selected.text,
-        } } : {}) },
+          context: { ...(this.data.panel.mode === 'editor' && this.data.panel.documentView ? { documentView: this.documentViewport ?? this.data.panel.documentView } : {}), ...(this.attachmentView ? { attachmentView: this.attachmentView } : {}), materialIds: this.materialIds, ...(this.materialIds.length ? { scene: 'attachment_conversation' as const } : {}) },
         conversationId: this.data.conversationId || undefined,
       },
       success: ({ data, statusCode }) => {
@@ -266,7 +259,6 @@ Page({
         this.showPanel(panel);
         this.setData({
           panel: this.data.panel,
-          selectedBlockId: '',
           conversationId: data.conversationId,
           messages: [...this.data.messages, data.message],
         });
@@ -281,20 +273,59 @@ Page({
 
   showPanel(panel: PanelState): void {
     if (panel.mode !== this.data.panel.mode || panel.attachment?.id !== this.data.panel.attachment?.id) this.setData({ attachmentFocused: false });
-    const page = panel.documentView?.page ?? 1;
-    this.setData({ panel: localPanel(panel), selectedBlockId: '', documentPageCount: panel.readingPages?.length ?? 1,
-      documentPage: panel.readingPages?.[page - 1]?.fragments ?? panel.document?.blocks.map(block => ({ blockId: block.id, kind: block.kind, text: block.text, start: 0, end: block.text.length })) ?? [] }, () => {
-      if (panel.mode === 'editor' && panel.documentView) voiceClient?.updateDocumentView(panel.documentView);
+    const changed = panel.document?.id !== this.data.panel.document?.id;
+    if (panel.document?.version !== this.data.panel.document?.version) this.documentViewport = undefined;
+    if (changed) { this.documentFollowing = true; this.documentViewport = undefined; }
+    const resume = panel.documentView?.followRequest !== undefined && panel.documentView.followRequest !== this.data.panel.documentView?.followRequest;
+    if (resume) this.documentFollowing = true;
+    const documentBlocks = (panel.document?.blocks ?? []).map(block => {
+      let offset = 0;
+      const chars = Array.from(block.text);
+      return { id: block.id, kind: block.kind, fragments: Array.from({ length: Math.ceil(chars.length / 80) }, (_, index) => {
+        const text = chars.slice(index * 80, (index + 1) * 80).join('');
+        const start = offset; offset += text.length;
+        return { id: `doc-${block.id}-${start}`, blockId: block.id, text, start, end: offset };
+      }) };
     });
+    const anchor = panel.readingPages?.[(panel.documentView?.page ?? 1) - 1]?.fragments[0];
+    const fragment = anchor && documentBlocks.find(block => block.id === anchor.blockId)?.fragments.find(item => item.end > anchor.start);
+    const navigate = changed || resume || panel.documentView?.page !== this.data.panel.documentView?.page;
+    this.setData({ panel: localPanel(panel), documentBlocks,
+      ...(this.documentFollowing && navigate ? { documentScrollAnchor: fragment?.id ?? 'document-title' } : {})
+    }, () => { void this.reportDocumentViewport(); });
   },
 
-  turnDocumentPage(event: WechatMiniprogram.BaseEvent): void {
-    const panel = this.data.panel, view = panel.documentView;
-    if (!view) return;
-    const page = view.page + Number(event.currentTarget.dataset.delta);
-    if (page < 1 || page > this.data.documentPageCount) return;
-    this.showPanel({ ...panel, documentView: { ...view, page } });
-    voiceClient?.interrupt();
+  documentTouchMove(): void { this.documentFollowing = false; this.setData({ documentScrollAnchor: '' }); this.documentScroll(); },
+  documentScroll(): void {
+    if (this.documentScrollTimer) clearTimeout(this.documentScrollTimer);
+    this.documentScrollTimer = setTimeout(() => { void this.reportDocumentViewport(); }, 180);
+  },
+  reportDocumentViewport(): Promise<void> {
+    if (this.documentScrollTimer) clearTimeout(this.documentScrollTimer);
+    const panel = this.data.panel;
+    if (this.unloaded || panel.mode !== 'editor' || !panel.documentView) return Promise.resolve();
+    return new Promise(resolve => {
+      const query = this.createSelectorQuery();
+      query.select('.messages').boundingClientRect();
+      query.selectAll('.document-fragment').fields({ rect: true, dataset: true });
+      query.exec(result => {
+        if (this.unloaded || this.data.panel.document?.id !== panel.document?.id || this.data.panel.document?.version !== panel.document?.version) { resolve(); return; }
+        const bounds = result[0] as { top: number; bottom: number } | null;
+        const ranges: NonNullable<DocumentView['visibleRanges']> = [];
+        if (bounds) for (const item of (result[1] ?? []) as Array<{ top: number; bottom: number; dataset: { block: string; start: number; end: number } }>) {
+          if (item.bottom <= bounds.top || item.top >= bounds.bottom) continue;
+          const range = { blockId: item.dataset.block, start: Number(item.dataset.start), end: Number(item.dataset.end) };
+          const previous = ranges[ranges.length - 1];
+          if (previous?.blockId === range.blockId) previous.end = range.end;
+          else ranges.push(range);
+        }
+        const view: DocumentView = { ...panel.documentView!, visibleRanges: ranges.slice(0, 100), following: this.documentFollowing };
+        if (JSON.stringify(view) !== JSON.stringify(this.documentViewport)) {
+          this.documentViewport = view; voiceClient?.updateDocumentView(view);
+        }
+        resolve();
+      });
+    });
   },
 
   showRequestError(message: string): void {

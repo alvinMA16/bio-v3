@@ -1,4 +1,4 @@
-import { IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength, IsInt, Min, ValidateNested, IsDefined, IsArray, ArrayMaxSize, IsUrl, ValidateIf } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength, IsInt, Min, ValidateNested, IsDefined, IsArray, ArrayMaxSize, IsUrl, ValidateIf } from 'class-validator';
 
 import { Type } from 'class-transformer';
 
@@ -58,7 +58,16 @@ export class AttachmentViewDto {
   @IsUUID('4') materialId!: string;
   @IsInt() @Min(1) page!: number;
 }
+export class VisibleDocumentRangeDto {
+  @IsString() @Matches(/^[a-zA-Z0-9_-]{1,64}$/) blockId!: string;
+  @IsInt() @Min(0) start!: number;
+  @IsInt() @Min(0) end!: number;
+}
 export class DocumentViewDto {
+  @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => VisibleDocumentRangeDto)
+  visibleRanges?: VisibleDocumentRangeDto[];
+  @IsOptional() @IsBoolean() following?: boolean;
+  @IsOptional() @IsInt() @Min(0) followRequest?: number;
   @IsString() @Matches(/^[a-zA-Z0-9_-]{1,64}$/) documentId!: string;
   @IsInt() @Min(1) version!: number;
   @IsInt() @Min(1) page!: number;

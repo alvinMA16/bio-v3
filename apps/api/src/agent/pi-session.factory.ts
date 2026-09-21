@@ -59,9 +59,10 @@ export class PiSessionFactory {
     const documents = this.documents ?? new DocumentStore(this.storage, this.memory);
     await documents.importLegacy(scope?.userId);
     const oldDocument = workspace.state().document;
-    workspace.hydrateDocuments((await documents.list(scope?.userId)).map(item => item.document),
+    const ownedDocuments = (await documents.list(scope?.userId)).map(item => item.document);
+    workspace.hydrateDocuments(ownedDocuments,
       oldDocument && oldDocument.schemaVersion !== 1 ? legacyDocumentId(conversationId, oldDocument.id) : undefined);
-    workspace.acceptDocumentView(context?.documentView);
+    workspace.acceptDocumentView(context?.documentView, ownedDocuments.find(item => item.id === context?.documentView?.documentId));
     let lastClientView = JSON.stringify(context?.documentView);
     const newlySelected = materialAttachments.find(item => !existingAttachments.has(item.id));
     if (newlySelected) workspace.setMode('attachment', newlySelected.id);

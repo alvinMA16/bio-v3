@@ -91,22 +91,37 @@ export class PanelWorkspace {
     this.commit(next);
   }
 
-  acceptDocumentView(view?: DocumentView): boolean {
-    const document = this.value.documents.find(item => item.id === view?.documentId);
+  acceptDocumentView(view?: DocumentView, openingDocument?: PanelDocument): boolean {
+    const document = openingDocument?.id === view?.documentId ? openingDocument : this.value.documents.find(item => item.id === view?.documentId);
     if (!view || !document || document.version !== view.version || !Number.isInteger(view.page)
       || view.page < 1 || view.page > documentPages(document).length) return false;
+    if (view.visibleRanges !== undefined) {
+      if (view.visibleRanges.length > 100 || view.visibleRanges.some(range => {
+          const block = document.blocks.find(block => block.id === range.blockId);
+          return !block || !Number.isInteger(range.start) || !Number.isInteger(range.end)
+            || range.start < 0 || range.end < range.start || range.end > block.text.length
+            || /[\uDC00-\uDFFF]/.test(block.text.charAt(range.start))
+            || /[\uDC00-\uDFFF]/.test(block.text.charAt(range.end));
+        })) return false;
+      if (this.value.panel.mode !== 'editor' || this.value.panel.document?.id !== view.documentId) {
+        if (!openingDocument) return false;
+        this.showDocument(document, view.page);
+      }
+      // Viewport reports never change the narrator's cursor or generate display events.
+      this.acknowledgedView = structuredClone(view); return true;
+    }
     if (this.value.panel.documentView?.documentId !== view.documentId || this.value.panel.documentView.version !== view.version
       || this.value.panel.documentView.page !== view.page || this.value.panel.mode !== 'editor') this.showDocument(document, view.page);
     this.acknowledgedView = { ...view }; return true;
   }
 
-  showDocument(document: PanelDocument, page = 1): PanelState {
+  showDocument(document: PanelDocument, page = 1, follow = false): PanelState {
     const pages = documentPages(document);
     if (!Number.isInteger(page) || page < 1 || page > pages.length) throw new Error(`页码超出范围，共 ${pages.length} 页`);
     const next = structuredClone(this.value);
     next.documents = [...next.documents.filter(item => item.id !== document.id), document];
     next.panel = { mode: 'editor', revision: next.panel.revision + 1, document,
-      documentView: { documentId: document.id, version: document.version, page } };
+      documentView: { documentId: document.id, version: document.version, page, ...(follow ? { followRequest: next.panel.revision + 1 } : {}) } };
     this.commit(next); return this.state();
   }
 
@@ -153,13 +168,25 @@ export class PanelWorkspace {
         return { ...block, text, truncated: text.length < block.text.length };
       }),
     };
+    const visibleView = this.acknowledgedView?.documentId === panel.document?.id
+      && this.acknowledgedView?.version === panel.document?.version ? this.acknowledgedView : undefined;
+    let visibleBudget = 6000;
+    const visibleContent = visibleView?.visibleRanges?.map(range => {
+      const block = panel.document!.blocks.find(block => block.id === range.blockId)!;
+      const text = block.text.slice(range.start, range.end).slice(0, visibleBudget);
+      visibleBudget -= text.length;
+      return { ...range, kind: block.kind, text, truncated: text.length < range.end - range.start };
+    });
     return {
       scene: this.scene(),
       revision: panel.revision, mode: panel.mode, document,
       screen: {
         source: 'server_display_state', renderAcknowledged: panel.mode === 'editor' && !!panel.documentView
           && panel.documentView.documentId === this.acknowledgedView?.documentId
-          && panel.documentView.version === this.acknowledgedView.version && panel.documentView.page === this.acknowledgedView.page,
+          && panel.documentView.version === this.acknowledgedView.version
+          && (visibleContent !== undefined || panel.documentView.page === this.acknowledgedView.page),
+        visibleContent: visibleContent ?? null,
+        following: visibleView?.following ?? null,
         mainContent: panel.mode === 'conversation' ? 'assistant_speech_text'
           : panel.mode === 'attachment' ? 'attachment' : 'document',
         description: panel.mode === 'conversation'

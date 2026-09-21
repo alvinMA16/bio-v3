@@ -1,41 +1,108 @@
-import { useEffect, useRef, useState } from 'react';
-import { documentPages, type DocumentView, type PanelBlock, type PanelDocument } from '@bio/contracts';
+import { useEffect, useRef } from 'react';
+import { documentPages, type DocumentView, type PanelDocument } from '@bio/contracts';
 
-export function DocumentReader({ document, view, navigationKey = 0, onView, onSelectBlock, selectedBlockId }: {
-  document: PanelDocument; view?: DocumentView | undefined; navigationKey?: number; onView?: ((view: DocumentView, manual: boolean) => void) | undefined;
-  onSelectBlock?: ((block: PanelBlock) => void) | undefined; selectedBlockId?: string | undefined;
+// Small inline spans let us report visible text without changing paragraph layout.
+function textSpans(text: string, blockId: string, base = 0) {
+  let offset = base;
+  const characters = Array.from(text);
+  return Array.from({ length: Math.ceil(characters.length / 80) }, (_, index) => {
+    const part = characters.slice(index * 80, (index + 1) * 80).join('');
+    const start = offset; offset += part.length;
+    return <span key={start} data-block={blockId} data-start={start} data-end={offset}>{part}</span>;
+  });
+}
+
+function listItems(text: string, blockId: string) {
+  let offset = 0;
+  return text.split('\n').map((line, index) => {
+    const start = offset; offset += line.length + 1;
+    return <li key={index}>{textSpans(line, blockId, start)}</li>;
+  });
+}
+
+export function DocumentReader({ document, view, onView }: {
+  document: PanelDocument; view?: DocumentView | undefined;
+  onView?: ((view: DocumentView) => void) | undefined;
 }) {
-  const [manual, setManual] = useState<{ key: string; page: number }>();
-  const [selection, setSelection] = useState<{ key: string; blockId: string }>();
-  const pages = documentPages(document);
-  const key = `${document.id}:${document.version}:${view?.page ?? 1}:${navigationKey}`;
-  const page = Math.max(1, Math.min(manual?.key === key ? manual.page : view?.page ?? 1, pages.length));
-  const selectionKey = `${key}:${page}`;
-  const activeBlockId = selection?.key === selectionKey ? selection.blockId : undefined;
-  const callback = useRef(onView); callback.current = onView;
   const content = useRef<HTMLElement>(null);
+  const following = useRef(true);
+  const current = useRef({ document, view, onView }); current.current = { document, view, onView };
+  const report = useRef<() => void>(() => {});
   useEffect(() => {
-    callback.current?.({ documentId: document.id, version: document.version, page }, manual?.key === key);
-    content.current?.closest('.phone-panel-scroll')?.scrollTo({ top: 0 });
-  }, [document.id, document.version, page]);
+    const root = content.current;
+    const scroller = root?.closest<HTMLElement>('.phone-panel-scroll');
+    if (!root || !scroller) return;
+    following.current = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let last = '';
+    let pointerActive = false;
+    const publish = () => {
+      clearTimeout(timer);
+      const { document, view, onView } = current.current;
+      const bounds = scroller.getBoundingClientRect();
+      const visibleRanges: NonNullable<DocumentView['visibleRanges']> = [];
+      for (const span of root.querySelectorAll<HTMLElement>('[data-block]')) {
+        if (!Array.from(span.getClientRects()).some(rect => rect.bottom > bounds.top && rect.top < bounds.bottom)) continue;
+        const blockId = span.dataset.block!, start = Number(span.dataset.start), end = Number(span.dataset.end);
+        const previous = visibleRanges.at(-1);
+        if (previous?.blockId === blockId) previous.end = end;
+        else visibleRanges.push({ blockId, start, end });
+      }
+      const next: DocumentView = { documentId: document.id, version: document.version,
+        page: view?.page ?? 1, visibleRanges: visibleRanges.slice(0, 100), following: following.current };
+      const serialized = JSON.stringify(next);
+      if (serialized !== last) { last = serialized; onView?.(next); }
+    };
+    report.current = publish;
+    const scroll = () => { if (pointerActive) following.current = false; clearTimeout(timer); timer = setTimeout(publish, 180); };
+    const pointerDown = () => { pointerActive = true; };
+    const pointerUp = () => { pointerActive = false; };
+    const manual = () => { following.current = false; scroll(); };
+    const key = (event: KeyboardEvent) => {
+      if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) manual();
+    };
+    scroller.addEventListener('scroll', scroll, { passive: true });
+    scroller.addEventListener('wheel', manual, { passive: true });
+    scroller.addEventListener('touchmove', manual, { passive: true });
+    scroller.addEventListener('pointerdown', pointerDown); // Track scrollbar drags without treating taps as scrolls.
+    window.addEventListener('pointerup', pointerUp); window.addEventListener('pointercancel', pointerUp);
+    scroller.addEventListener('keydown', key);
+    window.addEventListener('bio:document-view-request', publish);
+    const resize = new ResizeObserver(scroll); resize.observe(scroller); resize.observe(root);
+    publish();
+    return () => {
+      clearTimeout(timer); resize.disconnect();
+      scroller.removeEventListener('scroll', scroll); scroller.removeEventListener('wheel', manual);
+      scroller.removeEventListener('touchmove', manual); scroller.removeEventListener('pointerdown', pointerDown);
+      window.removeEventListener('pointerup', pointerUp); window.removeEventListener('pointercancel', pointerUp);
+      scroller.removeEventListener('keydown', key); window.removeEventListener('bio:document-view-request', publish);
+      report.current = () => {};
+    };
+  }, [document.id]);
+  useEffect(() => {
+    const root = content.current;
+    const scroller = root?.closest<HTMLElement>('.phone-panel-scroll');
+    if (view?.followRequest !== undefined) following.current = true;
+    if (root && scroller && following.current) {
+      const anchor = documentPages(document)[(view?.page ?? 1) - 1]?.fragments[0];
+      const target = anchor && Array.from(root.querySelectorAll<HTMLElement>('[data-block]')).find(span =>
+        span.dataset.block === anchor.blockId && Number(span.dataset.end) > anchor.start);
+      if (target && (view?.page ?? 1) > 1) {
+        scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 16;
+      } else scroller.scrollTop = 0;
+    }
+    report.current();
+  }, [document.id, view?.page, view?.followRequest]);
+  useEffect(() => { report.current(); }, [document.version]);
   return <section className="document-reader" ref={content} aria-label="文稿阅读">
     <header className="document-heading"><h3>{document.title}</h3><small>已保存 · 版本 {document.version}</small></header>
-    {pages[page - 1]!.fragments.filter(fragment => !(fragment.kind === 'heading' && fragment.blockId === document.blocks[0]?.id && fragment.text.trim() === document.title.trim())).map((fragment, index) => <section key={`${fragment.blockId}:${fragment.start}`} className={`panel-block ${activeBlockId === fragment.blockId ? 'panel-block--selected' : ''}`}>
-      {fragment.kind === 'heading' ? <h4>{fragment.text}</h4>
-        : fragment.kind === 'quote' ? <blockquote>{fragment.text}</blockquote>
-        : fragment.kind === 'list' ? <ul>{fragment.text.split('\n').map((line, index) => <li key={index}>{line}</li>)}</ul>
-        : fragment.kind === 'code' ? <pre><code>{fragment.text}</code></pre>
-        : <p style={{ whiteSpace: 'pre-wrap' }}>{fragment.text}</p>}
-      {onSelectBlock && <button type="button" className="document-select-block" aria-label={`选择第 ${index + 1} 段`} aria-pressed={activeBlockId === fragment.blockId}
-        onClick={() => setSelection({ key: selectionKey, blockId: activeBlockId === fragment.blockId ? '' : fragment.blockId })} />}
-      {onSelectBlock && activeBlockId === fragment.blockId && <div className="document-block-action"><button type="button"
-        onClick={() => onSelectBlock(document.blocks.find(block => block.id === fragment.blockId)!)}>和令狸改这段</button>
-        {selectedBlockId === fragment.blockId && <small role="status">已选中，请告诉令狸怎么改</small>}</div>}
-    </section>)}
-    <nav className="document-pagination" aria-label="文稿翻页">
-      <button type="button" disabled={page <= 1} onClick={() => setManual({ key, page: page - 1 })}>上一页</button>
-      <span aria-live="polite">第 {page} / {pages.length} 页</span>
-      <button type="button" disabled={page >= pages.length} onClick={() => setManual({ key, page: page + 1 })}>下一页</button>
-    </nav>
+    {document.blocks.filter((block, index) => !(index === 0 && block.kind === 'heading' && block.text.trim() === document.title.trim())).map(block =>
+      <section key={block.id} className="panel-block">
+        {block.kind === 'heading' ? <h4>{textSpans(block.text, block.id)}</h4>
+          : block.kind === 'quote' ? <blockquote>{textSpans(block.text, block.id)}</blockquote>
+          : block.kind === 'list' ? <ul>{listItems(block.text, block.id)}</ul>
+          : block.kind === 'code' ? <pre><code>{textSpans(block.text, block.id)}</code></pre>
+          : <p style={{ whiteSpace: 'pre-wrap' }}>{textSpans(block.text, block.id)}</p>}
+      </section>)}
   </section>;
 }
