@@ -61,7 +61,7 @@ function FileCard({ item, index, disabled = false, onChoose, onActions }: { item
   function cancel() { if (timer.current) clearTimeout(timer.current); timer.current = null; }
   useEffect(() => cancel, []);
   useEffect(() => { if (disabled) cancel(); }, [disabled]);
-  return <button type="button" className={`material-card material-card--${item.kind}`} style={{ animationDelay: `${Math.min(index, 7) * 28}ms` }} disabled={disabled} aria-label={`查看 ${item.title}`} aria-haspopup="dialog"
+  return <button type="button" className={`material-card material-card--${item.kind}`} style={{ animationDelay: `${Math.min(index, 5) * 40}ms` }} disabled={disabled} aria-label={`查看 ${item.title}`} aria-haspopup="dialog"
     onPointerDown={event => { cancel(); suppressClick.current = false; if (!event.isPrimary || event.button !== 0 || disabled) return; start.current = { x: event.clientX, y: event.clientY }; timer.current = setTimeout(() => { suppressClick.current = true; timer.current = null; onActions(item); }, 500); }}
     onPointerMove={event => { if (Math.hypot(event.clientX - start.current.x, event.clientY - start.current.y) > 10) { cancel(); suppressClick.current = true; } }}
     onPointerUp={cancel} onPointerCancel={() => { cancel(); suppressClick.current = true; }} onPointerLeave={cancel}

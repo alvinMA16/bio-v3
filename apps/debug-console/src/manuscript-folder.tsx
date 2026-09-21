@@ -39,7 +39,7 @@ export function ManuscriptFolder({ onChat, disabled = false }: { onChat?: ((docu
       {!loading && !error && document && onChat && <footer className="material-preview-footer"><button type="button" className="material-fox-chat" disabled={disabled} onClick={() => onChat(document)}><span>和令狸聊聊这篇</span><span className="material-fox-portrait" aria-hidden="true"><img src={uiAsset('lingli-chat-wave.webp')} alt="" /></span></button></footer>}
     </section> : <>
       {status}
-      {!loading && !error && (items.length ? <div className="material-grid">{items.map((item, index) => <button type="button" className="material-card" key={`${item.conversationId}/${item.id}`} style={{ animationDelay: `${Math.min(index, 7) * 28}ms` }} aria-label={`阅读 ${item.title}`} onClick={() => setSelected(item)}>
+      {!loading && !error && (items.length ? <div className="material-grid">{items.map((item, index) => <button type="button" className="material-card" key={`${item.conversationId}/${item.id}`} style={{ animationDelay: `${Math.min(index, 5) * 40}ms` }} aria-label={`阅读 ${item.title}`} onClick={() => setSelected(item)}>
         <span className="material-cover material-cover--paper">
           <span className="material-paper-content" aria-hidden="true"><span className="material-paper-sprig"><i /><i /><i /><i /><i /></span><span className="manuscript-cover-title">{item.title}</span><span className="material-paper-lines" /></span>
           <span className="material-cover-caption"><span>文稿</span><span>版本 {item.version}</span></span>

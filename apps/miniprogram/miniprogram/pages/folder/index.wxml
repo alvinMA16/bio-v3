@@ -29,7 +29,7 @@
     <view wx:elif="{{searchOpen && query !== renderedQuery}}" class="empty">正在搜索…</view>
     <view wx:elif="{{!visibleItems.length}}" class="empty">{{items.length ? '没有找到资料，试试其他名称或分类。' : '还没有资料，放进第一份回忆吧。'}}</view>
     <view class="material-grid">
-      <button wx:for="{{visibleItems}}" wx:key="id" class="material-card" style="animation-delay: {{index > 7 ? 196 : index * 28}}ms" data-id="{{item.id}}" bindtap="select" bindlongpress="fileActions" disabled="{{busy || leaving}}">
+      <button wx:for="{{visibleItems}}" wx:key="id" class="material-card" style="animation-delay: {{index > 5 ? 200 : index * 40}}ms" data-id="{{item.id}}" bindtap="select" bindlongpress="fileActions" disabled="{{busy || leaving}}">
         <view class="cover cover--{{item.kind}}">
           <image wx:if="{{thumbnails[item.id]}}" src="{{thumbnails[item.id]}}" mode="aspectFill" />
           <view wx:elif="{{item.kind === 'document'}}" class="paper-content"><view class="paper-sprig"><view /><view /><view /><view /><view /></view><view class="paper-lines" /></view>

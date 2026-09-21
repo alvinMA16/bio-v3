@@ -4,3 +4,10 @@ button { margin-bottom: 24rpx; text-align: left; font-size: 30rpx; }
 .version { font-size: 24rpx; color: #857565; }
 .block { white-space: pre-wrap; margin: 24rpx 0; line-height: 1.8; }
 .heading { font-size: 34rpx; font-weight: bold; }
+.manuscript-entry { animation: manuscript-enter 420ms cubic-bezier(.16,1,.3,1) both; }
+@keyframes manuscript-enter {
+  from { opacity: 0; transform: translateY(36rpx) scale(.985); }
+  65% { opacity: 1; }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .manuscript-entry { animation: none; } }

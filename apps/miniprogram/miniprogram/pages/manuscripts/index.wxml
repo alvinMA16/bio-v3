@@ -8,7 +8,7 @@
     <button bindtap="chat">和令狸一起看这篇</button>
   </view>
   <view wx:else>
-    <button wx:for="{{items}}" wx:key="index" data-index="{{index}}" bindtap="select">{{item.title}}<view class="version">已保存草稿 · 版本 {{item.version}}</view></button>
+    <button class="manuscript-entry" style="animation-delay: {{index > 5 ? 200 : index * 40}}ms" wx:for="{{items}}" wx:key="index" data-index="{{index}}" bindtap="select">{{item.title}}<view class="version">已保存草稿 · 版本 {{item.version}}</view></button>
     <view wx:if="{{!items.length}}">还没有已保存的文稿。通话中可以请令狸帮你整理。</view>
   </view>
 </view>
