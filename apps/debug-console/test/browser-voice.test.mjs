@@ -43,7 +43,7 @@ function environment(t, pendingMic, moduleError, prepare) {
     currentTime = 0; destination = {}; audioWorklet = { async addModule() { if (moduleError) throw moduleError; } };
     async resume() {} async close() {}
     createAnalyser() { return { amplitude: 0, connect(destination) { this.destination = destination; }, disconnect() {}, getFloatTimeDomainData(samples) { samples.fill(this.amplitude); } }; }
-    createGain() { const node = { gain: { events: [], setValueAtTime(...args) { this.events.push(args); }, linearRampToValueAtTime(...args) { this.events.push(args); } }, connect() {}, disconnect() {} }; gains.push(node); return node; }
+    createGain() { const node = { gain: { events: [], cancelAndHoldAtTime(...args) { this.events.push(args); }, setValueCurveAtTime(...args) { this.events.push(args); }, setValueAtTime(...args) { this.events.push(args); }, linearRampToValueAtTime(...args) { this.events.push(args); } }, connect() {}, disconnect() {} }; gains.push(node); return node; }
     createOscillator() { const tone = { frequency: {}, connect() {}, disconnect() {}, start() {}, stop() { this.stopped = true; } }; tones.push(tone); return tone; }
     createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
     createBuffer(_channels, length, rate) { return { getChannelData: () => new Float32Array(length), duration: length / rate }; }
@@ -338,12 +338,16 @@ test('opening audio connects before playing even before the first listening stat
   assert.equal(f.connected(), 1);
 });
 
-test('exactly three scheduled rings hold early audio and listening until the dialing ends', async t => {
+test('three complete rings hold early audio and listening, with a smooth envelope', async t => {
   for (const type of ['state', 'audio']) {
     const f = environment(t); await f.client.start();
     assert.deepEqual(f.tones.map(tone => tone.frequency.value), [440, 480]);
-    assert.equal(f.gains[1].gain.events.length, 12);
-    assert.deepEqual(f.gains[1].gain.events.filter((_, i) => i % 4 === 3).map(e => Math.round(e[1] * 1000)), [600, 1800, 3000]);
+    assert.equal(f.gains[1].gain.events.length, 3);
+    assert.deepEqual(f.gains[1].gain.events.map(e => Math.round((e[1] + e[2]) * 1000)), [600, 1800, 3000]);
+    const curve = f.gains[1].gain.events[0][0];
+    assert.equal(curve[0], 0); assert.equal(curve.at(-1), 0);
+    assert.ok(curve[80] > curve[100] && curve[100] > curve[119]);
+    assert.ok(Math.max(...curve.slice(1).map((value, i) => Math.abs(value - curve[i]))) < .002);
     f.sockets[0].onopen();
     f.sockets[0].onmessage({ data: JSON.stringify({ type, state: 'listening', turnId: f.starts[0], sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1 }) });
     t.mock.timers.tick(2999);
@@ -355,21 +359,39 @@ test('exactly three scheduled rings hold early audio and listening until the dia
     f.client.close();
   }
 });
-test('slow UI waits silently after three rings, then releases the buffered opening in order', async t => {
+test('slow UI keeps ringing, then releases the buffered opening in order', async t => {
   let ready;
   const f = environment(t, undefined, undefined, () => new Promise(resolve => { ready = resolve; }));
   await f.client.start(); f.sockets[0].onopen();
   const emit = e => f.sockets[0].onmessage({ data: JSON.stringify({ turnId: f.starts[0], ...e }) });
   emit({ type: 'audio', sampleRate: 16000, data: 'AAA=', text: '你好', segmentId: 1 });
   emit({ type: 'done' });
-  t.mock.timers.tick(6000);
-  assert.ok(f.tones.every(tone => tone.stopped)); assert.equal(f.connected(), 0); assert.equal(f.nodes.length, 0);
+  t.mock.timers.tick(3000);
+  t.mock.timers.tick(600);
+  assert.equal(f.gains[1].gain.events.length, 4);
+  assert.ok(f.tones.every(tone => !tone.stopped)); assert.equal(f.connected(), 0); assert.equal(f.nodes.length, 0);
   ready(); await flush();
+  assert.equal(f.connected(), 0, 'finish the extra ring before connecting');
+  t.mock.timers.tick(600);
   assert.equal(f.connected(), 1); assert.equal(f.nodes.length, 1);
   assert.deepEqual(f.events.map(e => e.type), ['audio', 'done']);
   assert.equal(f.starts.length, 1);
   f.nodes[0].onended(); t.mock.timers.tick(200); assert.equal(f.starts.length, 2);
 });
+test('slow server adds fourth and fifth rings and connects in the next quiet gap', async t => {
+  const f = environment(t); await f.client.start(); f.sockets[0].onopen();
+  t.mock.timers.tick(3000);
+  for (let i = 0; i < 2; i++) { t.mock.timers.tick(600); t.mock.timers.tick(600); }
+  assert.equal(f.gains[1].gain.events.length, 5);
+  assert.equal(f.connected(), 0);
+  f.sockets[0].onmessage({ data: JSON.stringify({ type: 'state', state: 'listening', turnId: f.starts[0] }) });
+  assert.equal(f.connected(), 1);
+  assert.equal(f.client.getDialPhase(), -1);
+  const count = f.gains[1].gain.events.length;
+  t.mock.timers.tick(2400);
+  assert.equal(f.gains[1].gain.events.length, count);
+});
+
 test('UI failure during server preparation stops the call without playing queued audio', async t => {
   let reject;
   const f = environment(t, undefined, undefined, () => new Promise((_, r) => { reject = r; }));

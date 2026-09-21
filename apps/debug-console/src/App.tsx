@@ -505,6 +505,7 @@ export function App() {
             <header className="lab-section-heading"><h1>用户界面预览</h1><span>手机 · 实时状态</span></header>
             <PhonePreview onAttachmentPage={(materialId, page) => { attachmentView.current = { materialId, page }; voiceRef.current?.updateAttachmentView({ materialId, page }); voiceContext.current = { ...voiceContext.current, context: { ...voiceContext.current.context, attachmentView: { materialId, page } } }; }} attachment={shownPanel?.attachment} subtitle={subtitle} running={running} activity={foxActivityOf({ running, live, panel: shownPanel, ...(callOpen ? { audioPlaying, ...(voiceEnabled ? { voiceState } : {}), userSpeaking: micEnabled && micListening && userSpeaking } : {}) })}
               motionState={audioPlaying ? 'speak' : voiceEnabled && micListening ? 'listen' : running ? 'think' : 'listen'}
+              getDialPhase={() => voiceRef.current?.getDialPhase() ?? -1}
               getMotionLevel={() => voiceRef.current?.getMotionLevel() ?? 0}
               readingFontFeedback={readingFontFeedback}
               callOpen={callOpen} callFailed={!voiceEnabled} callStartedAt={callStartedAt} status={voiceStatus} mode={shownPanel?.mode ?? 'conversation'}

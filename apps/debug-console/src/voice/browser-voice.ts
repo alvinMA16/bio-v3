@@ -44,7 +44,7 @@ export class BrowserVoice {
   private dialingFinished = false;
   private pendingEvents: VoiceServerMessage[] = [];
   private pendingEventBytes = 0;
-  private ringback: { tones: OscillatorNode[]; gain: GainNode; timer: ReturnType<typeof setTimeout> } | undefined;
+  private ringback: { tones: OscillatorNode[]; gain: GainNode; startedAt: number; timer: ReturnType<typeof setTimeout> } | undefined;
   private speechSignal = new FoxSpeechSignal(value => this.callbacks.speaking?.(value));
   private finishing = false;
   private drained = false;
@@ -159,23 +159,54 @@ export class BrowserVoice {
       return tone;
     });
     const now = context.currentTime;
-    for (let pulse = 0; pulse < 3; pulse++) {
-      const start = now + pulse * 1.2;
-      gain.gain.setValueAtTime(0, start);
-      gain.gain.linearRampToValueAtTime(.025, start + .08);
-      gain.gain.setValueAtTime(.025, start + .48);
-      gain.gain.linearRampToValueAtTime(0, start + .6);
+    const envelope = new Float32Array(121);
+    for (let i = 0; i < envelope.length; i++) {
+      const t = i / 120 * .6;
+      // Rounded attack, brief crest, then a long, smooth release to exact silence.
+      envelope[i] = .025 * (t < .12 ? .5 - .5 * Math.cos(Math.PI * t / .12)
+        : t < .22 ? 1 : .5 + .5 * Math.cos(Math.PI * (t - .22) / .38));
     }
-    this.ringback = { tones, gain, timer: setTimeout(() => {
-      this.stopRingback(); this.dialingFinished = true; this.flushPreparedEvents();
-    }, 3000) };
+    const pulse = (start: number) => gain.gain.setValueCurveAtTime(envelope, start, .6);
+    for (let index = 0; index < 3; index++) pulse(now + index * 1.2);
+    const finishPulse = () => {
+      if (!this.ringback || this.closed) return;
+      this.dialingFinished = true;
+      this.flushPreparedEvents();
+      if (!this.ringback) return;
+      // Readiness arriving in the quiet gap can connect immediately. Otherwise
+      // add another complete ring, keeping the same cadence until connected.
+      this.ringback.timer = setTimeout(() => {
+        if (!this.ringback || this.closed) return;
+        this.dialingFinished = false;
+        this.ringback.startedAt = context.currentTime;
+        pulse(context.currentTime);
+        this.ringback.timer = setTimeout(finishPulse, 600);
+      }, 600);
+    };
+    this.ringback = { tones, gain, startedAt: now, timer: setTimeout(finishPulse, 3000) };
+  }
+  /** Audio clock phase drives the portrait and ripples, including extended waits. */
+  getDialPhase(): number {
+    if (!this.ringback || !this.context || this.closed) return -1;
+    return Math.max(0, this.context.currentTime - this.ringback.startedAt) % 1.2;
   }
   private stopRingback(): void {
     if (!this.ringback) return;
     const { tones, gain, timer } = this.ringback;
     clearTimeout(timer);
-    tones.forEach(tone => { tone.stop(); tone.disconnect(); });
-    gain.disconnect(); this.ringback = undefined;
+    const now = this.context!.currentTime;
+    if (typeof gain.gain.cancelAndHoldAtTime === 'function') gain.gain.cancelAndHoldAtTime(now);
+    else {
+      const value = gain.gain.value;
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(value, now);
+    }
+    gain.gain.linearRampToValueAtTime(0, now + .05);
+    tones.forEach(tone => {
+      tone.onended = () => { tone.disconnect(); gain.disconnect(); };
+      tone.stop(now + .06);
+    });
+    this.ringback = undefined;
   }
 
   private flushPreparedEvents(): void {
@@ -445,9 +476,11 @@ export class BrowserVoice {
     this.pendingEvents = []; this.pendingEventBytes = 0;
     this.capture?.disconnect(); this.source?.disconnect(); this.muted?.disconnect();
     this.playbackAnalyser?.disconnect();
-    this.output?.disconnect();
     this.stream?.getTracks().forEach(track => track.stop());
-    this.socket?.close(1000, hangup ? 'user_hangup' : reason); void this.context?.close().catch(() => undefined);
+    this.socket?.close(1000, hangup ? 'user_hangup' : reason);
+    // Leave the output connected long enough for the final release on cancel/failure.
+    const context = this.context, output = this.output;
+    setTimeout(() => { output?.disconnect(); void context?.close().catch(() => undefined); }, 70);
     this.callbacks.ended();
   }
 }

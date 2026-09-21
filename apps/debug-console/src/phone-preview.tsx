@@ -1,3 +1,4 @@
+import { DialAvatar } from './dial-avatar';
 import { warmCallUi } from './prepare-call-ui';
 import { SlideToEnd } from './slide-to-end';
 import { VoiceCallStatus } from './voice-call-status';
@@ -23,7 +24,7 @@ interface Manifest {
   animations: Animation[];
 }
 
-export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, callOpen, callStartedAt, status, callFailed = false, motionState = 'listen', getMotionLevel = () => 0, mode, startDisabled, onStart, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
+export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, callOpen, callStartedAt, status, callFailed = false, motionState = 'listen', getMotionLevel = () => 0, getDialPhase = () => -1, mode, startDisabled, onStart, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
   readingFontFeedback?: { id: number; text: string } | undefined;
   onManuscriptChat?: ((document: import('@bio/contracts').PanelDocument) => void) | undefined;
   attachment?: PanelAttachment | undefined; onAttachmentPage?: ((materialId: string, page: number) => void) | undefined;
@@ -31,7 +32,7 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
   receipt: SessionReceipt | null; receiptVisible: boolean; onReceiptClose: () => void;
   children: ReactNode; subtitle: string; activity: FoxActivity; running: boolean;
   callOpen: boolean; callStartedAt: number | null; status: string; mode: 'conversation' | 'attachment' | 'editor';
-  callFailed?: boolean;
+  callFailed?: boolean; getDialPhase?: () => number;
   motionState?: 'listen' | 'speak' | 'think'; getMotionLevel?: () => number;
   startDisabled: boolean; onStart: () => void; onEnd: () => void;
 }) {
@@ -133,7 +134,7 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
 
       </> : <>
         {dialing ? <section className="phone-dialing" aria-label="呼叫令狸" aria-busy={!callFailed}>
-          <div className="phone-dial-avatar"><i /><i /><i /><img className="phone-dial-portrait" src={uiAsset('lingli-avatar.png')} alt="令狸的头像" /></div>
+          <DialAvatar active={!callFailed} getPhase={getDialPhase} />
           <p role="status">{callFailed ? '暂时未能接通' : '正在呼叫'}</p>
           {callFailed && <small>{status}</small>}
           {callFailed && <div className="phone-dial-recovery"><button type="button" className="phone-redial" disabled={startDisabled} onClick={onStart}>重新呼叫</button><button type="button" className="phone-dial-back" onClick={onEnd}>返回</button></div>}
