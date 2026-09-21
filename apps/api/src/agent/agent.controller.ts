@@ -12,6 +12,12 @@ export class AgentController {
 
   private get documentStore() { return this.documents ?? new DocumentStore(this.storage, this.memory); }
 
+  @Get('reading-preferences')
+  async readingPreferences(@Req() request: FastifyRequest) {
+    const user = await this.memory?.resolveIdentity(request.headers.authorization);
+    return { fontSize: this.storage.readingFontSize(user) };
+  }
+
   @Get('manuscripts')
   async manuscripts(@Req() request: FastifyRequest) {
     const user = await this.memory?.resolveIdentity(request.headers.authorization);

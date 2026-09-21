@@ -1,4 +1,6 @@
 import type { DocumentView, DocumentPage } from './documents.js';
+import type { ReadingFontSize } from './reading-preferences.js';
+export * from './reading-preferences.js';
 export { documentPages, documentTextSegments } from './documents.js';
 export type { DocumentView, DocumentPage, DocumentRange, DocumentHighlight, DocumentNavigationReceipt } from './documents.js';
 export type ChatRole = 'user' | 'assistant' | 'system';
@@ -73,6 +75,8 @@ export interface MaterialUploadResult extends Material {
 }
 
 export interface AgentContextSnapshot {
+  /** Client implements live reading-font events and feedback. */
+  readingFontControl?: boolean;
   documentView?: DocumentView;
   attachmentView?: { materialId: string; page: number };
   materialIds?: string[];
@@ -128,6 +132,7 @@ export interface MarkdownPanel {
 
 /** Product events. Pi's internal event types stay on the server. */
 export type AgentEventPayload =
+  | { type: 'reading.preference.updated'; fontSize: ReadingFontSize; previousFontSize?: ReadingFontSize }
   | { type: 'run.started' }
   | { type: 'speech.delta'; messageId: string; delta: string }
   | { type: 'speech.completed'; messageId: string; text: string }

@@ -76,6 +76,7 @@ before(async () => {
         : lastText === 'CLOSE_PANEL' ? { name: 'switch_mode', arguments: { mode: 'conversation' } }
         : lastText === 'OPEN_DRAFT' ? { name: 'show_document', arguments: { documentId: 'draft' } }
         : lastText === 'FOCUS_DRAFT' ? { name: 'show_document', arguments: { documentId: 'draft', blockId: 'p1' } }
+        : lastText === 'SMALLER_FONT' ? { name: 'set_reading_font_size', arguments: { size: '调小' } }
         : lastText === 'EDIT_DRAFT' ? { name: 'edit_document', arguments: { documentId: 'draft', expectedVersion: 1, operations: [{ action: 'replace', targetId: 'p1', block: { id: 'p1', kind: 'paragraph', text: '这是修改后的正文。' } }] } }
         : lastText === 'READ_PANEL' ? { name: 'read_document', arguments: JSON.parse(textOf(runtime)).screen.targetId === 'draft' ? { documentId: 'draft' } : {} } : false,
       text: payload.tools?.length ? '你好，我是令狸。' : 'COMPACTED_MEMORY_MARKER',
@@ -123,6 +124,16 @@ test('retired receipt summary endpoint does not invoke the model', async () => {
   assert.equal(requests.length, before);
 });
 
+test('font tool updates the live UI and next session preference endpoint without editing manuscripts', async () => {
+  const result = await service.run({ message: 'SMALLER_FONT', context: { readingFontControl: true } });
+  assert.ok(result.events.some(e => e.type === 'reading.preference.updated' && e.previousFontSize === '标准' && e.fontSize === '较小'));
+  assert.ok(result.events.some(e => e.type === 'tool.completed' && e.name === 'set_reading_font_size' && !e.isError));
+  assert.deepEqual(await (await fetch(`${baseUrl}/api/v1/agent/reading-preferences`)).json(), { fontSize: '较小' });
+  const next = await service.run({ message: '新的对话' });
+  assert.ok(next.events.some(e => e.type === 'reading.preference.updated' && e.fontSize === '较小' && !e.previousFontSize));
+  assert.ok(!result.events.some(e => e.type === 'tool.started' && e.name === 'edit_document'));
+});
+
 test('existing endpoint uses Pi, persists history and isolates conversations', async () => {
   const first = await post('chat/completions', { message: '记住当前暗号：星河', systemPrompt: 'TEST_PERSONA' });
   assert.equal(first.status, 201);
@@ -131,7 +142,7 @@ test('existing endpoint uses Pi, persists history and isolates conversations', a
   assert.equal(result.usage.promptTokens, 12);
   assert.equal(result.usage.promptCacheHitTokens, 2);
   const request = requests.at(-1);
-  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'restore_document', 'read_attachment']);
+  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'restore_document', 'read_attachment', 'set_reading_font_size']);
   assert.deepEqual(request.thinking, { type: 'disabled' });
   assert.ok(JSON.stringify(request.messages).includes('TEST_PERSONA'));
   assert.ok(!JSON.stringify(request.messages).includes('Compound Codex'));

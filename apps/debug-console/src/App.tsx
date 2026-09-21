@@ -1,6 +1,9 @@
 import { MemoryInspector } from './memory-inspector';
 import { ModelObservations } from './model-observations';
 import { DocumentReader } from './document-reader';
+import { useReadingFont } from './use-reading-font';
+import { READING_FONT_SCALE } from '@bio/contracts';
+import type { CSSProperties } from 'react';
 import type { DocumentView } from '@bio/contracts';
 import { useMaterialOriginal } from './use-material-original';
 import { accountCacheKey } from './account-cache';
@@ -86,6 +89,7 @@ function formatCost(value: number): string {
 }
 
 export function App() {
+  const { fontSize, feedback: readingFontFeedback, applyReadingFont } = useReadingFont();
   const [productView, setProductView] = useState<ProductView>('agent');
   const [apiStatus, setApiStatus] = useState<ApiStatus>('checking');
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
@@ -181,6 +185,7 @@ export function App() {
     return {
       message: text,
       context: {
+        readingFontControl: true,
         materialIds,
         ...(attachmentView.current ? { attachmentView: attachmentView.current } : {}),
         ...(shownPanel?.mode === 'editor' && documentView.current ? { documentView: documentView.current } : {}),
@@ -238,6 +243,7 @@ export function App() {
       record.request.message = event.text; timings.asrFinal = event.elapsedMs; setPendingMessage(event.text);
     }
     if (event.type === 'agent') {
+      if (event.event.type === 'reading.preference.updated') applyReadingFont(event.event.fontSize, event.event.previousFontSize);
       record.conversationId = event.event.conversationId;
       setConversationId(event.event.conversationId);
       record.live = applyLiveEvent(record.live!, event.event, event.elapsedMs);
@@ -276,7 +282,7 @@ export function App() {
     const client = new BrowserVoice({
       prepare: () => prepareCallUi(initialMaterialId),
       connected: () => { setCallStartedAt(value => value ?? Date.now()); if (receiptCall.current) receiptCall.current.startedAt = Date.now(); },
-      request: () => { window.dispatchEvent(new Event('bio:document-view-request')); return { ...voiceContext.current }; },
+      request: () => { window.dispatchEvent(new Event('bio:document-view-request')); return { ...voiceContext.current, context: { ...voiceContext.current.context, readingFontControl: true } }; },
       start: (id, request) => {
         startedRef.current = performance.now(); followThread.current = true;
         const currentLive = { ...emptyLiveRun(), ...(voiceTurn.current?.record.panel ? { panel: voiceTurn.current.record.panel } : shownPanel ? { panel: shownPanel } : {}) };
@@ -358,6 +364,7 @@ export function App() {
         const item = JSON.parse(line) as { kind: string; event?: AgentEvent; result?: ChatCompletionResponse; message?: string };
         if (item.kind === 'error') throw new Error(item.message ?? '运行失败');
         if (item.event) {
+          if (item.event.type === 'reading.preference.updated') applyReadingFont(item.event.fontSize, item.event.previousFontSize);
           runConversationId = item.event.conversationId;
           setConversationId(item.event.conversationId);
           if (item.event.type === 'panel.state.updated') {
@@ -453,7 +460,7 @@ export function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-reading-font={fontSize} style={{ '--reading-scale': READING_FONT_SCALE[fontSize] } as CSSProperties}>
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark">B</span>
@@ -499,6 +506,7 @@ export function App() {
             <PhonePreview onAttachmentPage={(materialId, page) => { attachmentView.current = { materialId, page }; voiceRef.current?.updateAttachmentView({ materialId, page }); voiceContext.current = { ...voiceContext.current, context: { ...voiceContext.current.context, attachmentView: { materialId, page } } }; }} attachment={shownPanel?.attachment} subtitle={subtitle} running={running} activity={foxActivityOf({ running, live, panel: shownPanel, ...(callOpen ? { audioPlaying, ...(voiceEnabled ? { voiceState } : {}), userSpeaking: micEnabled && micListening && userSpeaking } : {}) })}
               motionState={audioPlaying ? 'speak' : voiceEnabled && micListening ? 'listen' : running ? 'think' : 'listen'}
               getMotionLevel={() => voiceRef.current?.getMotionLevel() ?? 0}
+              readingFontFeedback={readingFontFeedback}
               callOpen={callOpen} callFailed={!voiceEnabled} callStartedAt={callStartedAt} status={voiceStatus} mode={shownPanel?.mode ?? 'conversation'}
               onManuscriptChat={document => {
                 const view = { documentId: document.id, version: document.version, page: 1 };

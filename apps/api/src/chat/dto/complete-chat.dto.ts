@@ -90,6 +90,7 @@ export class DocumentViewDto {
   @IsInt() @Min(1) page!: number;
 }
 export class ContextSnapshotDto implements AgentContextSnapshot {
+  @IsOptional() @IsBoolean() readingFontControl?: boolean;
   @IsOptional() @ValidateNested() @Type(() => DocumentViewDto)
   documentView?: DocumentViewDto;
   @IsOptional() @ValidateNested() @Type(() => AttachmentViewDto)

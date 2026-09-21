@@ -23,7 +23,8 @@ interface Manifest {
   animations: Animation[];
 }
 
-export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, callOpen, callStartedAt, status, callFailed = false, motionState = 'listen', getMotionLevel = () => 0, mode, startDisabled, onStart, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
+export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, callOpen, callStartedAt, status, callFailed = false, motionState = 'listen', getMotionLevel = () => 0, mode, startDisabled, onStart, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
+  readingFontFeedback?: { id: number; text: string } | undefined;
   onManuscriptChat?: ((document: import('@bio/contracts').PanelDocument) => void) | undefined;
   attachment?: PanelAttachment | undefined; onAttachmentPage?: ((materialId: string, page: number) => void) | undefined;
   onMaterialChat: (item: Material) => void;
@@ -113,6 +114,7 @@ export function PhonePreview({ attachment, onAttachmentPage, onManuscriptChat, c
   return <div className="phone-preview" aria-label="手机用户界面预览">
     <link rel="preload" as="image" href={uiAsset('lingli-avatar.png')} />
     <div className={`phone-screen ${callOpen ? 'phone-screen--call' : ''} ${mode === 'attachment' ? 'phone-screen--attachment' : ''} ${mode === 'editor' ? 'phone-screen--editor' : ''} ${callOpen && mode === 'conversation' ? 'phone-screen--conversation' : ''} ${dialing ? 'phone-screen--dialing' : ''}`} style={{ aspectRatio: '320/692' }}>
+      {readingFontFeedback && <div key={readingFontFeedback.id} className="reading-font-feedback" role="status">{readingFontFeedback.text}</div>}
       {!callOpen ? <>
         {artwork}
         <section className={`phone-desk ${receiptVisible ? 'phone-desk--printing' : ''}`} inert={receiptVisible || !!drawer} aria-label="令狸的书桌">

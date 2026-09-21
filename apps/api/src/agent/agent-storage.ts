@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AgentTraceEntry } from '@bio/contracts';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, renameSync } from 'node:fs';
+import { DEFAULT_READING_FONT_SIZE, isReadingFontSize, type ReadingFontSize } from '@bio/contracts';
 import { createHash } from 'node:crypto';
 import { appendFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
@@ -19,6 +20,27 @@ export class AgentStorage {
 
   assertId(id: string): void {
     if (!UUID.test(id)) throw new BadRequestException('Expected a UUID v4');
+  }
+
+  private readingPreferencePath(user?: string): string {
+    const directory = join(this.root, 'reading-preferences', user ? createHash('sha256').update(user).digest('hex') : 'local-preview');
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    return join(directory, 'font-size.json');
+  }
+
+  readingFontSize(user?: string): ReadingFontSize {
+    const path = this.readingPreferencePath(user);
+    if (!existsSync(path)) return DEFAULT_READING_FONT_SIZE;
+    const value = JSON.parse(readFileSync(path, 'utf8')) as { fontSize?: unknown };
+    return isReadingFontSize(value.fontSize) ? value.fontSize : DEFAULT_READING_FONT_SIZE;
+  }
+
+  saveReadingFontSize(fontSize: ReadingFontSize, user?: string): void {
+    if (!isReadingFontSize(fontSize)) throw new BadRequestException('Invalid reading font size');
+    const path = this.readingPreferencePath(user);
+    // One API process; synchronous read/adjust/write cannot interleave across calls.
+    writeFileSync(`${path}.tmp`, JSON.stringify({ fontSize }), { mode: 0o600 });
+    renameSync(`${path}.tmp`, path);
   }
 
   conversationDirectory(id: string, user?: string): string {

@@ -1,4 +1,4 @@
-import type { AgentContextSnapshot, AgentScene } from '@bio/contracts';
+import type { AgentContextSnapshot, AgentScene, ReadingFontSize } from '@bio/contracts';
 import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import type { PanelWorkspace } from './panel-workspace.js';
 
@@ -70,13 +70,14 @@ export function buildSystemPrompt(persona: string): string {
 }
 
 /** Rebuild from live server state before each model call, including within a tool loop. */
-export function buildRuntimeContext(snapshot: AgentContextSnapshot | undefined, contentView: ReturnType<PanelWorkspace['context']>): string {
+export function buildRuntimeContext(snapshot: AgentContextSnapshot | undefined, contentView: ReturnType<PanelWorkspace['context']>, readingFontSize?: ReadingFontSize): string {
   const scene = contentView.scene;
   const workspace = snapshot?.workspace;
   return JSON.stringify({
     type: 'bio_runtime_context',
     scene,
     requestedScene: snapshot?.scene ?? null,
+    ...(readingFontSize ? { readingFontSize } : {}),
     submittedAttachmentIds: snapshot?.attachments?.map(attachment => attachment.id) ?? [],
     attachmentView: snapshot?.attachmentView && !contentView.attachment?.originalStatus && contentView.attachment?.url === `/api/v1/materials/${snapshot.attachmentView.materialId}/file` ? { ...snapshot.attachmentView, source: 'client_reported_page' } : null,
     contentView,
