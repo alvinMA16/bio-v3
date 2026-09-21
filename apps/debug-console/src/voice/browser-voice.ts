@@ -197,7 +197,11 @@ export class BrowserVoice {
     };
     ws.onmessage = event => {
       if (this.closed || this.socket !== ws) return;
-      try { this.receive(JSON.parse(String(event.data)) as VoiceServerMessage); }
+      try {
+        const message = JSON.parse(String(event.data)) as VoiceServerMessage;
+        this.acknowledgePanel(message);
+        this.receive(message);
+      }
       catch (error) {
         console.error('Voice receive failed', { callId: this.callId, turnId: this.turnId, name: error instanceof Error ? error.name : 'unknown' });
         this.fail('语音数据处理失败，请重试。');
@@ -262,6 +266,22 @@ export class BrowserVoice {
     this.callbacks.event({ type: 'cancelled', turnId: this.turnId, elapsedMs: 0 });
     this.turnActive = false; this.setListening(false); this.listen();
   }
+  private acknowledgePanel(event: VoiceServerMessage): void {
+    if (event.turnId === this.turnId && event.type === 'agent') {
+      if (event.event.type === 'panel.state.updated') {
+        const view = event.event.panel.documentView;
+        if (view?.focus) {
+          const script = typeof document !== 'undefined' ? document.querySelector<HTMLScriptElement>('script[type="module"][src]') : null;
+          const clientBuild = script?.src.split('/').at(-1)?.split('?')[0];
+          // Acknowledge transport before React renders. This is not visibility.
+          this.updateDocumentView({ documentId: view.documentId, version: view.version, page: view.page,
+            navigation: { requestId: view.focus.requestId, status: 'received', attempts: 0, scrollBefore: 0, scrollAfter: 0,
+              ...(clientBuild && /^[a-zA-Z0-9_.-]{1,120}$/.test(clientBuild) ? { clientBuild } : {}) } });
+        }
+      }
+    }
+  }
+
   private receive(event: VoiceServerMessage): void {
     if (this.closed || event.turnId !== this.turnId) return;
     if (event.type === 'error' && event.code !== 'CALL_BUSY') {

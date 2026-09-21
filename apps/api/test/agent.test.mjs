@@ -75,6 +75,7 @@ before(async () => {
         : lastText === 'OPEN_MISSING_ATTACHMENT' ? { name: 'switch_mode', arguments: { mode: 'attachment_conversation', targetId: 'missing' } }
         : lastText === 'CLOSE_PANEL' ? { name: 'switch_mode', arguments: { mode: 'conversation' } }
         : lastText === 'OPEN_DRAFT' ? { name: 'show_document', arguments: { documentId: 'draft' } }
+        : lastText === 'FOCUS_DRAFT' ? { name: 'show_document', arguments: { documentId: 'draft', blockId: 'p1' } }
         : lastText === 'EDIT_DRAFT' ? { name: 'edit_document', arguments: { documentId: 'draft', expectedVersion: 1, operations: [{ action: 'replace', targetId: 'p1', block: { id: 'p1', kind: 'paragraph', text: '这是修改后的正文。' } }] } }
         : lastText === 'READ_PANEL' ? { name: 'read_document', arguments: JSON.parse(textOf(runtime)).screen.targetId === 'draft' ? { documentId: 'draft' } : {} } : false,
       text: payload.tools?.length ? '你好，我是令狸。' : 'COMPACTED_MEMORY_MARKER',
@@ -162,6 +163,26 @@ test('real SDK tool loop emits panel events and counts all model calls', async (
   const saved = await (await fetch(`${baseUrl}/api/v1/agent/manuscripts/${result.conversationId}/draft`)).json();
   assert.equal(saved.blocks[0].text, '这是正文。');
   assert.equal((await fetch(`${baseUrl}/api/v1/agent/manuscripts/${randomUUID()}/draft`)).status, 404);
+});
+
+test('real SDK marks unconfirmed navigation as tool failure and persists staged feedback', async () => {
+  const first = await service.run({ message: 'SHOW_PANEL' });
+  let observe, detached = false;
+  const result = await service.run({ message: 'FOCUS_DRAFT', conversationId: first.conversationId }, undefined, undefined, undefined, undefined, {
+    observeViews(listener) { observe = listener; return () => { detached = true; }; },
+    async waitForNavigation(target) {
+      const view = { documentId: target.documentId, version: target.version, page: 1,
+        navigation: { requestId: target.requestId, status: 'received', attempts: 0, scrollBefore: 0, scrollAfter: 0, clientBuild: 'main-test.js' } };
+      observe({ view, accepted: true }); return view;
+    },
+  });
+  assert.equal(result.events.find(e => e.type === 'tool.completed' && e.name === 'show_document').isError, true);
+  const trace = storage.readTrace(result.runId);
+  assert.equal(trace.find(e => e.type === 'document.view').data.navigation.clientBuild, 'main-test.js');
+  const tool = trace.find(e => e.type === 'tool_execution_end');
+  assert.equal(tool.data.isError, true);
+  assert.match(tool.data.result.content[0].text, /reader_not_started/);
+  assert.equal(detached, true);
 });
 
 test('stream endpoint delivers product events and final compatible response', async () => {

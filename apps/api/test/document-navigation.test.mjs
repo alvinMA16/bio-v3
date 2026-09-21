@@ -14,7 +14,7 @@ import { DocumentStore } from '../dist/agent/document-store.js';
 import { PanelWorkspace } from '../dist/agent/panel-workspace.js';
 import { createPresentationTools } from '../dist/agent/presentation-tools.js';
 
-for (const scenario of ['visible', 'wrong_target', 'old_request', 'old_version', 'interrupted', 'timeout', 'no_client', 'invalid_range']) {
+for (const scenario of ['visible', 'wrong_target', 'old_request', 'old_version', 'interrupted', 'timeout', 'no_client', 'invalid_range', 'received', 'rendering', 'highlight_missing', 'highlight_visible']) {
   test(`focus confirmation: ${scenario}`, async () => {
     const root = mkdtempSync(join(tmpdir(), 'bio-navigation-'));
     try {
@@ -34,14 +34,24 @@ for (const scenario of ['visible', 'wrong_target', 'old_request', 'old_version',
         return { documentId: 'story', version: scenario === 'old_version' ? 2 : 1, page: 1, following: false,
           visibleRanges: [{ blockId: scenario === 'wrong_target' ? 'p1' : 'p2', start: 0, end: scenario === 'invalid_range' ? 100 : 3 }],
           navigation: { requestId: scenario === 'old_request' ? randomUUID() : target.requestId,
-            status: scenario === 'interrupted' ? 'failed' : 'visible', ...(scenario === 'interrupted' ? { reason: 'user_interrupted' } : {}),
+            status: ['received', 'rendering'].includes(scenario) ? scenario : scenario === 'interrupted' ? 'failed' : 'visible', ...(scenario === 'interrupted' ? { reason: 'user_interrupted' } : {}),
+            ...(scenario.startsWith('highlight_') ? { highlight: scenario === 'highlight_visible' ? 'visible' : 'missing' } : {}),
             attempts: 1, scrollBefore: 0, scrollAfter: 50 } };
       } };
       const tool = createPresentationTools(workspace, e => events.push(e), undefined, { store, user: 'owner', conversationId: randomUUID() }, runtime).find(t => t.name === 'show_document');
-      const result = JSON.parse((await tool.execute('focus', { documentId: 'story', blockId: 'p2' })).content[0].text);
-      assert.equal(result.rendered, scenario === 'visible');
-      assert.equal(result.status, scenario === 'visible' ? 'visible' : ['interrupted', 'wrong_target'].includes(scenario) ? 'failed' : 'unconfirmed');
-      assert.equal(workspace.context().screen.renderAcknowledged, scenario === 'visible');
+      const response = await tool.execute('focus', { documentId: 'story', ...(scenario.startsWith('highlight_')
+        ? { expectedVersion: 1, highlights: [{ blockId: 'p2', quote: '第五' }] } : { blockId: 'p2' }) })
+        .then(value => ({ ...value, isError: false }), error => ({ content: [{ type: 'text', text: error.message }], isError: true }));
+      const result = JSON.parse(response.content[0].text);
+      const visible = ['visible', 'highlight_missing', 'highlight_visible'].includes(scenario);
+      const confirmed = ['visible', 'highlight_visible'].includes(scenario);
+      assert.equal(result.rendered, visible);
+      assert.equal(response.isError, !confirmed);
+      assert.equal(result.status, confirmed ? 'visible' : ['interrupted', 'wrong_target', 'highlight_missing'].includes(scenario) ? 'failed' : 'unconfirmed');
+      assert.equal(workspace.context().screen.renderAcknowledged, visible);
+      if (scenario === 'received') assert.equal(result.failureReason, 'reader_not_started');
+      if (scenario === 'rendering') assert.equal(result.failureReason, 'reader_not_completed');
+      if (scenario === 'highlight_missing') assert.equal(result.highlightRendered, false);
       assert.equal((await store.get('owner', 'story')).version, 1);
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
@@ -50,7 +60,7 @@ for (const scenario of ['visible', 'wrong_target', 'old_request', 'old_version',
 test('navigation receipt validation rejects unbounded diagnostics and unknown fields', async () => {
   const view = { documentId: 'story', version: 1, page: 1, navigation: { requestId: randomUUID(), status: 'visible', attempts: 1, scrollBefore: 0, scrollAfter: 25.5 } };
   assert.equal((await validate(plainToInstance(DocumentViewDto, view), { whitelist: true, forbidNonWhitelisted: true })).length, 0);
-  for (const change of [{ attempts: 999 }, { scrollAfter: Infinity }, { status: 'success' }, { arbitrary: 'x' }]) {
+  for (const change of [{ attempts: 999 }, { scrollAfter: Infinity }, { status: 'success' }, { arbitrary: 'x' }, { targetTop: NaN }, { clientBuild: 'https://secret' }, { highlight: 'success' }]) {
     assert.ok((await validate(plainToInstance(DocumentViewDto, { ...view, navigation: { ...view.navigation, ...change } }), { whitelist: true, forbidNonWhitelisted: true })).length);
   }
 });

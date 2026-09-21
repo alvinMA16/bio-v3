@@ -283,8 +283,28 @@ test('focus waits for matching request and ignores old turn, version and request
   f.session.updateDocumentView('old-turn', view);
   f.session.updateDocumentView('focus', { ...view, version: 2 });
   f.session.updateDocumentView('focus', { ...view, navigation: { requestId: 'old', status: 'visible' } });
+  f.session.updateDocumentView('focus', { ...view, navigation: { requestId: 'new', status: 'received' } });
+  f.session.updateDocumentView('focus', { ...view, navigation: { requestId: 'new', status: 'rendering' } });
   await flush(); assert.equal(resolved, false);
   f.session.updateDocumentView('focus', view); await f.done; assert.equal(resolved, true); f.session.close();
+});
+
+test('navigation timeout preserves the last stage and traces rejected turn feedback', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const observed = []; let result;
+  const f = fixture({ run: async (_input, _emit, signal, _trigger, runtime) => {
+    const stop = runtime.observeViews(event => observed.push(event));
+    try { result = await runtime.waitForNavigation({ documentId: 'story', version: 1, requestId: 'focus' }, signal); }
+    finally { stop(); }
+    return response;
+  } });
+  await f.session.listen('first', {}); f.session.finish('first'); await flush();
+  const view = { documentId: 'story', version: 1, page: 1, navigation: { requestId: 'focus', status: 'received', clientBuild: 'main-test.js' } };
+  f.session.updateDocumentView('old', view); f.session.updateDocumentView('first', view);
+  t.mock.timers.tick(2000); await f.done;
+  assert.deepEqual(observed.map(e => e.accepted), [false, true]);
+  assert.equal(result.navigation.status, 'received'); assert.equal(result.navigation.clientBuild, 'main-test.js');
+  f.session.close();
 });
 
 test('focus confirmation times out for old clients and is cancelled on interruption', async t => {

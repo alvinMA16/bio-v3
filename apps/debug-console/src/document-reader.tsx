@@ -36,7 +36,15 @@ export function DocumentReader({ document, view, onView }: {
   useEffect(() => {
     const root = content.current;
     const scroller = root?.closest<HTMLElement>('.phone-panel-scroll');
-    if (!root || !scroller) return;
+    if (!root) return;
+    if (!scroller) {
+      report.current = () => {
+        const { document, view, onView } = current.current;
+        onView?.({ documentId: document.id, version: document.version, page: view?.page ?? 1, visibleRanges: [],
+          ...(receipt.current ? { navigation: receipt.current } : {}) });
+      };
+      return () => { report.current = () => {}; };
+    }
     following.current = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let last = '';
@@ -92,11 +100,12 @@ export function DocumentReader({ document, view, onView }: {
     const navigation = { documentId: document.id, page: view?.page ?? 1, followRequest: view?.followRequest, focusId: view?.focus?.requestId };
     lastNavigation.current = navigation;
     const resume = navigation.followRequest !== undefined && navigation.followRequest !== previous?.followRequest;
-    const focusRequested = navigation.focusId !== undefined && navigation.focusId !== receipt.current?.requestId;
+    const focusRequested = navigation.focusId !== undefined && (navigation.focusId !== receipt.current?.requestId
+      || receipt.current?.status === 'rendering' || receipt.current?.status === 'received');
     if (resume) following.current = true;
     if (root && view?.focus && focusRequested) {
       receipt.current = undefined;
-      return navigateDocumentFocus(root, view.focus, value => { receipt.current = value; report.current(); });
+      return navigateDocumentFocus(root, view.focus, value => { receipt.current = value; report.current(); }, !!highlight?.ranges.length);
     }
     if (previous?.documentId === document.id && previous.page === navigation.page && !resume) return;
     if (root && scroller && following.current) {
@@ -113,7 +122,7 @@ export function DocumentReader({ document, view, onView }: {
   return <section className={`document-reader document-reader--${highlight?.kind ?? 'plain'}`} ref={content} aria-label="文稿阅读">
     <header className="document-heading"><h3>{titleBlock ? textSpans(titleBlock.text, titleBlock.id, ranges) : document.title}</h3><small>已保存 · 版本 {document.version}</small></header>
     {highlight && <aside className="document-highlight-note" aria-label="文稿标记">
-      <span><i aria-hidden="true" />{highlight.kind === 'focus' ? '已标出你要找的片段' : highlight.ranges.length ? '已标出本次文字改动' : highlight.deletions?.length ? '本次移除了文字' : '本次未标记正文文字'}</span>
+      <span><i aria-hidden="true" />{highlight.kind === 'focus' ? '定位与高亮标记' : highlight.ranges.length ? '本次文字改动标记' : highlight.deletions?.length ? '本次移除了文字' : '本次未标记正文文字'}</span>
       <button type="button" aria-label="清除高亮" onClick={() => setDismissed(highlight.requestId)}>清除</button>
       {!!highlight.deletions?.length && <details><summary>查看移除的文字</summary><div>{highlight.deletions.map((item, index) => <del key={index}>{item.text}</del>)}</div></details>}
       {highlight.notice && <small>{highlight.notice}</small>}

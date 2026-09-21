@@ -120,10 +120,23 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
         const accepted = matched && view.visibleRanges !== undefined && workspace.acceptDocumentView(view);
         const visible = accepted && view.navigation?.status === 'visible' && view.visibleRanges?.some(range =>
           range.blockId === target.blockId && range.start <= target.start && range.end > target.start);
-        return result({ status: visible ? 'visible' : accepted ? 'failed' : 'unconfirmed', rendered: !!visible,
-          documentView: panel.documentView, navigation: accepted ? view.navigation : { requestId: target.requestId, reason: runtime?.waitForNavigation ? 'timeout_or_invalid_receipt' : 'client_feedback_unavailable' },
+        const terminal = accepted && ['visible', 'failed'].includes(view.navigation!.status);
+        const highlightConfirmed = !ranges || accepted && view.navigation?.highlight === 'visible';
+        const confirmed = visible && highlightConfirmed;
+        const reason = !matched ? 'no_matching_receipt' : view.navigation?.status === 'received' ? 'reader_not_started'
+          : view.navigation?.status === 'rendering' ? 'reader_not_completed'
+          : !accepted ? 'invalid_viewport'
+          : visible && !highlightConfirmed ? 'highlight_not_confirmed' : view.navigation?.reason;
+        const outcome = { status: confirmed ? 'visible' : terminal ? 'failed' : 'unconfirmed', rendered: !!visible,
+          ...(ranges ? { highlightRendered: !!(visible && highlightConfirmed) } : {}),
+          documentView: panel.documentView, navigation: matched ? view.navigation : { requestId: target.requestId, reason: runtime?.waitForNavigation ? 'timeout_or_invalid_receipt' : 'client_feedback_unavailable' },
+          failureReason: confirmed ? undefined : reason,
           screen: workspace.context().screen,
-          note: visible ? '客户端确认目标文字已进入视口；不代表用户已经读过。' : '尚未确认目标文字进入视口。不要声称已滚动到位；说明位置并坦诚告知未确认。' });
+          note: confirmed ? '客户端确认目标文字已进入视口，目标高亮（如有请求）已验证；不代表用户已经读过。' : '本次展示未确认成功。不要声称已经滚动到位、已高亮或位于屏幕中间。说明目标位置和未确认结果，不自动重复定位。' };
+        // Pi marks resolved executions successful even if their value has isError.
+        // Throw the structured outcome so its tool-result error flag is preserved.
+        if (!confirmed) throw new Error(JSON.stringify(outcome));
+        return result(outcome);
       },
     }),
     defineTool({

@@ -14,6 +14,7 @@ interface Turn {
   speech: AbortController; window: PlaybackWindow; progress: VoicePlaybackSnapshot;
   segments: Array<{ end: number; segmentId: number; messageId: string; text: string }>;
   viewListeners: Set<() => void>;
+  viewObservers: Set<(event: { view: DocumentView; accepted: boolean }) => void>;
 }
 
 /** One connection, one active turn; all late callbacks are scoped to their owning turn. */
@@ -36,7 +37,7 @@ export class VoiceSession {
     if (this.playbackTurn && (!this.playbackTurn.progress.generated || this.playbackTurn.window.played < this.playbackTurn.window.sent)) this.report(this.playbackTurn, true);
     const turn: Turn = { id, request, abort: new AbortController(), started: performance.now(),
       task: Promise.resolve(), state: 'connecting', audioBytes: 0,
-      speech: new AbortController(), window: new PlaybackWindow(playbackFeedback), segments: [], viewListeners: new Set(),
+      speech: new AbortController(), window: new PlaybackWindow(playbackFeedback), segments: [], viewListeners: new Set(), viewObservers: new Set(),
       progress: { turnId: id, generated: false, sentSamples: 0, playedSamples: 0, interrupted: false } };
     this.current = turn;
     this.state(turn, 'connecting');
@@ -130,7 +131,13 @@ export class VoiceSession {
 
   updateDocumentView(id: string, view: DocumentView): void {
     const turn = this.current;
-    if (!turn || turn.id !== id || !this.isCurrent(turn)) return;
+    if (!turn) return;
+    const accepted = turn.id === id && this.isCurrent(turn);
+    for (const observer of turn.viewObservers) observer({ view, accepted });
+    if (!accepted) return;
+    // Transport acknowledgement has no viewport; preserve the last actual viewport.
+    const previous = turn.request.context?.documentView;
+    if (view.navigation?.status === 'received' && previous?.documentId === view.documentId && previous.version === view.version) view = { ...previous, navigation: view.navigation };
     turn.request = { ...turn.request, context: { ...turn.request.context, documentView: view } };
     for (const listener of turn.viewListeners) listener();
   }
@@ -202,16 +209,20 @@ export class VoiceSession {
         }
       }, turn.abort.signal, opening ? 'call_opening' : undefined, {
         getView: () => turn.request.context?.documentView,
+        observeViews: listener => { turn.viewObservers.add(listener); return () => { turn.viewObservers.delete(listener); }; },
         waitForNavigation: (target, signal) => new Promise((resolve, reject) => {
+          let last: DocumentView | undefined;
           const abortSignal = signal ? AbortSignal.any([turn.abort.signal, signal]) : turn.abort.signal;
           const cleanup = () => { clearTimeout(timer); turn.viewListeners.delete(check); abortSignal.removeEventListener('abort', abort); };
           const abort = () => { cleanup(); reject(new Error('Navigation cancelled')); };
           const check = () => {
             const view = turn.request.context?.documentView;
             if (view?.documentId !== target.documentId || view.version !== target.version || view.navigation?.requestId !== target.requestId) return;
+            last = view;
+            if (view.navigation.status === 'received' || view.navigation.status === 'rendering') return;
             cleanup(); resolve(view);
           };
-          const timer = setTimeout(() => { cleanup(); resolve(undefined); }, 2000);
+          const timer = setTimeout(() => { cleanup(); resolve(last); }, 2000);
           turn.viewListeners.add(check);
           abortSignal.addEventListener('abort', abort, { once: true });
           if (abortSignal.aborted) abort(); else check();

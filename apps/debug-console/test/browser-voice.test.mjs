@@ -52,7 +52,7 @@ function environment(t, pendingMic, moduleError, prepare) {
   const globals = {
     navigator: { mediaDevices: { getUserMedia: () => pendingMic ?? Promise.resolve(stream) } },
     location: { href: 'http://localhost:5173', protocol: 'http:' },
-    document: { hidden: false, addEventListener() {}, removeEventListener() {} },
+    document: { hidden: false, querySelector: () => ({ src: 'http://localhost/assets/main-test.js' }), addEventListener() {}, removeEventListener() {} },
     AudioContext: Context,
     AudioWorkletNode: class { constructor() { captures.push(this); } port = { postMessage() {} }; connect() {} disconnect() {} },
     WebSocket: Socket,
@@ -431,4 +431,18 @@ test('denying microphone permission discards the prepared opening and closes tra
   deny(Object.assign(new Error('denied'), { name: 'NotAllowedError' })); await starting; t.mock.timers.tick(4000);
   assert.equal(f.ended(), 1); assert.equal(f.connected(), 0); assert.equal(f.nodes.length, 0);
   assert.equal(f.sockets[0].readyState, 3);
+});
+
+test('a focus panel is acknowledged on the wire before the UI callback and never claims visibility', async t => {
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen();
+  const event = { type: 'agent', turnId: f.starts[0], event: { type: 'panel.state.updated', conversationId: 'conversation', panel: {
+    mode: 'editor', documentView: { documentId: 'story', version: 3, page: 2, focus: { requestId: 'focus', blockId: 'b9', start: 0, end: 10 } },
+  } } };
+  ws.onmessage({ data: JSON.stringify(event) });
+  const receipts = f.messages.map(JSON.parse).filter(m => m.type === 'document.view');
+  assert.equal(receipts.length, 1); assert.equal(receipts[0].view.navigation.status, 'received');
+  assert.equal(receipts[0].view.navigation.clientBuild, 'main-test.js');
+  assert.equal(receipts[0].turnId, f.starts[0]); assert.ok(f.events.some(e => e.type === 'agent'));
+  ws.onmessage({ data: JSON.stringify({ ...event, turnId: 'stale' }) });
+  assert.equal(f.messages.map(JSON.parse).filter(m => m.type === 'document.view').length, 1);
 });

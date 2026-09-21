@@ -43,7 +43,11 @@ Web 与小程序展示连续全文，无页码、翻页按钮、选段或“改�
 
 Web 对 `show_document` 的 blockId / highlights 定位独立于朗读跟随：先等布局，再滚动，下一帧确认目标文字进入阅读区。目标暂未出现或滚动未生效时最多尝试 6 次，整个请求限时 1.2 秒；用户滚轮、触摸滑动、指针操作或翻页按键立即终止定位，新请求和组件卸载取消旧请求。确认之前不将请求标为完成。
 
-客户端在 `document.view` 的 navigation 字段回传 requestId、visible/failed、原因、尝试次数和滚动前后位置。语音服务等待最多 2 秒，核对轮次、文稿、版本及请求 ID；内容工具还校验可见范围并确认包含目标起点。show_document 返回 visible / failed / unconfirmed 和 rendered，只有 visible 才允许 Agent 声称已经定位到位。文稿已显示的旧回执不能确认新的定位。回执与可见范围保存在工具结果 Trace 中；没有回执通道的文字请求及旧客户端保持 unconfirmed，不阻断任务或假称成功。普通朗读推进不等待精确定位回执。
+客户端在 `document.view.navigation` 回传同一 requestId 的 received（WebSocket 收到指令，含加载的脚本文件名）、rendering（阅读器开始处理）、visible/failed（最终结果）。记录尝试次数、滚动前后位置、目标与视口纵向坐标、前端耗时，并独立报告目标高亮 visible/not_visible/missing/not_requested。可见性取阅读区与浏览器视口的交集，缺少滚动容器明确返回 scroller_missing。
+
+语音服务等待最多 2 秒；中间阶段不结束等待，最终回执立即结束等待，超时保留最后收到的阶段。核对轮次、文稿、版本及请求 ID，内容工具还校验可见范围包含目标起点。show_document 返回 visible / failed / unconfirmed 和 rendered；请求高亮时还要求 highlightRendered=true 才算整体成功。失败/未确认通过结构化错误传递，保证 Pi 的 tool_execution_end / tool.completed.isError=true，而不只是正常工具结果正文写“失败”。这不撤销文稿展示指令，也不回滚正文。没有回执的旧客户端和文字请求同样不能声称精确定位成功；普通打开文稿和朗读推进不等待精确定位回执。
+
+运行 Trace 的 input/document.view 记录收到的反馈及轮次是否接受，不含正文。工具结果保留最终回执或超时阶段，可区分 no_matching_receipt、reader_not_started、reader_not_completed、invalid_viewport 和 highlight_not_confirmed。没有回执仍不能单凭服务端区分未刷新旧页面、未送达或已断开的客户端；不要从超时推断滚动算法是根因。
 
 ## 分段朗读与自动跟随
 

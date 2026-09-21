@@ -3,11 +3,18 @@ import type { PanelDocument } from './index.js';
 export interface DocumentRange { blockId: string; start: number; end: number }
 export interface DocumentNavigationReceipt {
   requestId: string;
-  status: 'visible' | 'failed';
-  reason?: 'target_missing' | 'not_visible' | 'user_interrupted';
+  status: 'received' | 'rendering' | 'visible' | 'failed';
+  reason?: 'target_missing' | 'scroller_missing' | 'not_visible' | 'user_interrupted';
   attempts: number;
   scrollBefore: number;
   scrollAfter: number;
+  clientBuild?: string;
+  elapsedMs?: number;
+  targetTop?: number;
+  targetBottom?: number;
+  viewportTop?: number;
+  viewportBottom?: number;
+  highlight?: 'not_requested' | 'visible' | 'not_visible' | 'missing';
 }
 export interface DocumentHighlight {
   requestId: string;

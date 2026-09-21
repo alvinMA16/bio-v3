@@ -47,7 +47,7 @@ test('focus works within the same narration chunk; edits and reloads keep precis
     const conversationId = randomUUID(), cwd = storage.conversationDirectory(conversationId), workspace = new PanelWorkspace(cwd);
     const tools = Object.fromEntries(createPresentationTools(workspace, () => {}, undefined, { store, conversationId }).map(t => [t.name, t]));
     await tools.edit_document.execute('1', { documentId: 'story', expectedVersion: 0, title: '回忆', operations: [{ action: 'insert', block: doc('花开了，花又落了。').blocks[0] }] });
-    await tools.show_document.execute('2', { documentId: 'story', expectedVersion: 1, highlights: [{ blockId: 'p1', quote: '花', occurrence: 2 }] });
+    await assert.rejects(tools.show_document.execute('2', { documentId: 'story', expectedVersion: 1, highlights: [{ blockId: 'p1', quote: '花', occurrence: 2 }] }), /unconfirmed/);
     const state = workspace.state();
     assert.equal(state.documentView.page, 1); assert.equal(state.documentView.focus.start, 4);
     assert.equal(state.documentView.highlight.ranges[0].end, 5);

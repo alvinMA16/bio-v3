@@ -65,11 +65,18 @@ export class VisibleDocumentRangeDto {
 }
 export class DocumentNavigationReceiptDto {
   @IsUUID('4') requestId!: string;
-  @IsIn(['visible', 'failed']) status!: 'visible' | 'failed';
-  @IsOptional() @IsIn(['target_missing', 'not_visible', 'user_interrupted']) reason?: 'target_missing' | 'not_visible' | 'user_interrupted';
+  @IsIn(['received', 'rendering', 'visible', 'failed']) status!: 'received' | 'rendering' | 'visible' | 'failed';
+  @IsOptional() @IsIn(['target_missing', 'scroller_missing', 'not_visible', 'user_interrupted']) reason?: 'target_missing' | 'scroller_missing' | 'not_visible' | 'user_interrupted';
   @IsInt() @Min(0) @Max(6) attempts!: number;
   @IsNumber() @Min(0) @Max(10000000) scrollBefore!: number;
   @IsNumber() @Min(0) @Max(10000000) scrollAfter!: number;
+  @IsOptional() @IsString() @Matches(/^[a-zA-Z0-9_.-]{1,120}$/) clientBuild?: string;
+  @IsOptional() @IsNumber() @Min(0) @Max(86400000) elapsedMs?: number;
+  @IsOptional() @IsNumber() @Min(-10000000) @Max(10000000) targetTop?: number;
+  @IsOptional() @IsNumber() @Min(-10000000) @Max(10000000) targetBottom?: number;
+  @IsOptional() @IsNumber() @Min(-10000000) @Max(10000000) viewportTop?: number;
+  @IsOptional() @IsNumber() @Min(-10000000) @Max(10000000) viewportBottom?: number;
+  @IsOptional() @IsIn(['not_requested', 'visible', 'not_visible', 'missing']) highlight?: 'not_requested' | 'visible' | 'not_visible' | 'missing';
 }
 export class DocumentViewDto {
   @IsOptional() @ValidateNested() @Type(() => DocumentNavigationReceiptDto)

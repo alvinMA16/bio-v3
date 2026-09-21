@@ -43,6 +43,7 @@ export class AgentService {
     let observationQueue = Promise.resolve();
     let observationBytes = 0;
     let unsubscribe: (() => void) | undefined;
+    let unobserveViews: (() => void) | undefined;
     let lastAssistant: AssistantMessage | undefined;
     let eventError: unknown;
     let timedOut = false;
@@ -78,6 +79,12 @@ export class AgentService {
     signal?.addEventListener('abort', abort, { once: true });
 
     try {
+      unobserveViews = runtime?.observeViews?.(({ view, accepted }) => {
+        // Metadata only: no manuscript text or credentials. Includes viewport-only
+        // feedback to distinguish old clients from missing transport entirely.
+        trace('input', 'document.view', { accepted, documentId: view.documentId, version: view.version,
+          page: view.page, navigation: view.navigation, visibleRanges: view.visibleRanges });
+      });
       if (scope && this.memory?.enabled) {
         release = await this.memory.acquireSession(scope.userId, conversationId, runId, this.storage.conversationDirectory(conversationId, scope.userId));
         if (trigger !== 'call_opening') await this.memory.archive(scope, conversationId, runId, randomUUID(), 'user', input.message);
@@ -182,6 +189,7 @@ export class AgentService {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
       unsubscribe?.();
+      unobserveViews?.();
       await observationQueue;
       try {
         try { await archiveQueue; session?.dispose(); }
