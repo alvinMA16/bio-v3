@@ -35,6 +35,6 @@ export function AttachmentViewer({ attachment, onPage }: { attachment: PanelAtta
         if (id) void fetch(`/api/v1/materials/${id}`).then(response => { if (response.status === 410 || response.status === 404) original.retry(); }).catch(() => {});
       }} /> : <pre>{material?.text || '暂无预览内容'}</pre>}
     </div>
-    {!originalStatus && count > 1 && <nav className="attachment-pages" aria-label="文件翻页"><button aria-label="上一页" disabled={page === 1 || loading} onClick={() => setPage(value => value - 1)}>‹</button><span aria-live="polite">{page} / {count}</span><button aria-label="下一页" disabled={page === count || loading} onClick={() => setPage(value => value + 1)}>›</button></nav>}
+    {!originalStatus && count > 1 && <nav className="attachment-pages" aria-label="文件翻页"><button type="button" aria-label="上一页" disabled={page === 1 || loading} onClick={() => setPage(value => value - 1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6" /></svg></button><span aria-live="polite" aria-label={`第 ${page} 页，共 ${count} 页`}><b>{page}</b><i aria-hidden="true">/</i>{count}</span><button type="button" aria-label="下一页" disabled={page === count || loading} onClick={() => setPage(value => value + 1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6 6 6-6 6" /></svg></button></nav>}
   </section>;
 }

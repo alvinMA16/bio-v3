@@ -1,19 +1,25 @@
 .attachment-viewer { height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
-.attachment-viewer-stage { flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.attachment-viewer-stage { flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 4px; border-radius: 12px; background: radial-gradient(ellipse at 50% 40%, #f0f2ee, #dfe5df); }
 .attachment-viewer-stage > pre { max-height: 100%; overflow: auto; font-size: 14px; white-space: pre-wrap; }
 .attachment-viewer-stage > p, .attachment-viewer-stage > div[role="alert"] { font-size: 13px; text-align: center; }
-.attachment-pages { display: flex; align-items: center; justify-content: center; gap: 12px; flex: 0 0 44px; }
-.attachment-pages button { border: 0; background: transparent; color: inherit; min-width: 44px; min-height: 44px; cursor: pointer; }
-.attachment-pages button { font-size: 26px; }
+.attachment-pages { display: grid; grid-template-columns: 44px 64px 44px; align-items: center; align-self: center; flex: 0 0 44px; margin: 4px 0 0; border-radius: 24px; background: linear-gradient(135deg, #f7fbf4c9, #d7e3d7b3); box-shadow: inset 0 1px 0 #ffffffdf, 0 3px 12px #354b3812; backdrop-filter: blur(16px); color: #42534a; }
+.attachment-pages button { display: grid; place-items: center; border: 0; border-radius: 50%; padding: 0; background: transparent; color: inherit; width: 44px; height: 44px; cursor: pointer; }
+.attachment-pages button svg { display: block; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.attachment-pages button:not(:disabled):hover { background: #ffffff66; }
+.attachment-pages button:not(:disabled):active { background: #c8d8cb99; }
+.attachment-pages button:focus-visible { outline: 2px solid #627e68; outline-offset: -3px; }
 .attachment-pages button:disabled { opacity: .3; }
-.attachment-pages span { font-size: 12px; font-variant-numeric: tabular-nums; }
+.attachment-pages span { display: flex; align-items: center; justify-content: center; gap: 5px; height: 44px; font-size: 12px; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.attachment-pages span b { font-weight: 500; }
+.attachment-pages span i { font-style: normal; opacity: .4; }
 .phone-screen.phone-screen--attachment .phone-video { flex-basis: 64px; width: 64px; height: 76px; }
 .phone-screen.phone-screen--attachment .phone-content-panel { padding: 0; border: 0; background: transparent; }
 
 .phone-screen.phone-screen--attachment { color: #424b46; background: linear-gradient(#e9ece9d9,#e9ece9d9), url('/api/v1/ui-assets/felt-oat.webp') center / 280px; background-blend-mode: normal, luminosity; }
+.phone-screen.phone-screen--call.phone-screen--attachment:not(.phone-screen--dialing) { background: #e7ebe7; }
 .phone-screen.phone-screen--attachment .phone-call-duration, .phone-screen.phone-screen--attachment .phone-call-status, .phone-screen.phone-screen--attachment .phone-call-control > span { color: #65716a; }
 .phone-screen.phone-screen--attachment .phone-control-button, .phone-screen.phone-screen--attachment .felt-mic__button { color: #42534a; background: #dbe6df80; backdrop-filter: blur(14px); box-shadow: inset 0 1px 0 #ffffffa0; }
 .phone-screen.phone-screen--attachment .phone-control-button::before, .phone-screen.phone-screen--attachment .felt-mic__button::before { border: 0; }
 .phone-screen.phone-screen--attachment .phone-control-button--end { background: #bb6969; color: #fff; }
 .attachment-viewer-stage { touch-action: manipulation; }
-.attachment-viewer-stage > img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center top; user-select: none; }
+.attachment-viewer-stage > img { display: block; width: 100%; height: 100%; min-height: 0; object-fit: contain; object-position: center; filter: drop-shadow(0 2px 5px #263d2924); user-select: none; }
