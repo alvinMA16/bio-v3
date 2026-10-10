@@ -103,7 +103,7 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
 
   const artwork = <>
       {manifest && <>
-        {callOpen && <div className="phone-art phone-art--background" style={{ backgroundImage: `url(${manifest.layers.environment.src})` }} />}
+        <div className="phone-art phone-art--background" style={{ backgroundImage: `url(${manifest.layers.environment.src})` }} />
         <div className="phone-art-actors">{manifest.animations.map(sheet => <img key={sheet.id} src={sheet.src} alt=""
           onLoad={() => setAnimationState(frameGate.current.loaded(sheet.id as FoxActionId))}
           style={{ position: 'absolute', maxWidth: 'none', pointerEvents: 'none', zIndex: 1,
@@ -123,7 +123,6 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
       {readingFontFeedback && <ReadingFontToast key={readingFontFeedback.id} feedback={readingFontFeedback} />}
       {!callOpen ? <>
         <div className="phone-scene-viewport">
-          {manifest && <div className="phone-scene-extension" aria-hidden="true" style={{ backgroundImage: `url(${uiAsset('environment-expanded.webp')})` }} />}
           <div className="phone-scene-frame">
             {artwork}
             <section className={`phone-desk ${receiptVisible ? 'phone-desk--printing' : ''}`} inert={receiptVisible || !!drawer} aria-label="令狸的书桌">

@@ -260,20 +260,13 @@ body { min-width: 320px; }
 .phone-screen { position: relative; width: 100%; overflow: hidden; border-radius: 23px; background: #d8c5a8; isolation: isolate; }
 .phone-art { position: absolute; inset: 0; pointer-events: none; background-repeat: no-repeat; background-size: 100% 100%; }
 .phone-art--background { z-index: 0; }.phone-art--actor { z-index: 1; }.phone-art--board { z-index: 2; }
-/* Keep the complete desk composition proportional within any phone viewport. */
-.phone-scene-viewport { position: absolute; inset: 0; container-type: size; background: #ded9cf; }
+/* Preserve the original scene; contrasting letterboxing handles other screen ratios. */
+.phone-scene-viewport { position: absolute; inset: 0; container-type: size; background: #151715; }
 .phone-scene-frame {
   position: absolute; left: 50%; top: 50%;
   width: min(100cqw, calc(100cqh * 320 / 692)); aspect-ratio: 320 / 692;
   transform: translate(-50%, -50%); container-type: inline-size; overflow: hidden;
   border-radius: 10% / 4.63%;
-}
-.phone-scene-extension {
-  position: absolute; left: 50%; top: 50%; pointer-events: none;
-  /* The outpaint spans twice the scene width, with extra room above and below. */
-  width: min(200cqw, calc(200cqh * 320 / 692)); aspect-ratio: 2 / 3;
-  transform: translate(-50%, -50%);
-  background-size: 100% 100%; background-repeat: no-repeat;
 }
 .phone-art-fallback { position: absolute; inset: 0 0 52%; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; }
 .phone-art-fallback span { font-size: 12px; }

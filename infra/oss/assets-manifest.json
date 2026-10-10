@@ -1,18 +1,12 @@
 {
-  "baseUrl": "https://calendar-images.oss-cn-beijing.aliyuncs.com/bio-v3/assets/3a12ce575f576378",
-  "prefix": "bio-v3/assets/3a12ce575f576378/",
+  "baseUrl": "https://calendar-images.oss-cn-beijing.aliyuncs.com/bio-v3/assets/f36f433f84351fbf",
+  "prefix": "bio-v3/assets/f36f433f84351fbf/",
   "cdnDomain": "image.neozeppelin.com",
   "files": [
     {
       "path": "animations/fox-clerk/blink.webp",
       "sha256": "9e63ee7f02ec61ed05e279800fc3250f876d689aa82e4378d3f6d44bf3216414",
       "bytes": 319568,
-      "contentType": "image/webp"
-    },
-    {
-      "path": "animations/fox-clerk/environment-expanded.webp",
-      "sha256": "9a180b13678551dcf063ef2b13cfd1435dec64ec8e5120f476bbaa82985c7dd6",
-      "bytes": 240058,
       "contentType": "image/webp"
     },
     {
