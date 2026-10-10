@@ -113,6 +113,8 @@ export function App({ internal = false }: { internal?: boolean }) {
   const [running, setRunning] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
+  const [recoveryUntil, setRecoveryUntil] = useState<number | null>(null);
+  const [recoveryExpired, setRecoveryExpired] = useState(false);
   const [receipt, setReceipt] = useState(readReceipt);
   const [receiptVisible, setReceiptVisible] = useState(false);
   const receiptCall = useRef<{ startedAt: number; endedAt?: number; messages: CallMessages } | null>(null);
@@ -269,8 +271,26 @@ export function App({ internal = false }: { internal?: boolean }) {
     }
   }
 
+  useEffect(() => {
+    setRecoveryExpired(false);
+    if (recoveryUntil === null) return;
+    const expire = () => {
+      setRecoveryExpired(true);
+      setVoiceStatus('已超过 5 分钟，请开始新通话；已保存的内容仍然保留。');
+    };
+    const remaining = recoveryUntil - Date.now();
+    if (remaining <= 0) { expire(); return; }
+    const timer = window.setTimeout(expire, remaining);
+    // Mobile browsers can suspend timers while locked; check again on return.
+    const visible = () => { if (!document.hidden && Date.now() >= recoveryUntil) expire(); };
+    document.addEventListener('visibilitychange', visible);
+    return () => { window.clearTimeout(timer); document.removeEventListener('visibilitychange', visible); };
+  }, [recoveryUntil]);
+
   function startVoice(): void {
     if (busy) return;
+    if (recoveryUntil !== null && recoveryUntil <= Date.now()) receiptCall.current = null;
+    setRecoveryUntil(null);
     if (!receiptCall.current) receiptCall.current = { startedAt: Date.now(), messages: new Map() };
     delete receiptCall.current.endedAt;
     setReceiptVisible(false);
@@ -307,13 +327,15 @@ export function App({ internal = false }: { internal?: boolean }) {
         }
       },
       error: error => { setVoiceStatus(error); saveVoiceTurn(error); },
-      ended: () => { if (receiptCall.current) receiptCall.current.endedAt = Date.now(); saveVoiceTurn('语音会话已结束'); setCallStartedAt(null); setVoiceEnabled(false); setMicEnabled(false); setAudioPlaying(false); setSpokenSubtitle(''); voiceRef.current = null; },
+      ended: recoveryUntil => { setRecoveryUntil(recoveryUntil ?? null); if (receiptCall.current) receiptCall.current.endedAt = Date.now(); saveVoiceTurn('语音会话已结束'); setCallStartedAt(null); setVoiceEnabled(false); setMicEnabled(false); setAudioPlaying(false); setSpokenSubtitle(''); voiceRef.current = null; },
     }, accountCacheKey('bio-voice-resume'));
     voiceRef.current = client; void client.start();
   }
 
   function endCall(): void {
     voiceRef.current?.close();
+    try { sessionStorage.removeItem(accountCacheKey('bio-voice-resume')); } catch { /* Storage is optional. */ }
+    setRecoveryUntil(null);
     setCallOpen(false);
     const call = receiptCall.current;
     receiptCall.current = null;
@@ -465,7 +487,7 @@ export function App({ internal = false }: { internal?: boolean }) {
       getDialPhase={() => voiceRef.current?.getDialPhase() ?? -1}
       getMotionLevel={() => voiceRef.current?.getMotionLevel() ?? 0}
       readingFontFeedback={readingFontFeedback}
-      callOpen={callOpen} callFailed={!voiceEnabled} callStartedAt={callStartedAt} status={voiceStatus} mode={shownPanel?.mode ?? 'conversation'}
+      callOpen={callOpen} callRecovery={recoveryUntil === null ? undefined : recoveryExpired ? 'expired' : 'available'} callFailed={!voiceEnabled} callStartedAt={callStartedAt} status={voiceStatus} mode={shownPanel?.mode ?? 'conversation'}
       onManuscriptChat={document => {
         const view = { documentId: document.id, version: document.version, page: 1 };
         documentView.current = view; attachmentView.current = undefined;

@@ -3,6 +3,9 @@ import type { ReadingFontSize } from './reading-preferences.js';
 export * from './reading-preferences.js';
 export { documentPages, documentTextSegments } from './documents.js';
 export type { DocumentView, DocumentPage, DocumentRange, DocumentHighlight, DocumentNavigationReceipt } from './documents.js';
+/** A disconnected call can be resumed for five minutes; saved content is durable. */
+export const VOICE_RECOVERY_WINDOW_MS = 5 * 60 * 1000;
+
 export type ChatRole = 'user' | 'assistant' | 'system';
 
 

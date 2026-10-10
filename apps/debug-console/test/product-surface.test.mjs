@@ -27,9 +27,17 @@ test('public and internal entries render identical product content without publi
   });
   try {
     const { App } = await server.ssrLoadModule('/src/App.tsx');
+    const { PhonePreview } = await server.ssrLoadModule('/src/phone-preview.tsx');
     const product = renderToStaticMarkup(createElement(App));
     const internal = renderToStaticMarkup(createElement(App, { internal: true }));
     assert.equal(phoneMarkup(product), phoneMarkup(internal));
+    const callProps = { children: null, subtitle: '', activity: { phase: 'idle', notebook: false, speech: 'silent' }, running: false,
+      callOpen: true, callStartedAt: null, callFailed: true, status: '已保存的内容会保留。', mode: 'conversation',
+      startDisabled: false, onStart() {}, onEnd() {}, receipt: null, receiptVisible: false, onReceiptClose() {}, onMaterialChat() {} };
+    const paused = renderToStaticMarkup(createElement(PhonePreview, { ...callProps, callRecovery: 'available' }));
+    const expired = renderToStaticMarkup(createElement(PhonePreview, { ...callProps, callRecovery: 'expired' }));
+    assert.ok(paused.includes('继续刚才的对话')); assert.ok(paused.includes('通话已暂停'));
+    assert.ok(expired.includes('开始新通话')); assert.ok(!expired.includes('继续刚才的对话'));
     for (const label of ['资料夹', '呼叫令狸', '文稿集']) assert.ok(product.includes(label));
     for (const label of ['Prompt &amp; runtime debugger', '对话历史与输入', '配置与上下文', '运行详情与历史']) {
       assert.ok(internal.includes(label), `Internal retains ${label}`);

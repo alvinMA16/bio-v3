@@ -21,6 +21,21 @@ surface: full-screen on phones, centered in a phone frame on desktop. `/internal
 retains the debugger. Both entries use the same account authentication and data;
 in legacy private-preview mode they require the same gateway login.
 
+## Voice interruption recovery
+
+The shared product voice client requests Screen Wake Lock during calls and releases
+it on hangup, interruption or startup failure. Unsupported browsers and rejected
+requests still allow calls. Locking the device manually or leaving the foreground
+pauses capture; wake lock cannot override those actions.
+
+Disconnected calls have a fixed five-minute recovery window shared by the browser,
+mini-program cache and server. A successful reconnection allows a fresh five-minute
+window on the next interruption; failed retries do not extend the browser deadline.
+After expiry a new call starts; stored messages and manuscripts remain durable.
+Explicit hangup skips the grace period. `MEMORY_RECONNECT_SECONDS` is superseded by
+the shared contract so environment overrides cannot shorten the server window.
+Unfinished recognition is not a durable transcript and is not recovered by this change.
+
 ## Publish
 
 Commit and push the desired changes first. A release must be an exact 40-character

@@ -1,6 +1,6 @@
 import { Injectable, Optional, UnauthorizedException, NotFoundException, ConflictException, ServiceUnavailableException, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service.js';
-import type { VoicePlaybackSnapshot } from '@bio/contracts';
+import { VOICE_RECOVERY_WINDOW_MS, type VoicePlaybackSnapshot } from '@bio/contracts';
 import { ConfigService } from '@nestjs/config';
 import { Pool, type PoolClient } from 'pg';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
@@ -176,7 +176,7 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
     return !!result.rowCount;
   }
   async disconnectCall(user: string, id: string, connection: string, ended: boolean): Promise<void> {
-    const grace = ended ? 0 : Math.max(1, Number(this.config.get('MEMORY_RECONNECT_SECONDS', 60)) || 60);
+    const grace = ended ? 0 : VOICE_RECOVERY_WINDOW_MS / 1000;
     await this.pool!.query(`UPDATE bio_memory_calls SET status='disconnected',end_after=now()+$4*interval '1 second'
       WHERE user_id=$1 AND id=$2 AND connection_id=$3 AND status='active'`, [user, id, connection, grace]);
     await this.expireCalls();
@@ -185,9 +185,9 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
     // A crashed API also eventually closes its abandoned calls. Live connections send heartbeats.
     await this.pool!.query(`WITH ended AS (
       UPDATE bio_memory_calls SET status='ended',ended_at=now()
-      WHERE (status='disconnected' AND end_after<=now()) OR (status='active' AND touched_at<now()-interval '3 minutes')
+      WHERE (status='disconnected' AND end_after<=now()) OR (status='active' AND touched_at<now()-$1*interval '1 second')
       RETURNING id,user_id)
-      INSERT INTO bio_memory_jobs(call_id,user_id) SELECT id,user_id FROM ended ON CONFLICT DO NOTHING`);
+      INSERT INTO bio_memory_jobs(call_id,user_id) SELECT id,user_id FROM ended ON CONFLICT DO NOTHING`, [VOICE_RECOVERY_WINDOW_MS / 1000]);
   }
   async archive(scope: MemoryScope, conversation: string, run: string, id: string, role: 'user' | 'assistant' | 'tool', body: string): Promise<void> {
     await this.pool!.query(`INSERT INTO bio_memory_messages(id,user_id,call_id,conversation_id,run_id,role,body,origin)

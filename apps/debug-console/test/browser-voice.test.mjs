@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 
 const source = readFileSync(new URL('../src/voice/browser-voice.ts', import.meta.url), 'utf8').replace("import workletUrl from './pcm-worklet.js?url&no-inline';", "const workletUrl = 'mock-worklet';");
-const compiled = ts.transpileModule(source.replace("'../../../miniprogram/miniprogram/lib/fox-speech-signal'", JSON.stringify(new URL('../../miniprogram/miniprogram/lib/fox-speech-signal.ts', import.meta.url).href)), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+const compiled = ts.transpileModule(source.replace("'@bio/contracts'", JSON.stringify(new URL('../../../packages/contracts/dist/index.js', import.meta.url).href)).replace("'../../../miniprogram/miniprogram/lib/fox-speech-signal'", JSON.stringify(new URL('../../miniprogram/miniprogram/lib/fox-speech-signal.ts', import.meta.url).href)), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
 const { BrowserVoice } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const flush = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
 
@@ -28,6 +28,8 @@ const timerContexts = new WeakSet();
 function environment(t, pendingMic, moduleError, prepare) {
   if (!timerContexts.has(t)) { t.mock.timers.enable({ apis: ['setTimeout'] }); timerContexts.add(t); }
   const cache = new Map();
+  const visibility = new EventTarget();
+  const recoveries = [];
   const tones = [];
   const sockets = [], nodes = [], messages = [], events = [], starts = [], playback = [], captures = [], levels = [], gains = [];
   let stopped = 0, ended = 0, connected = 0;
@@ -52,7 +54,7 @@ function environment(t, pendingMic, moduleError, prepare) {
   const globals = {
     navigator: { mediaDevices: { getUserMedia: () => pendingMic ?? Promise.resolve(stream) } },
     location: { href: 'http://localhost:5173', protocol: 'http:' },
-    document: { hidden: false, querySelector: () => ({ src: 'http://localhost/assets/main-test.js' }), addEventListener() {}, removeEventListener() {} },
+    document: { hidden: false, querySelector: () => ({ src: 'http://localhost/assets/main-test.js' }), addEventListener: (...args) => visibility.addEventListener(...args), removeEventListener: (...args) => visibility.removeEventListener(...args), dispatchEvent: event => visibility.dispatchEvent(event) },
     AudioContext: Context,
     AudioWorkletNode: class { constructor() { captures.push(this); } port = { postMessage() {} }; connect() {} disconnect() {} },
     WebSocket: Socket,
@@ -65,9 +67,9 @@ function environment(t, pendingMic, moduleError, prepare) {
     restore.push(() => original ? Object.defineProperty(globalThis, key, original) : delete globalThis[key]);
   }
   const client = new BrowserVoice({ prepare, connected: () => connected++, request: () => ({}), start: id => starts.push(id), event: event => events.push(event),
-    inputLevel: level => levels.push(level), playback: (...args) => playback.push(args), error: message => events.push({ type: 'local.error', message }), ended: () => ended++ });
+    inputLevel: level => levels.push(level), playback: (...args) => playback.push(args), error: message => events.push({ type: 'local.error', message }), ended: until => { recoveries.push(until); ended++; } });
   t.after(() => { client.close(); restore.forEach(fn => fn()); });
-  return { client, cache, tones, sockets, nodes, captures, levels, gains, starts, messages, events, playback, stream, connected: () => connected, stopped: () => stopped, ended: () => ended };
+  return { client, cache, recoveries, navigator: globals.navigator, document: globals.document, tones, sockets, nodes, captures, levels, gains, starts, messages, events, playback, stream, connected: () => connected, stopped: () => stopped, ended: () => ended };
 }
 
 test('interruption clears scheduled audio and rejects old turn callbacks', async t => {
@@ -467,4 +469,81 @@ test('a focus panel is acknowledged on the wire before the UI callback and never
   assert.equal(receipts[0].turnId, f.starts[0]); assert.ok(f.events.some(e => e.type === 'agent'));
   ws.onmessage({ data: JSON.stringify({ ...event, turnId: 'stale' }) });
   assert.equal(f.messages.map(JSON.parse).filter(m => m.type === 'document.view').length, 1);
+});
+
+
+function wakeLockFixture(f) {
+  const locks = [];
+  f.navigator.wakeLock = { async request(type) {
+    assert.equal(type, 'screen');
+    const lock = new EventTarget(); lock.released = false; lock.releaseCount = 0;
+    lock.release = async () => { lock.releaseCount++; lock.released = true; lock.dispatchEvent(new Event('release')); };
+    locks.push(lock); return lock;
+  } };
+  return locks;
+}
+
+test('voice holds a screen wake lock and releases it once on explicit hangup', async t => {
+  const f = environment(t); const locks = wakeLockFixture(f);
+  await f.client.start(); await flush();
+  assert.equal(locks.length, 1); assert.equal(locks[0].released, false);
+  f.client.close(); f.client.close(); await flush();
+  assert.equal(locks[0].releaseCount, 1);
+  f.document.dispatchEvent(new Event('visibilitychange')); await flush();
+  assert.equal(locks.length, 1, 'a finished call cannot reacquire wake lock');
+});
+
+test('wake lock refusal does not block microphone or socket', async t => {
+  const f = environment(t);
+  f.navigator.wakeLock = { async request() { throw new Error('Power saving'); } };
+  await f.client.start(); await flush();
+  assert.equal(f.sockets.length, 1); assert.equal(f.captures.length, 1); assert.equal(f.ended(), 0);
+  f.client.close();
+});
+
+test('startup failure releases an acquired screen wake lock', async t => {
+  const failed = environment(t, undefined, new Error('Worklet unavailable'));
+  const locks = wakeLockFixture(failed); await failed.client.start(); await flush();
+  assert.equal(failed.ended(), 1); assert.equal(locks[0].released, true);
+});
+
+test('late wake lock acquisition after hangup is immediately released', async t => {
+  const f = environment(t); let resolve;
+  const lock = { releaseCount: 0, async release() { this.releaseCount++; }, addEventListener() {} };
+  f.navigator.wakeLock = { request: () => new Promise(done => { resolve = done; }) };
+  await f.client.start(); f.client.close(); resolve(lock); await flush();
+  assert.equal(lock.releaseCount, 1);
+});
+
+test('hidden page releases wake lock, offers five-minute recovery and a resumed call holds a new lock', async t => {
+  const f = environment(t); const locks = wakeLockFixture(f);
+  await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen();
+  const first = f.messages.map(JSON.parse).find(m => m.type === 'listen');
+  ws.onmessage({ data: JSON.stringify({ type: 'connected', turnId: first.turnId, callId: first.callId, conversationId: 'conv', resumed: false }) });
+  const before = Date.now(); f.document.hidden = true; f.document.dispatchEvent(new Event('visibilitychange')); await flush();
+  assert.equal(locks[0].released, true); assert.equal(f.ended(), 1);
+  assert.ok(f.recoveries[0] >= before + 300000 && f.recoveries[0] <= Date.now() + 300000);
+  assert.ok(f.messages.map(JSON.parse).some(m => m.type === 'disconnect' && m.reason === 'page_hidden'));
+  assert.ok(!f.messages.map(JSON.parse).some(m => m.type === 'hangup'));
+  f.document.hidden = false; f.document.dispatchEvent(new Event('visibilitychange')); await flush();
+  assert.equal(locks.length, 1, 'resuming capture requires the user to continue the call');
+  const resumed = new BrowserVoice({ request: () => ({}), start() {}, event() {}, playback() {}, error() {}, ended() {} });
+  t.after(() => resumed.close()); await resumed.start(); f.sockets[1].onopen(); await flush();
+  assert.equal(locks.length, 2); assert.equal(locks[1].released, false);
+  const next = f.messages.map(JSON.parse).filter(m => m.type === 'listen').at(-1);
+  assert.equal(next.callId, first.callId); assert.equal(next.resume, true);
+});
+
+test('a failed recovery attempt preserves its original deadline and expiry starts a new call', async t => {
+  const f = environment(t); const until = Date.now() + 300000;
+  f.cache.set('bio-voice-resume', JSON.stringify({ callId: 'interrupted-call', expiresAt: until }));
+  const callbacks = { request: () => ({}), start() {}, event() {}, playback() {}, error() {}, ended() {} };
+  const retry = new BrowserVoice(callbacks); t.after(() => retry.close());
+  await retry.start(); f.sockets[0].onopen(); retry.close(false);
+  assert.equal(JSON.parse(f.cache.get('bio-voice-resume')).expiresAt, until);
+  f.cache.set('bio-voice-resume', JSON.stringify({ callId: 'interrupted-call', expiresAt: Date.now() - 1 }));
+  const expired = new BrowserVoice(callbacks); t.after(() => expired.close());
+  await expired.start(); f.sockets[1].onopen();
+  const next = f.messages.map(JSON.parse).filter(m => m.type === 'listen').at(-1);
+  assert.notEqual(next.callId, 'interrupted-call'); assert.equal(next.resume, false);
 });

@@ -94,7 +94,7 @@ export class MiniVoiceClient {
   }
   private remember(): void {
     if (!this.confirmed && !this.resume) return;
-    try { wx.setStorageSync(this.storageKey, { callId: this.callId, expiresAt: Date.now() + 180000 }); } catch { /* Optional cache. */ }
+    try { wx.setStorageSync(this.storageKey, { callId: this.callId, expiresAt: Date.now() + 300000 }); } catch { /* Optional cache. */ }
   }
   private reconnect(socket: WechatMiniprogram.SocketTask): void {
     if (this.closed || this.socket !== socket) return;

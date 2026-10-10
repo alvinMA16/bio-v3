@@ -1,3 +1,4 @@
+import { VOICE_RECOVERY_WINDOW_MS } from '@bio/contracts';
 import type { VoiceClientMessage, VoiceRequest, VoiceServerMessage } from '@bio/contracts';
 import workletUrl from './pcm-worklet.js?url&no-inline';
 import { FoxSpeechSignal } from '../../../miniprogram/miniprogram/lib/fox-speech-signal';
@@ -8,7 +9,7 @@ type Callbacks = {
   event: (event: VoiceServerMessage) => void;
   playback: (playing: boolean, text: string) => void;
   error: (message: string) => void;
-  ended: () => void;
+  ended: (recoveryUntil?: number) => void;
   connected?: () => void;
   prepare?: () => Promise<void>;
   microphone?: (enabled: boolean) => void;
@@ -65,14 +66,38 @@ export class BrowserVoice {
   private receivedSamples = 0;
   private acknowledgedSamples = 0;
   private readonly storageKey: string;
-  private onVisibility = () => { if (document.hidden) { this.callbacks.error('页面进入后台，通话已暂停；已写入的文稿会保留。'); this.close(false, 'page_hidden'); } };
+  private recoveryUntil: number | undefined;
+  private screenWakeLock: WakeLockSentinel | undefined;
+  private wakeLockPending = false;
+
+  /** Optional browser capability; failure must never prevent a voice call. */
+  private async keepScreenAwake(): Promise<void> {
+    if (this.closed || document.hidden || this.screenWakeLock || this.wakeLockPending || !navigator.wakeLock) return;
+    this.wakeLockPending = true;
+    try {
+      const lock = await navigator.wakeLock.request('screen');
+      if (this.closed || document.hidden) { await lock.release(); return; }
+      this.screenWakeLock = lock;
+      lock.addEventListener('release', () => {
+        if (this.screenWakeLock === lock) this.screenWakeLock = undefined;
+      }, { once: true });
+    } catch { /* Unsupported policy, low battery or power saving: recovery remains available. */ }
+    finally { this.wakeLockPending = false; }
+  }
+
+  private onVisibility = () => {
+    if (document.hidden) {
+      this.callbacks.error('5 分钟内可继续；已保存的内容会保留。');
+      this.close(false, 'page_hidden');
+    } else void this.keepScreenAwake();
+  };
   constructor(private callbacks: Callbacks, storageKey = 'bio-voice-resume') {
     this.storageKey = storageKey;
     try {
       const saved = JSON.parse(sessionStorage.getItem(storageKey) ?? 'null');
       if (saved && typeof saved.callId === 'string' && saved.expiresAt > Date.now()) {
-        this.callId = saved.callId; this.resume = true;
-      }
+        this.callId = saved.callId; this.resume = true; this.recoveryUntil = saved.expiresAt;
+      } else if (saved) sessionStorage.removeItem(storageKey);
     } catch { /* Storage is optional; in-memory reconnect still works. */ }
   }
 
@@ -80,6 +105,7 @@ export class BrowserVoice {
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('请在 HTTPS 或 localhost 页面使用麦克风。');
       document.addEventListener('visibilitychange', this.onVisibility);
+      void this.keepScreenAwake();
       // UI assets, microphone setup and the server opening run concurrently.
       void Promise.resolve().then(() => this.callbacks.prepare?.()).then(() => {
         if (this.closed) return;
@@ -250,23 +276,26 @@ export class BrowserVoice {
   private reconnect(ws: WebSocket): void {
     if (this.closed || this.socket !== ws) return;
     clearTimeout(this.connectionTimer);
-    this.remember();
+    this.remember(this.confirmed);
+    this.confirmed = false; this.resume = true;
     this.send({ type: 'disconnect', turnId: this.turnId || 'disconnect', reason: 'client_error' });
     this.socket = undefined; ws.close();
     this.pendingEvents = []; this.pendingEventBytes = 0;
     this.setListening(false); this.stopAudio(); this.turnActive = false;
     this.callbacks.event({ type: 'cancelled', turnId: this.turnId, elapsedMs: 0, reason: 'connection_lost' });
     if (document.hidden || this.reconnects >= 3) { this.fail('连接暂时中断，重新连接可尝试恢复刚才的对话。'); return; }
-    this.resume = true;
     this.callbacks.status?.('连接中断，正在恢复刚才的对话…');
     const delay = [1000, 3000, 7000][this.reconnects++]!;
     this.reconnectTimer = setTimeout(() => this.connectSocket(), delay);
   }
 
-  private remember(): void {
+  private remember(refresh = false): number | undefined {
     if (!this.confirmed && !this.resume) return;
-    try { sessionStorage.setItem(this.storageKey, JSON.stringify({ callId: this.callId, expiresAt: Date.now() + 180000 })); } catch { /* Optional storage. */ }
+    if (refresh || !this.recoveryUntil) this.recoveryUntil = Date.now() + VOICE_RECOVERY_WINDOW_MS;
+    try { sessionStorage.setItem(this.storageKey, JSON.stringify({ callId: this.callId, expiresAt: this.recoveryUntil })); } catch { /* Optional storage. */ }
+    return this.recoveryUntil;
   }
+
   private forget(): void { this.confirmed = false; this.resume = false; try { sessionStorage.removeItem(this.storageKey); } catch { /* Optional storage. */ } }
 
   private listen(): void {
@@ -328,7 +357,7 @@ export class BrowserVoice {
     }
     if (event.type === 'connected') {
       this.callId = event.callId; this.conversationId = event.conversationId;
-      this.confirmed = true; this.resume = false; this.reconnects = 0; this.remember();
+      this.confirmed = true; this.resume = false; this.reconnects = 0; this.recoveryUntil = undefined; this.remember();
       if (event.resumed) this.callbacks.status?.('已恢复刚才的对话，可以继续说。');
     }
     if (event.type === 'error' && event.code === 'CALL_BUSY') { if (this.socket) this.reconnect(this.socket); return; }
@@ -467,11 +496,15 @@ export class BrowserVoice {
   close(hangup = true, reason: 'page_hidden' | 'client_error' = 'client_error'): void {
     if (this.closed) return;
     clearTimeout(this.reconnectTimer); clearTimeout(this.connectionTimer);
-    if (hangup) this.forget(); else this.remember();
+    const recoveryUntil = hangup ? undefined : this.remember(this.confirmed);
+    if (hangup) this.forget();
     if (hangup) this.send({ type: 'hangup', turnId: this.turnId || 'hangup' });
     else this.send({ type: 'disconnect', turnId: this.turnId || 'disconnect', reason });
     document.removeEventListener('visibilitychange', this.onVisibility);
-    this.closed = true; ++this.micGeneration; this.callbacks.microphone?.(false); this.setListening(false); this.stopAudio();
+    this.closed = true;
+    const lock = this.screenWakeLock; this.screenWakeLock = undefined;
+    void lock?.release().catch(() => undefined);
+    ++this.micGeneration; this.callbacks.microphone?.(false); this.setListening(false); this.stopAudio();
     this.stopRingback();
     this.pendingEvents = []; this.pendingEventBytes = 0;
     this.capture?.disconnect(); this.source?.disconnect(); this.muted?.disconnect();
@@ -481,6 +514,6 @@ export class BrowserVoice {
     // Leave the output connected long enough for the final release on cancel/failure.
     const context = this.context, output = this.output;
     setTimeout(() => { output?.disconnect(); void context?.close().catch(() => undefined); }, 70);
-    this.callbacks.ended();
+    this.callbacks.ended(recoveryUntil);
   }
 }

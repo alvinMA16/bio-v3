@@ -27,7 +27,7 @@ interface Manifest {
   animations: Animation[];
 }
 
-export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, callOpen, callStartedAt, status, callFailed = false, motionState = 'listen', getMotionLevel = () => 0, getDialPhase = () => -1, mode, startDisabled, onStart, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
+export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, callOpen, callStartedAt, status, callFailed = false, callRecovery, motionState = 'listen', getMotionLevel = () => 0, getDialPhase = () => -1, mode, startDisabled, onStart, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
   readingFontFeedback?: ReadingFontFeedback | undefined;
   onManuscriptChat?: ((document: import('@bio/contracts').PanelDocument) => void) | undefined;
   attachment?: PanelAttachment | undefined; onAttachmentPage?: ((materialId: string, page: number) => void) | undefined;
@@ -35,7 +35,7 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
   receipt: SessionReceipt | null; receiptVisible: boolean; onReceiptClose: () => void;
   children: ReactNode; subtitle: string; activity: FoxActivity; running: boolean;
   callOpen: boolean; callStartedAt: number | null; status: string; mode: 'conversation' | 'attachment' | 'editor';
-  callFailed?: boolean; getDialPhase?: () => number;
+  callFailed?: boolean; callRecovery?: 'available' | 'expired' | undefined; getDialPhase?: () => number;
   motionState?: 'listen' | 'speak' | 'think'; getMotionLevel?: () => number;
   startDisabled: boolean; onStart: () => void; onEnd: () => void;
 }) {
@@ -140,9 +140,9 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
       </> : <>
         {dialing ? <section className="phone-dialing" aria-label="呼叫令狸" aria-busy={!callFailed}>
           <DialAvatar active={!callFailed} getPhase={getDialPhase} />
-          <p role="status">{callFailed ? '暂时未能接通' : '正在呼叫'}</p>
+          <p role="status">{callFailed ? callRecovery === 'available' ? '通话已暂停' : callRecovery === 'expired' ? '上次通话已结束' : '暂时未能接通' : '正在呼叫'}</p>
           {callFailed && <small>{status}</small>}
-          {callFailed && <div className="phone-dial-recovery"><button type="button" className="phone-redial" disabled={startDisabled} onClick={onStart}>重新呼叫</button><button type="button" className="phone-dial-back" onClick={onEnd}>返回</button></div>}
+          {callFailed && <div className="phone-dial-recovery"><button type="button" className="phone-redial" disabled={startDisabled} onClick={onStart}>{callRecovery === 'available' ? '继续刚才的对话' : callRecovery === 'expired' ? '开始新通话' : '重新呼叫'}</button><button type="button" className="phone-dial-back" onClick={onEnd}>返回</button></div>}
         </section> : <>
           {mode === 'conversation' && <div className="phone-conversation-window" role="img" aria-label="令狸在书房里"><div className="phone-conversation-scene">{artwork}</div></div>}
           <section className={`phone-content-panel ${mode !== 'conversation' ? 'phone-content-panel--document' : ''}`} aria-label={mode === 'conversation' ? '对话内容' : mode === 'attachment' ? '附件内容' : '编辑内容'}>
