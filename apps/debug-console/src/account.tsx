@@ -23,7 +23,7 @@ async function api(path: string, body?: unknown) {
   if (!response.ok) throw new Error(Array.isArray(result.message) ? result.message.join('，') : result.message || '请求失败，请稍后重试');
   return result;
 }
-export function AccountBoundary({ children }: { children: ReactNode }) {
+export function AccountBoundary({ children, showAccountBar = true }: { children: ReactNode; showAccountBar?: boolean }) {
   const [state, setState] = useState<'checking' | 'legacy' | 'login' | 'ready' | 'error'>('checking');
   const [phone, setPhone] = useState(''), [code, setCode] = useState('');
   const [user, setUser] = useState<{ id: string; phone: string }>();
@@ -77,10 +77,10 @@ export function AccountBoundary({ children }: { children: ReactNode }) {
     finally { setBusy(false); }
   }
   if (state === 'legacy') return children;
-  if (state === 'ready') return <><div className="account-bar"><span>{user?.phone}</span><button disabled={busy} onClick={async () => {
+  if (state === 'ready') return <>{showAccountBar && <div className="account-bar"><span>{user?.phone}</span><button disabled={busy} onClick={async () => {
     setBusy(true); setError('');
     try { await api('logout', {}); clear(); } catch { setError('退出失败，请重试'); } finally { setBusy(false); }
-  }}>退出登录</button>{error && <span role="alert">{error}</span>}</div><div key={user?.id}>{children}</div></>;
+  }}>退出登录</button>{error && <span role="alert">{error}</span>}</div>}<div key={user?.id}>{children}</div></>;
   return <main className="account-page"><section className="account-card">
     <div className="account-mark" aria-hidden="true">狸</div><p className="account-eyebrow">令狸 · 你的故事伙伴</p>
     <h1>给你的故事，留一个位置</h1><p className="account-description">登录后，你的聊天、资料和文稿会保存在自己的账号里。</p>

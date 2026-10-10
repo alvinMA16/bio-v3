@@ -16,8 +16,10 @@ host remains `qs@neozeppelin.com`; do not deploy bio-v3 over the bio2 service.
 Web Agent debugger: `https://app.storyofme.cn/internal/` (`/internal` redirects
 to the trailing-slash URL). It uses the same origin's `/api/v1/` HTTP endpoints
 and `/api/v1/voice` WebSocket, so conversations, materials and memory use the
-real deployed backend. The existing root entry remains available. Both entries
-require the same private-preview login and share the owner identity and data.
+real deployed backend. The root entry (`https://app.storyofme.cn/`) presents only the product phone
+surface: full-screen on phones, centered in a phone frame on desktop. `/internal/`
+retains the debugger. Both entries use the same account authentication and data;
+in legacy private-preview mode they require the same gateway login.
 
 ## Publish
 

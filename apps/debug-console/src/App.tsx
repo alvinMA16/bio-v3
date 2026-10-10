@@ -88,7 +88,7 @@ function formatCost(value: number): string {
   return `¥${value.toFixed(value < 0.01 ? 8 : 4)}`;
 }
 
-export function App() {
+export function App({ internal = false }: { internal?: boolean }) {
   const { fontSize, feedback: readingFontFeedback, applyReadingFont } = useReadingFont();
   const [productView, setProductView] = useState<ProductView>('agent');
   const [apiStatus, setApiStatus] = useState<ApiStatus>('checking');
@@ -459,6 +459,43 @@ export function App() {
     localStorage.removeItem(accountCacheKey(HISTORY_KEY));
   }
 
+  const phoneSurface = (
+    <PhonePreview onAttachmentPage={(materialId, page) => { attachmentView.current = { materialId, page }; voiceRef.current?.updateAttachmentView({ materialId, page }); voiceContext.current = { ...voiceContext.current, context: { ...voiceContext.current.context, attachmentView: { materialId, page } } }; }} attachment={shownPanel?.attachment} subtitle={subtitle} running={running} activity={foxActivityOf({ running, live, panel: shownPanel, ...(callOpen ? { audioPlaying, ...(voiceEnabled ? { voiceState } : {}), userSpeaking: micEnabled && micListening && userSpeaking } : {}) })}
+      motionState={audioPlaying ? 'speak' : voiceEnabled && micListening ? 'listen' : running ? 'think' : 'listen'}
+      getDialPhase={() => voiceRef.current?.getDialPhase() ?? -1}
+      getMotionLevel={() => voiceRef.current?.getMotionLevel() ?? 0}
+      readingFontFeedback={readingFontFeedback}
+      callOpen={callOpen} callFailed={!voiceEnabled} callStartedAt={callStartedAt} status={voiceStatus} mode={shownPanel?.mode ?? 'conversation'}
+      onManuscriptChat={document => {
+        const view = { documentId: document.id, version: document.version, page: 1 };
+        documentView.current = view; attachmentView.current = undefined;
+        setPendingMaterialPanel({ mode: 'editor', revision: 0, document, documentView: view });
+        setMaterialIds([]); setScene('revision'); setDocumentId(''); setSelectedBlockId(''); setExcerpt('');
+        voiceContext.current = { ...voiceContext.current, context: { scene: 'revision', documentView: view } };
+        startVoice();
+      }}
+      onMaterialChat={item => { setProvider('gemini'); setPendingMaterialPanel({ mode: 'attachment', revision: 0, attachment: { id: item.id, kind: item.kind, title: item.title, url: item.url, text: item.text || item.statusMessage } }); setMaterialTitle(item.title); setMaterialIds([item.id]); setScene('attachment_conversation'); setMessage(`我们聊聊《${item.title}》这份资料吧。`); voiceContext.current = { ...voiceContext.current, provider: 'gemini', context: { materialIds: [item.id], scene: 'attachment_conversation' } }; startVoice(); }}
+      startDisabled={busy} onStart={startVoice}
+      onEnd={endCall}
+      receipt={receipt} receiptVisible={receiptVisible} onReceiptClose={() => setReceiptVisible(false)}>
+      {shownPanel ? <WorkspacePanel panel={shownPanel}
+        onDocumentView={view => {
+          documentView.current = view;
+          voiceRef.current?.updateDocumentView(view);
+          voiceContext.current = { ...voiceContext.current, context: { ...voiceContext.current.context, documentView: view } };
+        }}
+        />
+        : <div className="phone-empty"><strong>今天想聊点什么？</strong><p>我在这里，陪你慢慢讲。</p></div>}
+    </PhonePreview>
+  );
+
+  if (!internal) return (
+    <main className="product-shell" aria-label="令狸" data-reading-font={fontSize}
+      style={{ '--reading-scale': READING_FONT_SCALE[fontSize] } as CSSProperties}>
+      {phoneSurface}
+    </main>
+  );
+
   return (
     <div className="app-shell" data-reading-font={fontSize} style={{ '--reading-scale': READING_FONT_SCALE[fontSize] } as CSSProperties}>
       <header className="topbar">
@@ -503,33 +540,7 @@ export function App() {
         <div className="lab-main" ref={resultRef}>
           <section className="lab-preview-column">
             <header className="lab-section-heading"><h1>用户界面预览</h1><span>手机 · 实时状态</span></header>
-            <PhonePreview onAttachmentPage={(materialId, page) => { attachmentView.current = { materialId, page }; voiceRef.current?.updateAttachmentView({ materialId, page }); voiceContext.current = { ...voiceContext.current, context: { ...voiceContext.current.context, attachmentView: { materialId, page } } }; }} attachment={shownPanel?.attachment} subtitle={subtitle} running={running} activity={foxActivityOf({ running, live, panel: shownPanel, ...(callOpen ? { audioPlaying, ...(voiceEnabled ? { voiceState } : {}), userSpeaking: micEnabled && micListening && userSpeaking } : {}) })}
-              motionState={audioPlaying ? 'speak' : voiceEnabled && micListening ? 'listen' : running ? 'think' : 'listen'}
-              getDialPhase={() => voiceRef.current?.getDialPhase() ?? -1}
-              getMotionLevel={() => voiceRef.current?.getMotionLevel() ?? 0}
-              readingFontFeedback={readingFontFeedback}
-              callOpen={callOpen} callFailed={!voiceEnabled} callStartedAt={callStartedAt} status={voiceStatus} mode={shownPanel?.mode ?? 'conversation'}
-              onManuscriptChat={document => {
-                const view = { documentId: document.id, version: document.version, page: 1 };
-                documentView.current = view; attachmentView.current = undefined;
-                setPendingMaterialPanel({ mode: 'editor', revision: 0, document, documentView: view });
-                setMaterialIds([]); setScene('revision'); setDocumentId(''); setSelectedBlockId(''); setExcerpt('');
-                voiceContext.current = { ...voiceContext.current, context: { scene: 'revision', documentView: view } };
-                startVoice();
-              }}
-              onMaterialChat={item => { setProvider('gemini'); setPendingMaterialPanel({ mode: 'attachment', revision: 0, attachment: { id: item.id, kind: item.kind, title: item.title, url: item.url, text: item.text || item.statusMessage } }); setMaterialTitle(item.title); setMaterialIds([item.id]); setScene('attachment_conversation'); setMessage(`我们聊聊《${item.title}》这份资料吧。`); voiceContext.current = { ...voiceContext.current, provider: 'gemini', context: { materialIds: [item.id], scene: 'attachment_conversation' } }; startVoice(); }}
-              startDisabled={busy} onStart={startVoice}
-              onEnd={endCall}
-              receipt={receipt} receiptVisible={receiptVisible} onReceiptClose={() => setReceiptVisible(false)}>
-              {shownPanel ? <WorkspacePanel panel={shownPanel}
-                onDocumentView={view => {
-                  documentView.current = view;
-                  voiceRef.current?.updateDocumentView(view);
-                  voiceContext.current = { ...voiceContext.current, context: { ...voiceContext.current.context, documentView: view } };
-                }}
-                />
-                : <div className="phone-empty"><strong>今天想聊点什么？</strong><p>我在这里，陪你慢慢讲。</p></div>}
-            </PhonePreview>
+            {phoneSurface}
             <p className="lab-preview-note">{voiceEnabled ? '语音模式 · 动作跟随实际播放' : '文字模式 · 动作跟随文本生成'}</p>
           </section>
           <section className="lab-conversation-column">

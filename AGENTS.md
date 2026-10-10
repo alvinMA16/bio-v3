@@ -25,6 +25,8 @@
 
 # UI change discipline
 
+- The public entry and `/internal/` must share the same product components, content, styling, and interactions. Device adaptation belongs to the outer viewport and phone frame; do not maintain separate product implementations for public/internal or desktop/mobile.
+
 - Present each piece of information only once. Omit headings, counts, status labels, and explanatory copy that add no actionable value; prefer the simplest control that communicates the state.
 - Preserve established layout, spacing, positions, and component hierarchy during visual refinements. Color, texture, glass, and highlight requests do not authorize layout redesigns. Implement decorative effects in non-interactive layers outside layout flow.
 - When the user requests a wireframe for approval, show it before implementing that component's revised design.
