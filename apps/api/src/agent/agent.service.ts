@@ -4,7 +4,7 @@ import type { AgentEvent, AgentEventPayload, ChatCompletionRequest, ChatCompleti
 import type { AgentSession, AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 import type { AssistantMessage, Usage } from '@earendil-works/pi-ai';
 import { randomUUID } from 'node:crypto';
-import { estimateModelCost } from '../chat/model-pricing.js';
+import { estimateModelCost, getModelPrice } from '../chat/model-pricing.js';
 import { AgentStorage } from './agent-storage.js';
 import { MemoryService } from '../memory/memory.service.js';
 import type { MemoryScope } from '../memory/memory-types.js';
@@ -35,6 +35,8 @@ export class AgentService {
     if (this.active.has(conversationId)) throw new ConflictException('This conversation already has an active run');
     this.active.add(conversationId);
     const runId = randomUUID();
+    const startedAt = Date.now();
+    let outcome = 'failed';
     const events: AgentEvent[] = [];
     let sequence = 0;
     let messageId = randomUUID();
@@ -176,6 +178,7 @@ export class AgentService {
       if (!lastAssistant || lastAssistant.stopReason === 'error') throw new Error('Model completion failed');
       if (release) { const save = release; release = undefined; await save(); }
       emit({ type: 'run.completed' });
+      outcome = 'done';
       const rate = Number(this.config.get('USD_TO_CNY_RATE', 6.7829));
       return {
         conversationId, runId, events,
@@ -186,6 +189,7 @@ export class AgentService {
       };
     } catch (error) {
       const cancelled = !eventError && (signal?.aborted || timedOut || lastAssistant?.stopReason === 'aborted');
+      outcome = cancelled ? 'cancelled' : 'failed';
       const message = timedOut ? 'Agent run timed out' : cancelled ? 'Agent run cancelled' : 'Agent run failed';
       const reason = timedOut ? 'timeout' : typeof signal?.reason === 'string' ? signal.reason : 'unknown';
       try { emit(cancelled ? { type: 'run.cancelled', reason } : { type: 'run.failed', message }); }
@@ -205,7 +209,18 @@ export class AgentService {
         try { await archiveQueue; session?.dispose(); }
         finally { await release?.(); }
       }
-      finally { this.active.delete(conversationId); }
+      finally {
+        this.active.delete(conversationId);
+        if (scope && this.memory?.recordRun) {
+          const rate = Number(this.config.get('USD_TO_CNY_RATE', 6.7829));
+          try { await this.memory.recordRun({ id: runId, userId: scope.userId, conversationId,
+            ...(scope.callId ? { callId: scope.callId } : {}), status: outcome,
+            ...(lastAssistant ? { model: lastAssistant.model } : {}),
+            ...(lastAssistant && (getModelPrice(lastAssistant.model) || lastAssistant.model === 'qwen3.8-flash') ? { estimatedCost: estimateModelCost(lastAssistant.model, usage, Number.isFinite(rate) && rate > 0 ? rate : 6.7829) } : {}),
+            usage, durationMs: Date.now() - startedAt }); }
+          catch { this.logger.warn(`Run metrics unavailable for ${runId}`); }
+        }
+      }
     }
   }
 }

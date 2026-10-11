@@ -1,5 +1,7 @@
 # Bio Agent
 
+管理后台首版入口：`/admin/`，包含用户、通话与会话、记忆整理任务、文稿版本及服务日志。管理员授权配置与数据采集边界见 [管理后台说明](docs/admin.md)。
+
 微信小程序形态的对话式 Agent 产品。后端使用 TypeScript、NestJS、Fastify 和 Pi Coding Agent SDK，模型通过独立适配模块接入 DeepSeek、千问和 OpenAI 兼容服务。
 
 ## 目录

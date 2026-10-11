@@ -5,6 +5,8 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, write
 import { DEFAULT_READING_FONT_SIZE, isReadingFontSize, type ReadingFontSize } from '@bio/contracts';
 import { createHash } from 'node:crypto';
 import { appendFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { createInterface } from 'node:readline';
 import { resolve, join } from 'node:path';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -81,5 +83,23 @@ export class AgentStorage {
     if (!existsSync(path)) throw new NotFoundException('Run not found');
     return readFileSync(path, 'utf8').trim().split('\n').filter(Boolean)
       .map((line) => JSON.parse(line) as AgentTraceEntry).sort((a, b) => a.sequence - b.sequence);
+  }
+
+  async tracePage(runId: string, offset: number, limit = 100) {
+    this.assertId(runId);
+    const path = join(this.root, 'traces', `${runId}.jsonl`);
+    if (!existsSync(path)) throw new NotFoundException('Trace 不存在');
+    const stream = createReadStream(path, { encoding: 'utf8' });
+    const lines = createInterface({ input: stream, crlfDelay: Infinity });
+    const items: AgentTraceEntry[] = [];
+    let total = 0;
+    try {
+      for await (const line of lines) {
+        if (!line.trim()) continue;
+        if (total >= offset && total < offset + limit) items.push(JSON.parse(line));
+        total++;
+      }
+    } finally { lines.close(); stream.destroy(); }
+    return { items, total, offset, limit };
   }
 }

@@ -79,7 +79,14 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
             .catch(() => this.logger.warn('Voice playback persistence failed'));
         }
       },
-      diagnostic: data => this.logger.warn(JSON.stringify({ type: 'voice.failure', callId, connection, ...data })),
+      diagnostic: data => {
+        this.logger.warn(JSON.stringify({ type: 'voice.failure', callId, connection, ...data }));
+        if (user && callId && this.memory?.recordVoiceFailure) {
+          const id = callId;
+          persistence = persistence.then(() => this.memory!.recordVoiceFailure(user!,id,data))
+            .catch(() => this.logger.warn('Voice diagnostic persistence failed'));
+        }
+      },
     });
     let validating = false;
     const idle = setInterval(() => { if (ws.readyState === WebSocket.OPEN) { ws.ping(); if (user && callId) void this.memory!.touchCall(user, callId, connection).catch(() => this.logger.warn('Call heartbeat persistence failed')); } }, 20_000);

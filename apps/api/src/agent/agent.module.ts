@@ -10,6 +10,6 @@ import { DocumentStore } from './document-store.js';
   imports: [MaterialsModule],
   controllers: [AgentController],
   providers: [AgentService, AgentStorage, PiSessionFactory, DocumentStore],
-  exports: [AgentService],
+  exports: [AgentService, AgentStorage, DocumentStore],
 })
 export class AgentModule {}

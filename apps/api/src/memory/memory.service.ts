@@ -24,6 +24,18 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
     if (url) this.pool = new Pool({ connectionString: url, max: POOL_SIZE, connectionTimeoutMillis: 5000 });
   }
   get enabled(): boolean { return !!this.pool; }
+  async recordVoiceFailure(user: string, call: string, value: { turnId: string; stage: string; code: string }) {
+    await this.pool?.query(`INSERT INTO bio_voice_failures(id,user_id,call_id,turn_id,stage,code)
+      SELECT $1,user_id,id,$4,$5,$6 FROM bio_memory_calls WHERE id=$2 AND user_id=$3`,
+      [randomUUID(),call,user,value.turnId.slice(0,100),value.stage.slice(0,100),value.code.slice(0,200)]);
+  }
+  async recordRun(value: { id: string; userId: string; conversationId: string; callId?: string; status: string; model?: string; usage: unknown; estimatedCost?: unknown; durationMs: number }) {
+    // Rejected/unowned runs must never create telemetry or acquire user ownership.
+    await this.pool?.query(`INSERT INTO bio_run_metrics(id,user_id,conversation_id,call_id,status,model,usage,estimated_cost,duration_ms)
+      SELECT id,user_id,$3,$4,$5,$6,$7,$8,$9 FROM bio_memory_runs WHERE id=$1 AND user_id=$2
+      ON CONFLICT(id) DO NOTHING`, [value.id,value.userId,value.conversationId,value.callId ?? null,value.status,value.model ?? null,
+      JSON.stringify(value.usage),value.estimatedCost ? JSON.stringify(value.estimatedCost) : null,value.durationMs]);
+  }
   async onModuleInit(): Promise<void> {
     if (!this.pool) return;
     const c = await this.pool.connect();

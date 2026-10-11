@@ -23,7 +23,7 @@ async function api(path: string, body?: unknown) {
   if (!response.ok) throw new Error(Array.isArray(result.message) ? result.message.join('，') : result.message || '请求失败，请稍后重试');
   return result;
 }
-export function AccountBoundary({ children, showAccountBar = true }: { children: ReactNode; showAccountBar?: boolean }) {
+export function AccountBoundary({ children, showAccountBar = true, purpose = 'product' }: { children: ReactNode; showAccountBar?: boolean; purpose?: 'product' | 'admin' }) {
   const [state, setState] = useState<'checking' | 'legacy' | 'login' | 'ready' | 'error'>('checking');
   const [phone, setPhone] = useState(''), [code, setCode] = useState('');
   const [user, setUser] = useState<{ id: string; phone: string }>();
@@ -83,14 +83,14 @@ export function AccountBoundary({ children, showAccountBar = true }: { children:
   }}>退出登录</button>{error && <span role="alert">{error}</span>}</div>}<div key={user?.id}>{children}</div></>;
   return <main className="account-page"><section className="account-card">
     <div className="account-mark" aria-hidden="true">狸</div><p className="account-eyebrow">令狸 · 你的故事伙伴</p>
-    <h1>给你的故事，留一个位置</h1><p className="account-description">登录后，你的聊天、资料和文稿会保存在自己的账号里。</p>
+    <h1>{purpose === 'admin' ? '登录令狸管理台' : '给你的故事，留一个位置'}</h1><p className="account-description">{purpose === 'admin' ? '使用已获管理权限的手机号账号登录。' : '登录后，你的聊天、资料和文稿会保存在自己的账号里。'}</p>
     {state === 'checking' ? <p role="status">正在确认登录状态…</p> : state === 'error' ? <><p role="alert">{error}</p><button onClick={() => location.reload()}>重新连接</button></> :
       <form onSubmit={event => { event.preventDefault(); void login(); }}>
         <label htmlFor="account-phone">手机号</label><div className="account-phone"><span>+86</span><input id="account-phone" type="tel" autoComplete="tel-national" inputMode="numeric" maxLength={11} placeholder="请输入手机号" value={phone} disabled={busy} onChange={e => { setPhone(e.target.value.replace(/\D/g, '')); setCode(''); }} /></div>
         <label htmlFor="account-code">短信验证码</label><div className="account-code"><input id="account-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="六位验证码" value={code} disabled={busy} onChange={e => setCode(e.target.value.replace(/\D/g, ''))} /><button type="button" disabled={busy || cooldown > 0 || !/^1[3-9]\d{9}$/.test(phone)} onClick={() => void send()}>{cooldown ? `${cooldown} 秒后重发` : '获取验证码'}</button></div>
         {error && <p className="account-error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
-        <button className="account-submit" disabled={busy || !/^1[3-9]\d{9}$/.test(phone) || !/^\d{6}$/.test(code)}>{busy ? '请稍候…' : '登录，开始记录'}</button>
-        <p className="account-note">首次验证成功会自动创建账号</p>
+        <button className="account-submit" disabled={busy || !/^1[3-9]\d{9}$/.test(phone) || !/^\d{6}$/.test(code)}>{busy ? '请稍候…' : purpose === 'admin' ? '登录管理台' : '登录，开始记录'}</button>
+        <p className="account-note">{purpose === 'admin' ? '管理权限由服务端单独授予' : '首次验证成功会自动创建账号'}</p>
       </form>}
   </section></main>;
 }

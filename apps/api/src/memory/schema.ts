@@ -49,6 +49,18 @@ CREATE TABLE IF NOT EXISTS bio_memory_jobs (
  error text, usage jsonb, created_at timestamptz NOT NULL DEFAULT now(), finished_at timestamptz
 );
 CREATE TABLE IF NOT EXISTS bio_memory_runs (id uuid PRIMARY KEY, user_id text NOT NULL REFERENCES bio_memory_users(id));
+CREATE TABLE IF NOT EXISTS bio_run_metrics (
+ id uuid PRIMARY KEY REFERENCES bio_memory_runs(id) ON DELETE CASCADE, user_id text NOT NULL,
+ conversation_id uuid NOT NULL, call_id text, status text NOT NULL CHECK(status IN ('done','failed','cancelled')),
+ model text, usage jsonb NOT NULL, estimated_cost jsonb, duration_ms integer NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS bio_run_metrics_owner ON bio_run_metrics(user_id,created_at DESC);
+CREATE TABLE IF NOT EXISTS bio_voice_failures (
+ id uuid PRIMARY KEY, user_id text NOT NULL, call_id text NOT NULL REFERENCES bio_memory_calls(id) ON DELETE CASCADE,
+ turn_id text NOT NULL, stage text NOT NULL, code text NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS bio_voice_failures_time ON bio_voice_failures(created_at DESC);
 ALTER TABLE bio_memory_calls ADD COLUMN IF NOT EXISTS call_summary jsonb;
 ALTER TABLE bio_memory_calls ADD COLUMN IF NOT EXISTS initial_context jsonb;
 ALTER TABLE bio_memory_calls ADD COLUMN IF NOT EXISTS opening_claimed boolean NOT NULL DEFAULT false;

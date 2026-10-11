@@ -1,4 +1,5 @@
 import { AuthModule } from './auth/auth.module.js';
+import { AdminModule } from './admin/admin.module.js';
 import { MemoryModule } from './memory/memory.module.js';
 import { VoiceModule } from './voice/voice.module.js';
 import { Module } from '@nestjs/common';
@@ -18,6 +19,7 @@ import { AssetsController } from './assets/assets.controller.js';
     MemoryModule,
     ChatModule,
     VoiceModule,
+    AdminModule,
   ],
   controllers: [HealthController, AssetsController],
 })
