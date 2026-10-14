@@ -1,5 +1,5 @@
 import { DialAvatar } from './dial-avatar';
-import { warmCallUi } from './prepare-call-ui';
+import { prepareDeskScene, warmCallUi, type SceneManifest } from './prepare-call-ui';
 import { SlideToEnd } from './slide-to-end';
 import { VoiceCallStatus } from './voice-call-status';
 import { AttachmentViewer } from './attachment-viewer';
@@ -13,19 +13,10 @@ import type { ReadingFontFeedback } from './use-reading-font';
 import type { Material, PanelAttachment } from '@bio/contracts';
 import type { SessionReceipt } from './session-receipt';
 import type { FoxActivity } from '../../miniprogram/miniprogram/lib/fox-behavior';
-import { FoxAnimationController, type FoxAnimationState } from '../../miniprogram/miniprogram/lib/fox-animation-controller';
+import { FOX_ANIMATION_CLIPS, FoxAnimationController, type FoxAnimationState } from '../../miniprogram/miniprogram/lib/fox-animation-controller';
 import { FoxFrameGate } from '../../miniprogram/miniprogram/lib/fox-frame-gate';
 import type { FoxActionId } from '../../miniprogram/miniprogram/lib/fox-animation-controller';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-
-interface Animation {
-  id: string; src: string; columns: number; rows: number; frameCount: number;
-  frameWidth: number; frameHeight: number; fps: number;
-}
-interface Manifest {
-  layers: { environment: { src: string }; innerPanel: { src: string } };
-  animations: Animation[];
-}
 
 export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, callOpen, callStartedAt, status, callFailed = false, callRecovery, motionState = 'listen', getMotionLevel = () => 0, getDialPhase = () => -1, mode, startDisabled, onStart, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
   readingFontFeedback?: ReadingFontFeedback | undefined;
@@ -42,7 +33,9 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
   useEffect(() => { void warmCallUi().catch(() => { /* Retry when the user calls. */ }); }, []);
   const dialing = callOpen && callStartedAt === null;
   const { phase, notebook, speech } = activity;
-  const [manifest, setManifest] = useState<Manifest>();
+  const [manifest, setManifest] = useState<SceneManifest>();
+  const [sceneReady, setSceneReady] = useState(false);
+  const [sceneAttempt, setSceneAttempt] = useState(0);
   const [assetError, setAssetError] = useState(false);
   const [folderSearchOpen, setFolderSearchOpen] = useState(false);
   const [drawer, setDrawer] = useState<'folder' | 'manuscripts' | null>(null);
@@ -59,20 +52,36 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
   const frameGate = useRef(new FoxFrameGate());
   const controllerRef = useRef<FoxAnimationController | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const screenRef = useRef<HTMLDivElement>(null);
   const documentScroller = useRef<HTMLDivElement>(null);
   const subtitleRef = useRef<HTMLDivElement>(null);
   const animation = manifest?.animations.find(item => item.id === (animationState?.action.id ?? 'blink'));
 
   useEffect(() => {
-    const controller = new AbortController();
-    void fetch('/animations/fox-clerk/manifest.json', { signal: controller.signal })
-      .then(response => { if (!response.ok) throw new Error('Assets unavailable'); return response.json() as Promise<Manifest>; })
-      .then(value => setManifest({ ...value,
-        layers: { environment: { src: uiAsset(value.layers.environment.src) }, innerPanel: { src: uiAsset(value.layers.innerPanel.src) } },
-        animations: value.animations.map(animation => ({ ...animation, src: uiAsset(animation.src) })),
-      })).catch(() => { if (!controller.signal.aborted) setAssetError(true); });
-    return () => controller.abort();
-  }, []);
+    let active = true;
+    setAssetError(false);
+    void prepareDeskScene().then(value => {
+      if (!active) return;
+      // Seed the frame gate before mounting sheets; no partial actor is shown.
+      for (const sheet of value.animations) frameGate.current.loaded(sheet.id as FoxActionId);
+      setAnimationState(frameGate.current.request({
+        action: FOX_ANIMATION_CLIPS.blink, frame: 0, playing: false, phase: 'idle',
+      }));
+      setManifest(value);
+    }).catch(() => { if (active) setAssetError(true); });
+    return () => { active = false; };
+  }, [sceneAttempt]);
+  useEffect(() => {
+    if (!manifest) return;
+    // Confirm the actual mounted images have decoded as well, then give the set a paint.
+    let active = true, first = 0, second = 0;
+    const images = Array.from(screenRef.current?.querySelectorAll<HTMLImageElement>('.phone-scene-frame img, .phone-conversation-scene img') ?? []);
+    void Promise.all(images.map(image => image.decode())).then(() => {
+      if (!active) return;
+      first = requestAnimationFrame(() => { second = requestAnimationFrame(() => { if (active) setSceneReady(true); }); });
+    }).catch(() => { if (active) setAssetError(true); });
+    return () => { active = false; cancelAnimationFrame(first); cancelAnimationFrame(second); };
+  }, [manifest, sceneAttempt]);
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     const update = () => setReducedMotion(media.matches);
@@ -80,6 +89,7 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
     return () => media.removeEventListener('change', update);
   }, []);
   useEffect(() => {
+    if (!sceneReady) return;
     const controller = new FoxAnimationController(state => setAnimationState(frameGate.current.request(state)));
     controllerRef.current = controller;
     controller.setActivity({ phase: 'idle', notebook: false, speech: 'silent', reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches });
@@ -88,12 +98,12 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
     document.addEventListener('visibilitychange', visibility);
     visibility();
     return () => { document.removeEventListener('visibilitychange', visibility); controller.destroy(); controllerRef.current = null; };
-  }, []);
+  }, [sceneReady]);
   useEffect(() => {
     controllerRef.current?.setActivity({
       phase, notebook, speech, reducedMotion,
     });
-  }, [phase, notebook, speech, reducedMotion]);
+  }, [phase, notebook, speech, reducedMotion, sceneReady]);
   useEffect(() => {
     if (running && subtitleRef.current) subtitleRef.current.scrollTop = subtitleRef.current.scrollHeight;
   }, [subtitle, running]);
@@ -114,18 +124,22 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
         </div>
         <div className="phone-art phone-art--board" style={{ backgroundImage: `url(${manifest.layers.innerPanel.src})` }} />
       </>}
-      {!manifest && <div className="phone-art-fallback">令狸<span>{assetError ? '场景素材加载失败' : '正在加载场景…'}</span></div>}
     </>;
   return <div className="phone-preview" aria-label="手机用户界面预览">
     <link rel="preload" as="image" href={uiAsset('lingli-avatar.png')} />
-    <div className={`phone-screen ${callOpen ? 'phone-screen--call' : ''} ${mode === 'attachment' ? 'phone-screen--attachment' : ''} ${mode === 'editor' ? 'phone-screen--editor' : ''} ${callOpen && mode === 'conversation' ? 'phone-screen--conversation' : ''} ${dialing ? 'phone-screen--dialing' : ''}`} style={{ aspectRatio: '320/692' }}>
+    <div ref={screenRef} aria-busy={!sceneReady} className={`phone-screen ${sceneReady ? 'phone-screen--ready' : 'phone-screen--preparing'} ${callOpen ? 'phone-screen--call' : ''} ${mode === 'attachment' ? 'phone-screen--attachment' : ''} ${mode === 'editor' ? 'phone-screen--editor' : ''} ${callOpen && mode === 'conversation' ? 'phone-screen--conversation' : ''} ${dialing ? 'phone-screen--dialing' : ''}`} style={{ aspectRatio: '320/692' }}>
+      <div className={`phone-scene-curtain ${sceneReady ? 'phone-scene-curtain--open' : ''}`} inert={sceneReady} aria-hidden={sceneReady}>
+        <span className="phone-scene-glow" aria-hidden="true" />
+        <p role={assetError ? 'alert' : 'status'}>{assetError ? '书房暂时未能打开' : '正在打开书房…'}</p>
+        {assetError && <button type="button" onClick={() => setSceneAttempt(value => value + 1)}>重新加载</button>}
+      </div>
       {callOpen && !dialing && mode === 'editor' && <DocumentGlassBackdrop source={documentScroller} />}
       {readingFontFeedback && <ReadingFontToast key={readingFontFeedback.id} feedback={readingFontFeedback} />}
       {!callOpen ? <>
         <div className="phone-scene-viewport">
           <div className="phone-scene-frame">
             {artwork}
-            <section className={`phone-desk ${receiptVisible ? 'phone-desk--printing' : ''}`} inert={receiptVisible || !!drawer} aria-label="令狸的书桌">
+            <section className={`phone-desk ${receiptVisible ? 'phone-desk--printing' : ''}`} inert={!sceneReady || receiptVisible || !!drawer} aria-label="令狸的书桌">
               <button type="button" className="phone-desk-entry phone-desk-entry--folder" aria-label="资料夹" onClick={() => { setFolderSearchOpen(false); setDrawer('folder'); }}><img src={uiAsset('folder.png')} alt="" /></button>
               <button type="button" className="phone-desk-entry phone-desk-entry--call" aria-label="呼叫令狸" disabled={startDisabled} onClick={onStart}><img src={uiAsset('phone.png')} alt="" /></button>
               <button type="button" className="phone-desk-entry phone-desk-entry--manuscripts" aria-label="文稿集" onClick={() => setDrawer('manuscripts')}><span className="phone-manuscript-art"><img src={uiAsset('manuscripts.png')} alt="" /><img className="phone-manuscript-label" src={uiAsset('manuscripts-label.png')} alt="" /></span></button>

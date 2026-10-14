@@ -14,7 +14,7 @@ function setup(t, hang = false) {
   const urls = [], images = [];
   t.mock.method(globalThis, 'fetch', async url => {
     urls.push(url);
-    return { ok: true, json: async () => url.includes('manifest') ? { layers: { actor: { kind: 'sprite' }, environment: { src: '/environment.webp' } }, animations: [{ src: '/blink.webp' }] } : url.includes('/pages/') ? { image: '/first-page.png' } : { kind: 'document', mimeType: 'application/pdf' } };
+    return { ok: true, json: async () => url.includes('manifest') ? { layers: { actor: { kind: 'sprite' }, environment: { src: '/environment.webp' }, innerPanel: { src: '/inner-panel.webp' } }, animations: [{ src: '/blink.webp' }] } : url.includes('/pages/') ? { image: '/first-page.png' } : { kind: 'document', mimeType: 'application/pdf' } };
   });
   const original = Object.getOwnPropertyDescriptor(globalThis, 'Image');
   Object.defineProperty(globalThis, 'Image', { configurable: true, value: class {
@@ -28,7 +28,7 @@ test('preflight loads sprites and first attachment page without an artificial de
   const f = setup(t); let finished = false;
   const promise = prepareCallUi('file').then(() => { finished = true; });
   await promise; assert.equal(finished, true);
-  assert.deepEqual(f.images.sort(), ['/api/v1/ui-assets/blink.webp', '/api/v1/ui-assets/environment.webp', '/first-page.png'].sort());
+  assert.deepEqual(f.images.sort(), ['/api/v1/ui-assets/blink.webp', '/api/v1/ui-assets/environment.webp', '/api/v1/ui-assets/inner-panel.webp', ...['folder.png', 'phone.png', 'manuscripts.png', 'manuscripts-label.png', 'lingli-avatar.png'].map(name => `/api/v1/ui-assets/${name}`), '/first-page.png'].sort());
 
 });
 test('a hanging image becomes a retryable failure rather than endless dialing', async t => {
@@ -54,4 +54,30 @@ test('failed warming is retried on the next call', async t => {
   const retry = assert.rejects(prepareCallUi(), /超时/);
   await flush(); t.mock.timers.tick(25000); await retry;
   assert.equal(f.urls.filter(url => url.includes('manifest')).length, 2);
+});
+
+test('the scene stays pending until every image has decoded', async t => {
+  const { prepareDeskScene } = await fresh();
+  setup(t);
+  const decoders = [];
+  globalThis.Image.prototype.decode = function () { return new Promise(resolve => decoders.push(resolve)); };
+  let ready = false;
+  const scene = prepareDeskScene().then(value => { ready = true; return value; });
+  await flush();
+  assert.equal(decoders.length, 8);
+  decoders.slice(0, -1).forEach(resolve => resolve());
+  await flush(); assert.equal(ready, false);
+  decoders.at(-1)();
+  const manifest = await scene;
+  assert.equal(ready, true);
+  assert.equal(manifest.layers.environment.src, '/api/v1/ui-assets/environment.webp');
+});
+test('decode failure keeps the scene closed and allows a fresh retry', async t => {
+  const { prepareDeskScene } = await fresh();
+  const fixture = setup(t);
+  globalThis.Image.prototype.decode = async function () { throw new Error('decode failed'); };
+  await assert.rejects(prepareDeskScene(), /解码/);
+  globalThis.Image.prototype.decode = async function () {};
+  await prepareDeskScene();
+  assert.equal(fixture.urls.filter(url => url.includes('manifest')).length, 2);
 });

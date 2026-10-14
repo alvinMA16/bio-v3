@@ -1,10 +1,31 @@
 import { uiAsset } from './ui-asset';
 
+export interface SceneAnimation {
+  id: string; src: string; columns: number; rows: number; frameCount: number;
+  frameWidth: number; frameHeight: number; fps: number;
+}
+export interface SceneManifest {
+  layers: { environment: { src: string }; innerPanel: { src: string } };
+  animations: SceneAnimation[];
+}
+// Retain decoded backgrounds and sheets for the lifetime of the cached scene.
+const decodedSceneAssets = new WeakMap<SceneManifest, HTMLImageElement[]>();
+let deskPreparation: Promise<SceneManifest> | undefined;
+
+/** Resolve only after every visible scene asset has downloaded and decoded. */
+export function prepareDeskScene(): Promise<SceneManifest> {
+  if (!deskPreparation) deskPreparation = loadCallUi(undefined, true).then(manifest => manifest!).catch(error => {
+    deskPreparation = undefined;
+    throw error;
+  });
+  return deskPreparation;
+}
+
 let scenePreparation: Promise<void> | undefined;
 
 /** Start on the desk; concurrent calls share assets and failures remain retryable. */
 export function warmCallUi(): Promise<void> {
-  if (!scenePreparation) scenePreparation = loadCallUi().catch(error => {
+  if (!scenePreparation) scenePreparation = Promise.all([prepareDeskScene(), import('./voice-glass-stack.js').then(renderer => renderer.prepareGlassStack())]).then(() => {}).catch(error => {
     scenePreparation = undefined; throw error;
   });
   return scenePreparation;
@@ -19,7 +40,9 @@ export async function prepareCallUi(materialId?: string): Promise<void> {
   ]);
 }
 
-async function loadCallUi(materialId?: string, includeScene = true): Promise<void> {
+async function loadCallUi(materialId?: string, includeScene = true): Promise<SceneManifest | undefined> {
+  let scene: SceneManifest | undefined;
+  const decodedImages: HTMLImageElement[] = [];
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 25_000);
   async function json(url: string) {
@@ -30,15 +53,21 @@ async function loadCallUi(materialId?: string, includeScene = true): Promise<voi
   function image(src: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const img = new Image();
+      let settled = false;
       const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
         controller.signal.removeEventListener('abort', abort);
         img.onload = null; img.onerror = null;
-        if (error) { img.src = ''; reject(error); } else resolve();
+        if (error) { img.src = ''; reject(error); } else { decodedImages.push(img); resolve(); }
       };
       const abort = () => finish(new Error('通话资源加载超时，请重新呼叫。'));
       if (controller.signal.aborted) { abort(); return; }
       controller.signal.addEventListener('abort', abort, { once: true });
-      img.onload = () => finish();
+      img.onload = () => {
+        if (img.decode) void img.decode().then(() => finish(), () => finish(new Error('场景素材解码失败，请重试。')));
+        else finish();
+      };
       img.onerror = () => finish(new Error('场景或附件加载失败，请重新呼叫。'));
       img.src = src;
     });
@@ -47,13 +76,16 @@ async function loadCallUi(materialId?: string, includeScene = true): Promise<voi
     await Promise.race([
       new Promise<never>((_, reject) => controller.signal.addEventListener('abort', () => reject(new Error('通话资源加载超时，请重新呼叫。')), { once: true })),
       Promise.all([
-      includeScene ? import('./voice-glass-stack.js').then(renderer => renderer.prepareGlassStack()) : Promise.resolve(),
       (async () => {
         if (!includeScene) return;
-        const manifest = await json('/animations/fox-clerk/manifest.json') as {
-          layers: Record<string, { src?: string }>; animations: { src: string }[];
+        const manifest = await json('/animations/fox-clerk/manifest.json') as SceneManifest;
+        const sources = [...Object.values(manifest.layers), ...manifest.animations].flatMap(item => item.src ? [uiAsset(item.src)] : []);
+        sources.push(...['folder.png', 'phone.png', 'manuscripts.png', 'manuscripts-label.png', 'lingli-avatar.png'].map(uiAsset));
+        await Promise.all([...new Set(sources)].map(image));
+        scene = { ...manifest,
+          layers: { environment: { src: uiAsset(manifest.layers.environment.src) }, innerPanel: { src: uiAsset(manifest.layers.innerPanel.src) } },
+          animations: manifest.animations.map(animation => ({ ...animation, src: uiAsset(animation.src) })),
         };
-        await Promise.all([...Object.values(manifest.layers), ...manifest.animations].flatMap(item => item.src ? [image(uiAsset(item.src))] : []));
       })(),
       (async () => {
         if (!materialId) return;
@@ -66,5 +98,7 @@ async function loadCallUi(materialId?: string, includeScene = true): Promise<voi
       })(),
       ]),
     ]);
+    if (scene) decodedSceneAssets.set(scene, decodedImages);
+    return scene;
   } finally { clearTimeout(timeout); controller.abort(); }
 }
