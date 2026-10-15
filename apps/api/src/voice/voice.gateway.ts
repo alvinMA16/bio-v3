@@ -129,6 +129,7 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
           if (message.type === 'listen') {
             if ((message.resume !== undefined && typeof message.resume !== 'boolean')
               || (message.playbackFeedback !== undefined && typeof message.playbackFeedback !== 'boolean')
+              || (message.orderedCapture !== undefined && typeof message.orderedCapture !== 'boolean')
               || (message.durableCapture !== undefined && typeof message.durableCapture !== 'boolean')
               || (message.captureId !== undefined && (typeof message.captureId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(message.captureId)))
               || (message.callId !== undefined && (typeof message.callId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(message.callId)))) throw new Error('Invalid call options');
@@ -185,7 +186,7 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
                 }, undefined, (remainingMs, totalMs) => {
                   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'capture.recovering', remainingMs, totalMs, turnId: captureTurn, elapsedMs: Date.now() - startedAt }));
                 }) : undefined;
-              void session.listen(message.turnId, input, opening, message.playbackFeedback === true).catch(() => ws.close(1011, 'Voice session failed'));
+              void session.listen(message.turnId, input, opening, message.playbackFeedback === true, !!durable && message.orderedCapture === true).catch(() => ws.close(1011, 'Voice session failed'));
             } finally { validating = false; }
           } else if (message.type === 'diagnostic') {
             if (!['storage_unavailable', 'upload_stalled', 'recovery_timeout', 'receive_failed', 'startup_failed'].includes(message.code)

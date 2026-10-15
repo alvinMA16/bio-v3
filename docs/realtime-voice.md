@@ -97,7 +97,10 @@ Both clients use a PCM-duration-paced uploader with at most ten unacknowledged p
 The browser also pauses uploads when its socket buffer exceeds 64 KB. Transport loss
 pauses microphone capture; it resumes only after server tail replay and local pending
 packets have been durably acknowledged. Upload stalls stop after 20 seconds without
-progress and retain pending packets. A local finish waits for all durable ACKs. During
+progress and retain pending packets. A local finish waits for all durable ACKs. New clients negotiate orderedCapture;
+the server requests capture.finish at a silence endpoint so the client can flush
+its recorder and obtain the final durable ACK before sending finish. Legacy
+clients retain their existing endpoint behavior. During
 backlog recovery, capture.sync prevents a silence endpoint from submitting only the
 first part of the upload. The server's existing 30-second recognition blocks still bound
 replay; capture.recovering reports remaining replay duration. ASR readiness has a

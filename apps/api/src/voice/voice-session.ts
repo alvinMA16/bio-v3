@@ -9,6 +9,7 @@ type Runner = (input: ChatCompletionRequest, emit: (event: AgentEvent) => void, 
 type Payload = VoiceServerMessage extends infer M ? M extends VoiceServerMessage ? Omit<M, 'turnId' | 'elapsedMs'> : never : never;
 interface Turn {
   id: string; request: VoiceRequest; abort: AbortController; started: number;
+  orderedCapture: boolean; finishRequested?: boolean;
   captureThrough?: number; recognitionFinal?: boolean;
   asr?: AsrStream; endpoint?: ReturnType<typeof setTimeout>; deadline?: ReturnType<typeof setTimeout>;
   task: Promise<void>; state: VoiceState; audioBytes: number;
@@ -29,14 +30,14 @@ export class VoiceSession {
     private send: (event: VoiceServerMessage) => void, private endpointMs = 2500,
     private observe?: { progress: (value: VoicePlaybackSnapshot) => void; diagnostic: (value: { turnId: string; stage: string; code: string; queuedSamples: number }) => void }) {}
 
-  async listen(id: string, request: VoiceRequest, opening = false, playbackFeedback = false): Promise<void> {
+  async listen(id: string, request: VoiceRequest, opening = false, playbackFeedback = false, orderedCapture = false): Promise<void> {
     const generation = ++this.generation;
     this.cancel(undefined, 'superseded');
     // Agent abort is asynchronous; release the conversation lock before reusing it.
     await this.lastTask.catch(() => undefined);
     if (this.closed || generation !== this.generation) return;
     if (this.playbackTurn && (!this.playbackTurn.progress.generated || this.playbackTurn.window.played < this.playbackTurn.window.sent)) this.report(this.playbackTurn, true);
-    const turn: Turn = { id, request, abort: new AbortController(), started: performance.now(),
+    const turn: Turn = { id, request, orderedCapture, abort: new AbortController(), started: performance.now(),
       task: Promise.resolve(), state: 'connecting', audioBytes: 0,
       speech: new AbortController(), window: new PlaybackWindow(playbackFeedback), segments: [], viewListeners: new Set(), viewObservers: new Set(),
       progress: { turnId: id, generated: false, sentSamples: 0, playedSamples: 0, interrupted: false } };
@@ -56,7 +57,7 @@ export class VoiceSession {
         turn.recognitionFinal = result.final && !!result.text.trim();
         clearTimeout(turn.endpoint);
         if (!turn.captureThrough && result.final && result.text.trim() && turn.state === 'listening') {
-          turn.endpoint = setTimeout(() => this.finish(turn.id), this.endpointMs);
+          turn.endpoint = setTimeout(() => this.endpoint(turn), this.endpointMs);
         }
       }, turn.abort.signal);
       if (!this.isCurrent(turn)) { stream.close(); return; }
@@ -83,7 +84,16 @@ export class VoiceSession {
     const turn = this.current;
     if (!turn || turn.id !== id || !turn.captureThrough || sequence < turn.captureThrough) return;
     turn.captureThrough = 0;
-    if (turn.recognitionFinal && turn.state === 'listening') turn.endpoint = setTimeout(() => this.finish(id), this.endpointMs);
+    if (turn.recognitionFinal && turn.state === 'listening') turn.endpoint = setTimeout(() => this.endpoint(turn), this.endpointMs);
+  }
+  private endpoint(turn: Turn): void {
+    if (!this.isCurrent(turn) || turn.state !== 'listening') return;
+    if (!turn.orderedCapture) { this.finish(turn.id); return; }
+    if (turn.finishRequested) return;
+    turn.finishRequested = true;
+    this.emit(turn, { type: 'capture.finish' });
+    // The client flushes its worklet and waits for every packet's durable ACK.
+    turn.deadline = setTimeout(() => this.fail(turn, 'asr', '尾部录音保存超时，已保存的讲述仍然保留。', 'capture_flush_timeout'), 90_000);
   }
   finish(id: string): void {
     const turn = this.current;

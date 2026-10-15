@@ -344,8 +344,8 @@ export function App({ internal = false }: { internal?: boolean }) {
           if (voiceTurn.current?.saved) setHistory(items => items.map(item => item.id === record.id ? { ...record } : item));
         }
       },
-      error: error => { voiceFailure.current = true; setVoiceStatus(error); saveVoiceTurn(error); },
-      ended: recoveryUntil => { setRecoveryUntil(recoveryUntil ?? null); if (receiptCall.current) receiptCall.current.endedAt = Date.now(); saveVoiceTurn('语音会话已结束'); setCallStartedAt(null); setVoiceEnabled(false); setMicEnabled(false); setAudioPlaying(false); setSpokenSubtitle(''); voiceRef.current = null; },
+      error: error => { setVoiceStatus(error); saveVoiceTurn(error); },
+      ended: recoveryUntil => { voiceFailure.current = true; setRecoveryUntil(recoveryUntil ?? null); if (receiptCall.current) receiptCall.current.endedAt = Date.now(); saveVoiceTurn('语音会话已结束'); setCallStartedAt(null); setVoiceEnabled(false); setMicEnabled(false); setAudioPlaying(false); setSpokenSubtitle(''); voiceRef.current = null; },
     }, accountCacheKey('bio-voice-resume'), mode === 'new' ? 'new' : !pendingCapture()?.id && pendingCapture()?.hasParked ? 'saved' : 'continue');
     voiceRef.current = client; void client.start();
   }

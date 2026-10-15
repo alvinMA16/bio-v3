@@ -348,7 +348,7 @@ export class BrowserVoice {
     const request = this.callbacks.request();
     if (this.conversationId) request.conversationId = this.conversationId;
     this.callbacks.start(this.turnId, request);
-    this.send({ type: 'listen', turnId: this.turnId, callId: this.callId, resume: this.resume, playbackFeedback: true, durableCapture: !!this.captureBuffer, ...(this.captureBuffer?.id ? { captureId: this.captureBuffer.id } : {}), request });
+    this.send({ type: 'listen', turnId: this.turnId, callId: this.callId, resume: this.resume, playbackFeedback: true, durableCapture: !!this.captureBuffer, orderedCapture: true, ...(this.captureBuffer?.id ? { captureId: this.captureBuffer.id } : {}), request });
   }
   updateAttachmentView(view: { materialId: string; page: number }): void {
     if (!this.closed && this.turnId) this.send({ type: 'attachment.view', turnId: this.turnId, view });
@@ -396,6 +396,7 @@ export class BrowserVoice {
       }
       this.pendingEvents.push(event); return;
     }
+    if (event.type === 'capture.finish') this.finish();
     if (event.type === 'capture.recovering') {
       this.restoring = true; this.setListening(false);
       this.callbacks.status?.(`正在恢复讲述，还需重放约 ${Math.ceil(event.remainingMs / 1000)} 秒录音…`);

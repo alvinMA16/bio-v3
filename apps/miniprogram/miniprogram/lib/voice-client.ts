@@ -132,7 +132,7 @@ export class MiniVoiceClient {
     this.turnId = `voice-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const request = this.callbacks.request();
     if (this.conversationId) request.conversationId = this.conversationId;
-    this.send({ type: 'listen', turnId: this.turnId, callId: this.callId, resume: this.resume, playbackFeedback: true, durableCapture: !!this.captureBuffer, ...(this.captureBuffer?.id ? { captureId: this.captureBuffer.id } : {}), request });
+    this.send({ type: 'listen', turnId: this.turnId, callId: this.callId, resume: this.resume, playbackFeedback: true, durableCapture: !!this.captureBuffer, orderedCapture: true, ...(this.captureBuffer?.id ? { captureId: this.captureBuffer.id } : {}), request });
   }
   private onFrame = ({ frameBuffer }: { frameBuffer: ArrayBuffer }): void => {
     if (this.closed || !this.recording) return;
@@ -177,6 +177,7 @@ export class MiniVoiceClient {
   }
   private receive(event: VoiceServerMessage): void {
     if (this.closed || event.turnId !== this.turnId) return;
+    if (event.type === 'capture.finish') this.finish();
     if (event.type === 'capture.ready') { this.durableCapture = true; this.captureBuffer!.ready(event.captureId, event.sequence); }
     if (event.type === 'capture.saved' && event.captureId === this.captureBuffer?.id) { this.captureBuffer.acknowledge(event.sequence); this.upload?.wake(); this.uploadDrained(); }
     if (event.type === 'transcript') { this.upload?.stop(); this.captureBuffer?.clear(); this.durableCapture = false; }

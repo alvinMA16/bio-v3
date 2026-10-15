@@ -133,3 +133,14 @@ test('a silence endpoint cannot submit half a recovered upload before its last p
   session.captureSaved('tail',39);t.mock.timers.tick(3000);assert.equal(inputs.length,0);
   session.captureSaved('tail',40);t.mock.timers.tick(2500);await session.settled();assert.equal(inputs.length,1);session.close();
 });
+
+test('ordered capture endpoint requests client flush and never submits before explicit durable finish', async t => {
+  t.mock.timers.enable({apis:['setTimeout']});let callback;const inputs=[],events=[];
+  const values=[];
+  const session=new VoiceSession({async open(cb){callback=cb;return {write(bytes){values.push(bytes[0]);},close(){},async finish(){return values.join(',');}};}},{async synthesize(){}},async input=>{inputs.push(input);return {conversationId:'test',message:{content:''}};},e=>events.push(e));
+  await session.listen('ordered',{},false,false,true);session.audio(new Uint8Array([1,0]),1);
+  callback({text:'开头',final:true});t.mock.timers.tick(2500);
+  assert.equal(events.filter(e=>e.type==='capture.finish').length,1);assert.equal(inputs.length,0);
+  session.audio(new Uint8Array([2,0]),2);session.audio(new Uint8Array([3,0]),3);
+  session.finish('ordered');await session.settled();assert.equal(inputs[0].message,'1,2,3');session.close();
+});

@@ -616,3 +616,21 @@ test('handshake alone does not report readiness and recovery timeout preserves t
   t.mock.timers.tick(120000);assert.equal(f.ended(),1);
   assert.ok(f.messages.map(JSON.parse).some(m=>m.type==='diagnostic'&&m.code==='recovery_timeout'));
 });
+
+test('server endpoint flushes the worklet and sends finish only after the last PCM ACK', async t => {
+  const f=environment(t);await f.client.start();t.mock.timers.tick(3000);const ws=f.sockets[0];ws.onopen();
+  const turnId=f.starts[0],incoming=event=>ws.onmessage({data:JSON.stringify({turnId,...event})});
+  incoming({type:'capture.ready',captureId:'draft',sequence:0});incoming({type:'state',state:'listening'});
+  f.captures[0].port.onmessage({data:new Int16Array(1600).buffer});
+  incoming({type:'capture.finish'});
+  // AudioWorklet delivers the last partial packet before confirming its flush.
+  f.captures[0].port.onmessage({data:new Int16Array(300).buffer});
+  f.captures[0].port.onmessage({data:{type:'flushed'}});
+  assert.equal(f.messages.map(JSON.parse).some(m=>m.type==='finish'),false);
+  incoming({type:'capture.saved',captureId:'draft',sequence:1});t.mock.timers.tick(100);
+  assert.equal(f.messages.map(JSON.parse).filter(m=>m.type==='capture.audio').length,2);
+  assert.equal(f.messages.map(JSON.parse).some(m=>m.type==='finish'),false);
+  incoming({type:'capture.saved',captureId:'draft',sequence:2});
+  assert.equal(f.messages.map(JSON.parse).filter(m=>m.type==='finish').length,1);
+  assert.equal(f.client.listening,false);
+});

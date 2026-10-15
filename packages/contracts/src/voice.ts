@@ -7,7 +7,7 @@ export type VoiceClientMessage =
   | { type: 'diagnostic'; turnId: string; code: 'storage_unavailable' | 'upload_stalled' | 'recovery_timeout' | 'receive_failed' | 'startup_failed'; pendingFrames?: number }
   | { type: 'capture.sync'; turnId: string; through: number }
   | { type: 'capture.audio'; turnId: string; sequence: number; data: string }
-  | { type: 'listen'; durableCapture?: boolean; captureId?: string; turnId: string; callId?: string; resume?: boolean; playbackFeedback?: boolean; request: VoiceRequest }
+  | { type: 'listen'; durableCapture?: boolean; orderedCapture?: boolean; captureId?: string; turnId: string; callId?: string; resume?: boolean; playbackFeedback?: boolean; request: VoiceRequest }
   | { type: 'playback'; turnId: string; playedSamples: number }
   | { type: 'playback.stop'; turnId: string; code: string }
   | { type: 'attachment.view'; turnId: string; view: { materialId: string; page: number } }
@@ -19,6 +19,7 @@ export type VoiceState = 'connecting' | 'listening' | 'finalizing' | 'agent' | '
 export type VoiceServerMessage = { turnId: string; elapsedMs: number } & (
   | { type: 'connected'; callId: string; conversationId: string; resumed: boolean }
   | { type: 'state'; state: VoiceState }
+  | { type: 'capture.finish' }
   | { type: 'capture.recovering'; remainingMs: number; totalMs: number }
   | { type: 'capture.ready'; captureId: string; sequence: number }
   | { type: 'capture.saved'; captureId: string; sequence: number }
