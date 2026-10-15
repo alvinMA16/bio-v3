@@ -642,9 +642,9 @@ html[data-surface="product"] body { min-width: 0; }
 .phone-scene-welcome { display: flex; flex-direction: column; align-items: center; width: 180px; gap: 12px; }
 .phone-scene-mascot {
   display: block; width: 128px; height: 128px; object-fit: contain; margin-bottom: 14px;
-  opacity: 0; filter: drop-shadow(0 5px 5px #66553c18); transition: opacity 180ms ease;
+  opacity: 0; filter: drop-shadow(0 5px 5px #66553c18); transition: opacity 180ms ease; transform-origin: 50% 88%;
 }
-.phone-scene-mascot--ready { opacity: 1; animation: phone-scene-sway 2400ms steps(4, end) infinite; }
+.phone-scene-mascot--ready { opacity: 1; animation: phone-scene-bounce 1800ms infinite; }
 .phone-scene-mascot[hidden] { visibility: hidden; display: block; }
 .phone-scene-progress {
   align-self: stretch; height: 10px; overflow: hidden; border-radius: 8px;
@@ -652,18 +652,28 @@ html[data-surface="product"] body { min-width: 0; }
 }
 .phone-scene-progress > span {
   display: block; height: 100%; border-radius: inherit;
-  background: repeating-linear-gradient(105deg, #ffffff0a 0 1px, #6376530a 1px 3px), linear-gradient(#b8c5a4, #96aa84);
-  box-shadow: inset 0 1px 2px #f6f8e5aa, inset 0 -1px 2px #667c4c30;
+  background: repeating-linear-gradient(105deg, #ffffff0a 0 1px, #6376530a 1px 3px), linear-gradient(#cc9b68, #b17b4f);
+  box-shadow: inset 0 1px 2px #f6f8e5aa, inset 0 -1px 2px #80533230;
   transition: width 240ms cubic-bezier(.2,.65,.35,1);
 }
-.phone-scene-progress-caption { display: flex; justify-content: space-between; align-self: stretch; font-size: 11px; line-height: 1.6; letter-spacing: .07em; }
-.phone-scene-percent { font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.phone-scene-error { font-size: 11px; line-height: 1.6; }
 .phone-scene-curtain button {
   padding: 10px 24px; border: 0; border-radius: 24px; font: inherit; color: #485f4c;
   background: linear-gradient(140deg, #ffffffa3, #cddfc978);
   box-shadow: inset 0 1px 2px #fff, 0 3px 14px #354b3812; cursor: pointer;
 }
-@keyframes phone-scene-sway { 50% { transform: translateY(-3px) rotate(-2deg); } }
+/* Quadratic flight curves slow at the apex and accelerate toward contact.
+   The smaller rebound has a shorter flight, followed by a soft landing settle. */
+@keyframes phone-scene-bounce {
+  0%, 10%, 94%, 100% { transform: translateY(0) rotate(0) scale(1); animation-timing-function: ease-in-out; }
+  16% { transform: translateY(3px) rotate(0) scale(1.045, .955); animation-timing-function: ease-out; }
+  20% { transform: translateY(0) rotate(0) scale(.98, 1.02); animation-timing-function: cubic-bezier(.333, .667, .667, 1); }
+  40% { transform: translateY(-22px) rotate(-3deg) scale(1); animation-timing-function: cubic-bezier(.333, 0, .667, .333); }
+  60% { transform: translateY(0) rotate(0) scale(.98, 1.02); animation-timing-function: ease-out; }
+  64% { transform: translateY(2px) rotate(0) scale(1.07, .93); animation-timing-function: cubic-bezier(.333, .667, .667, 1); }
+  76% { transform: translateY(-7px) rotate(1deg) scale(1); animation-timing-function: cubic-bezier(.333, 0, .667, .333); }
+  88% { transform: translateY(0) rotate(0) scale(1.035, .965); animation-timing-function: ease-out; }
+}
 @media (prefers-reduced-motion: reduce) {
   .phone-scene-mascot--ready { animation: none; }
   .phone-scene-progress > span { transition: none; }

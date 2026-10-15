@@ -33,10 +33,7 @@ export function SceneLoadingCurtain({ prepared, revealed, progress, error, onRev
       <div className="phone-scene-progress" role="progressbar" aria-label="书房加载进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percentage}>
         <span style={{ width: `${percentage}%` }} />
       </div>
-      <div className="phone-scene-progress-caption">
-        <span role={error ? 'alert' : undefined}>{error ? '书房暂时未能打开' : '正在打开书房'}</span>
-        {!error && <span className="phone-scene-percent" aria-hidden="true">{percentage}%</span>}
-      </div>
+      {error && <span className="phone-scene-error" role="alert">书房暂时未能打开</span>}
       {error && <button type="button" onClick={() => { startedAt.current = Date.now(); setComplete(false); onRetry(); }}>重新加载</button>}
     </div>
   </div>;
