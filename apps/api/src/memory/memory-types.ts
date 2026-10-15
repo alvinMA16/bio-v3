@@ -8,7 +8,7 @@ export interface MemoryChange {
   summary: string; body: string; active: boolean; sources: string[];
 }
 export interface MemoryBatch { changes: MemoryChange[]; overview: Overview }
-export interface MemoryScope { userId: string; callId?: string }
+export interface MemoryScope { userId: string; callId?: string; captureId?: string }
 export const EMPTY_OVERVIEW: Overview = { preferences: [], entries: [] };
 export const MEMORY_RULES = `长期记忆由通话结束后的后台任务整理。你在通话中只能读取，不能宣称本轮内容已经写入长期记忆。
 bio_memory_overview 是服务端提供的用户偏好、交流约定与记忆入口；本轮明确要求和纠正优先于旧记忆。人物(person)、故事(story)、互动与近况(interaction)详情按需读取。

@@ -46,7 +46,6 @@ export class VoiceSession {
       this.lastTask = turn.task;
       return;
     }
-    turn.deadline = setTimeout(() => this.fail(turn, 'asr', '录音超过两分钟，请分段讲述。'), 120_000);
     try {
       const stream = await this.asr.open(result => {
         if (!this.isCurrent(turn)) return;
@@ -63,13 +62,12 @@ export class VoiceSession {
     } catch { this.fail(turn, 'asr', '语音识别连接失败，请检查服务配置后重试。'); }
   }
 
-  audio(pcm: Uint8Array): void {
+  audio(pcm: Uint8Array, sequence?: number): void {
     const turn = this.current;
     if (!turn || turn.state !== 'listening' || !this.isCurrent(turn)) return;
     if (!pcm.length || pcm.length % 2 || pcm.length > 32_000) { this.fail(turn, 'asr', '音频帧格式无效。'); return; }
     turn.audioBytes += pcm.length;
-    if (turn.audioBytes > 16000 * 2 * 120) { this.fail(turn, 'asr', '录音超过两分钟。'); return; }
-    try { turn.asr?.write(pcm); } catch { this.fail(turn, 'asr', '语音识别连接中断。'); }
+    try { turn.asr?.write(pcm, sequence); } catch { this.fail(turn, 'asr', '语音识别连接中断。'); }
   }
 
   finish(id: string): void {

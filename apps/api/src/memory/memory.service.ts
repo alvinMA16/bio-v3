@@ -1,3 +1,4 @@
+import { PostgresCaptureStore } from '../voice/capture-store.js';
 import { Injectable, Optional, UnauthorizedException, NotFoundException, ConflictException, ServiceUnavailableException, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service.js';
 import { VOICE_RECOVERY_WINDOW_MS, type VoicePlaybackSnapshot } from '@bio/contracts';
@@ -155,6 +156,10 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
     return { callId, conversationId: await this.beginCall(user, callId, connection), resumed: callId === id };
   }
 
+  captureStore(user: string, call: string, connection: string, requested?: string) {
+    return new PostgresCaptureStore(this.pool!, user, call, connection, requested);
+  }
+
   async savePlayback(user: string, callId: string, connection: string, data: VoicePlaybackSnapshot): Promise<void> {
     await this.pool!.query(`INSERT INTO bio_voice_playback(call_id,turn_id,user_id,data)
       SELECT id,$4,user_id,$5::jsonb FROM bio_memory_calls WHERE id=$1 AND user_id=$2 AND connection_id=$3 AND status='active'
@@ -202,6 +207,15 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
       INSERT INTO bio_memory_jobs(call_id,user_id) SELECT id,user_id FROM ended ON CONFLICT DO NOTHING`, [VOICE_RECOVERY_WINDOW_MS / 1000]);
   }
   async archive(scope: MemoryScope, conversation: string, run: string, id: string, role: 'user' | 'assistant' | 'tool', body: string): Promise<void> {
+    if (role === 'user' && scope.captureId) {
+      // The durable message and the consumed marker commit together. Reconnect never resubmits this draft.
+      await this.pool!.query(`WITH claimed AS (
+        UPDATE bio_voice_captures SET status='submitted',draft='' WHERE id=$1 AND user_id=$2 AND status='pending' RETURNING id
+      ) INSERT INTO bio_memory_messages(id,user_id,call_id,conversation_id,run_id,role,body,origin)
+        SELECT id,$2,$3,$4,$5,'user',$6,'asr_final' FROM claimed ON CONFLICT(id) DO NOTHING`,
+      [scope.captureId, scope.userId, scope.callId, conversation, run, body]);
+      return;
+    }
     await this.pool!.query(`INSERT INTO bio_memory_messages(id,user_id,call_id,conversation_id,run_id,role,body,origin)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(id) DO NOTHING`,
     [id, scope.userId, scope.callId ?? null, conversation, run, role, body, role === 'user' ? scope.callId ? 'asr_final' : 'typed' : role === 'tool' ? 'tool_result' : 'assistant']);

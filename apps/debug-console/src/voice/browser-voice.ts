@@ -1,3 +1,4 @@
+import { CaptureBuffer } from '../../../miniprogram/miniprogram/lib/capture-buffer';
 import { VOICE_RECOVERY_WINDOW_MS } from '@bio/contracts';
 import type { VoiceClientMessage, VoiceRequest, VoiceServerMessage } from '@bio/contracts';
 import workletUrl from './pcm-worklet.js?url&no-inline';
@@ -23,6 +24,8 @@ type Callbacks = {
 /** Owns microphone, socket, and PCM playback; closing releases all browser resources. */
 export class BrowserVoice {
   private socket: WebSocket | undefined;
+  private captureBuffer?: CaptureBuffer;
+  private durableCapture = false;
   private stream: MediaStream | undefined;
   private context?: AudioContext;
   private capture?: AudioWorkletNode;
@@ -93,6 +96,7 @@ export class BrowserVoice {
   };
   constructor(private callbacks: Callbacks, storageKey = 'bio-voice-resume') {
     this.storageKey = storageKey;
+    try { this.captureBuffer = new CaptureBuffer(sessionStorage, `${storageKey}:audio`); } catch { /* Start reports unavailable durable storage. */ }
     try {
       const saved = JSON.parse(sessionStorage.getItem(storageKey) ?? 'null');
       if (saved && typeof saved.callId === 'string' && saved.expiresAt > Date.now()) {
@@ -103,6 +107,7 @@ export class BrowserVoice {
 
   async start(): Promise<void> {
     try {
+      if (!this.captureBuffer) throw new Error('Durable recording storage unavailable');
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('请在 HTTPS 或 localhost 页面使用麦克风。');
       document.addEventListener('visibilitychange', this.onVisibility);
       void this.keepScreenAwake();
@@ -143,13 +148,14 @@ export class BrowserVoice {
       this.source?.connect(this.capture); this.capture.connect(this.muted); this.muted.connect(this.context.destination);
       this.capture.port.onmessage = event => {
         const ws = this.socket;
-        if (this.closed || !ws || ws.readyState !== WebSocket.OPEN) return;
+        if (this.closed) return;
+        if (!this.durableCapture && (!ws || ws.readyState !== WebSocket.OPEN)) return;
         if (event.data?.type === 'flushed') {
-          if (this.finishing) { this.finishing = false; this.setListening(false); this.send({ type: 'finish', turnId: this.turnId }); }
+          if (this.finishing) { if (this.durableCapture) this.captureBuffer?.finish(); this.finishing = false; this.setListening(false); this.send({ type: 'finish', turnId: this.turnId }); }
           return;
         }
         if (!this.listening) return;
-        if (ws.bufferedAmount > 128_000) { this.fail('音频上传拥塞，请检查网络后重试。'); return; }
+        if (ws && ws.bufferedAmount > 128_000) { this.fail('音频上传拥塞，请检查网络后重试。'); return; }
         // Meter only the PCM being accepted for ASR, never reply audio.
         const samples = new Int16Array(event.data as ArrayBuffer);
         let energy = 0;
@@ -159,7 +165,14 @@ export class BrowserVoice {
         this.inputMeasuredAt = performance.now();
         this.speechSignal.update(rms, samples.length / 16);
         this.callbacks.inputLevel?.(rms < 0.008 ? 0 : Math.min(4, Math.ceil(rms * 24)));
-        ws.send(event.data as ArrayBuffer);
+        if (this.durableCapture) {
+          try {
+            const data = btoa(String.fromCharCode(...new Uint8Array(event.data as ArrayBuffer)));
+            const sequence = this.captureBuffer!.append(data);
+            this.send({ type: 'capture.audio', turnId: this.turnId, sequence, data });
+            if (!this.recoveryUntil || this.recoveryUntil < Date.now() + VOICE_RECOVERY_WINDOW_MS - 10000) this.remember(true);
+          } catch { this.fail('暂时无法安全保存录音，已保存的讲述可在重新连接后继续。'); }
+        } else ws?.send(event.data as ArrayBuffer);
       };
       if (this.closed) return;
       this.captureReady = true;
@@ -281,7 +294,8 @@ export class BrowserVoice {
     this.send({ type: 'disconnect', turnId: this.turnId || 'disconnect', reason: 'client_error' });
     this.socket = undefined; ws.close();
     this.pendingEvents = []; this.pendingEventBytes = 0;
-    this.setListening(false); this.stopAudio(); this.turnActive = false;
+    if (!this.durableCapture) this.setListening(false);
+    this.stopAudio(); this.turnActive = false;
     this.callbacks.event({ type: 'cancelled', turnId: this.turnId, elapsedMs: 0, reason: 'connection_lost' });
     if (document.hidden || this.reconnects >= 3) { this.fail('连接暂时中断，重新连接可尝试恢复刚才的对话。'); return; }
     this.callbacks.status?.('连接中断，正在恢复刚才的对话…');
@@ -307,7 +321,7 @@ export class BrowserVoice {
     const request = this.callbacks.request();
     if (this.conversationId) request.conversationId = this.conversationId;
     this.callbacks.start(this.turnId, request);
-    this.send({ type: 'listen', turnId: this.turnId, callId: this.callId, resume: this.resume, playbackFeedback: true, request });
+    this.send({ type: 'listen', turnId: this.turnId, callId: this.callId, resume: this.resume, playbackFeedback: true, durableCapture: !!this.captureBuffer, ...(this.captureBuffer?.id ? { captureId: this.captureBuffer.id } : {}), request });
   }
   updateAttachmentView(view: { materialId: string; page: number }): void {
     if (!this.closed && this.turnId) this.send({ type: 'attachment.view', turnId: this.turnId, view });
@@ -355,6 +369,12 @@ export class BrowserVoice {
       }
       this.pendingEvents.push(event); return;
     }
+    if (event.type === 'capture.ready') {
+      this.durableCapture = true;
+      this.captureBuffer!.ready(event.captureId, event.sequence);
+    }
+    if (event.type === 'capture.saved' && event.captureId === this.captureBuffer?.id) this.captureBuffer.acknowledge(event.sequence);
+    if (event.type === 'transcript') { this.captureBuffer?.clear(); this.durableCapture = false; }
     if (event.type === 'connected') {
       this.callId = event.callId; this.conversationId = event.conversationId;
       this.confirmed = true; this.resume = false; this.reconnects = 0; this.recoveryUntil = undefined; this.remember();
@@ -363,8 +383,15 @@ export class BrowserVoice {
     if (event.type === 'error' && event.code === 'CALL_BUSY') { if (this.socket) this.reconnect(this.socket); return; }
     if (event.type === 'asr' && this.listening) this.speechSignal.recognize(event.text);
     if (event.type === 'state') {
-      if (event.state === 'listening') this.stopRingback();
-      this.setListening(this.micEnabled && event.state === 'listening');
+      if (event.state === 'listening') {
+        this.stopRingback();
+        if (this.durableCapture) for (const frame of this.captureBuffer!.pending()) this.send({ type: 'capture.audio', turnId: this.turnId, ...frame });
+      }
+      if (event.state === 'listening' && this.durableCapture && this.captureBuffer?.finished) {
+        this.setListening(false); this.send({ type: 'finish', turnId: this.turnId });
+      } else if (!(event.state === 'connecting' && this.durableCapture && this.listening)) {
+        this.setListening(this.micEnabled && event.state === 'listening');
+      }
       if (event.state === 'listening' && !this.callReady) { this.callReady = true; this.callbacks.connected?.(); }
     }
     if (event.type === 'transcript' || event.type === 'audio' || event.type === 'agent') this.submitted = true;

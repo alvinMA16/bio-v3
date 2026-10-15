@@ -72,6 +72,22 @@ CREATE TABLE IF NOT EXISTS bio_voice_playback (
  data jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(call_id,turn_id)
 );
+CREATE TABLE IF NOT EXISTS bio_voice_captures (
+ id uuid PRIMARY KEY, user_id text NOT NULL REFERENCES bio_memory_users(id),
+ call_id text NOT NULL REFERENCES bio_memory_calls(id), connection_id text NOT NULL,
+ status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','submitted')),
+ sequence integer NOT NULL DEFAULT 0, block integer NOT NULL DEFAULT 0, draft text NOT NULL DEFAULT '',
+ updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS bio_voice_captures_pending ON bio_voice_captures(user_id,updated_at DESC) WHERE status='pending';
+CREATE TABLE IF NOT EXISTS bio_voice_capture_audio (
+ capture_id uuid NOT NULL REFERENCES bio_voice_captures(id) ON DELETE CASCADE,
+ sequence integer NOT NULL, pcm bytea NOT NULL, PRIMARY KEY(capture_id,sequence)
+);
+CREATE TABLE IF NOT EXISTS bio_voice_capture_blocks (
+ capture_id uuid NOT NULL REFERENCES bio_voice_captures(id) ON DELETE CASCADE,
+ block integer NOT NULL, text text NOT NULL, PRIMARY KEY(capture_id,block)
+);
 CREATE TABLE IF NOT EXISTS bio_documents (
  user_id text NOT NULL REFERENCES bio_memory_users(id) ON DELETE CASCADE,
  id text NOT NULL, origin_conversation_id uuid NOT NULL,

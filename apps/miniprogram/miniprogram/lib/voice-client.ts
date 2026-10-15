@@ -1,3 +1,4 @@
+import { CaptureBuffer } from './capture-buffer';
 import type { VoiceClientMessage, VoiceRequest, VoiceServerMessage } from '@bio/contracts';
 import { FoxSpeechSignal } from './fox-speech-signal';
 
@@ -32,6 +33,8 @@ function sharedRecorder(): WechatMiniprogram.RecorderManager {
 
 /** WeChat transport/audio adapter for the same server-side Agent voice session. */
 export class MiniVoiceClient {
+  private captureBuffer?: CaptureBuffer;
+  private durableCapture = false;
   private socket: WechatMiniprogram.SocketTask | undefined;
   private recorder = sharedRecorder();
   private audio: WechatMiniprogram.WebAudioContext | undefined;
@@ -65,6 +68,7 @@ export class MiniVoiceClient {
     speaking?: (speaking: boolean) => void;
   }) {}
   start(): void {
+    try { this.captureBuffer = new CaptureBuffer({ getItem: key => wx.getStorageSync(key) || null, setItem: (key, value) => wx.setStorageSync(key, value), removeItem: key => wx.removeStorageSync(key) }, `${this.storageKey}:audio`); } catch { /* Legacy transport remains available. */ }
     const saved = wx.getStorageSync(this.storageKey);
     if (saved && typeof saved.callId === 'string' && saved.expiresAt > Date.now()) { this.callId = saved.callId; this.resume = true; }
     wx.authorize({ scope: 'scope.record', success: () => this.connect(), fail: () => this.fail('请允许麦克风权限后重试。') });
@@ -115,7 +119,7 @@ export class MiniVoiceClient {
     this.turnId = `voice-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const request = this.callbacks.request();
     if (this.conversationId) request.conversationId = this.conversationId;
-    this.send({ type: 'listen', turnId: this.turnId, callId: this.callId, resume: this.resume, playbackFeedback: true, request });
+    this.send({ type: 'listen', turnId: this.turnId, callId: this.callId, resume: this.resume, playbackFeedback: true, durableCapture: !!this.captureBuffer, ...(this.captureBuffer?.id ? { captureId: this.captureBuffer.id } : {}), request });
   }
   private onFrame = ({ frameBuffer }: { frameBuffer: ArrayBuffer }): void => {
     if (this.closed || !this.recording) return;
@@ -123,6 +127,13 @@ export class MiniVoiceClient {
     let energy = 0;
     for (const sample of samples) energy += (sample / 32768) ** 2;
     this.speechSignal.update(samples.length ? Math.sqrt(energy / samples.length) : 0, samples.length / 16);
+    if (this.durableCapture) {
+      try {
+        const data = wx.arrayBufferToBase64(frameBuffer), sequence = this.captureBuffer!.append(data);
+        this.send({ type: 'capture.audio', turnId: this.turnId, sequence, data }); this.remember();
+      } catch { this.fail('暂时无法安全保存录音，重新连接可继续已保存的讲述。'); }
+      return;
+    }
     this.queuedBytes += frameBuffer.byteLength;
     if (this.queuedBytes > 128_000) { this.fail('音频上传拥塞。'); return; }
     this.socket?.send({ data: frameBuffer, fail: () => this.fail('音频上传失败。'), complete: () => { this.queuedBytes -= frameBuffer.byteLength; } });
@@ -131,7 +142,8 @@ export class MiniVoiceClient {
     this.recording = false;
     this.speechSignal.reset();
     if (this.closed) return;
-    if (this.finishing || (!expected && this.wantRecording)) { this.finishing = false; this.wantRecording = false; this.send({ type: 'finish', turnId: this.turnId }); }
+    if (this.finishing) { this.finishing = false; this.wantRecording = false; this.send({ type: 'finish', turnId: this.turnId }); }
+    else if (!expected && this.wantRecording) void this.beginRecording().catch(() => this.fail('无法继续录音。'));
   };
   private onRecorderError = (): void => this.fail('录音失败，请检查麦克风权限。');
   updateAttachmentView(view: { materialId: string; page: number }): void {
@@ -150,6 +162,9 @@ export class MiniVoiceClient {
   }
   private receive(event: VoiceServerMessage): void {
     if (this.closed || event.turnId !== this.turnId) return;
+    if (event.type === 'capture.ready') { this.durableCapture = true; this.captureBuffer!.ready(event.captureId, event.sequence); }
+    if (event.type === 'capture.saved' && event.captureId === this.captureBuffer?.id) this.captureBuffer.acknowledge(event.sequence);
+    if (event.type === 'transcript') { this.captureBuffer?.clear(); this.durableCapture = false; }
     if (event.type === 'connected') {
       this.callId = event.callId; this.conversationId = event.conversationId;
       this.confirmed = true; this.resume = false; this.reconnects = 0; this.remember();
@@ -158,6 +173,7 @@ export class MiniVoiceClient {
     if (event.type === 'asr' && this.recording) this.speechSignal.recognize(event.text);
     if (event.type === 'state') {
       if (event.state === 'listening' && !this.recording) {
+        if (this.durableCapture) for (const frame of this.captureBuffer!.pending()) this.send({ type: 'capture.audio', turnId: this.turnId, ...frame });
         this.wantRecording = true;
         void this.beginRecording().catch(() => this.fail('无法启动录音。'));
       } else if (event.state !== 'listening') {
@@ -188,7 +204,7 @@ export class MiniVoiceClient {
     await stopped;
     if (this.closed || !this.wantRecording || id !== this.turnId || this.recording) return;
     this.recording = true; recorderBusy = true;
-    this.recorder.start({ format: 'PCM', sampleRate: 16000, numberOfChannels: 1, frameSize: 4, duration: 120_000 });
+    this.recorder.start({ format: 'PCM', sampleRate: 16000, numberOfChannels: 1, frameSize: 4, duration: 600_000 });
   }
   private enqueue(event: Extract<VoiceServerMessage, { type: 'audio' }>): void {
     const audio = this.audio!;

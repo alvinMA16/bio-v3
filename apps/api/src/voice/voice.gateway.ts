@@ -1,3 +1,4 @@
+import { DurableAsr } from './durable-asr.js';
 import { Injectable, Optional, Logger, OnApplicationBootstrap, OnApplicationShutdown, ConflictException } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
@@ -67,7 +68,11 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
     let persistence = Promise.resolve();
     let finalized: Promise<void> | undefined;
     const delay = Number(this.config.get('VOICE_ENDPOINT_MS', 2500));
-    const session = new VoiceSession(this.asr, this.tts, (input, emit, signal, trigger, runtime) => this.agent.run({ ...input, ...(conversationId ? { conversationId } : {}) }, emit, signal, user ? { userId: user, ...(callId ? { callId } : {}) } : undefined, trigger, runtime), event => {
+    let durable: DurableAsr | undefined;
+    let captureId: string | undefined;
+    let captureTurn = '';
+    const provider = { open: (callback: Parameters<VolcengineAsr['open']>[0], signal: AbortSignal) => (durable ?? this.asr).open(callback, signal) };
+    const session = new VoiceSession(provider, this.tts, (input, emit, signal, trigger, runtime) => this.agent.run({ ...input, ...(conversationId ? { conversationId } : {}) }, emit, signal, user ? { userId: user, ...(callId ? { callId } : {}), ...(captureId && !trigger ? { captureId } : {}) } : undefined, trigger, runtime), event => {
       if (ws.readyState !== WebSocket.OPEN) return;
       if (ws.bufferedAmount > 2 * 1024 * 1024) { ws.close(1013, 'Slow connection'); return; }
       ws.send(JSON.stringify(event));
@@ -93,7 +98,7 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
     let alive = true;
     const heartbeat = setInterval(() => { if (!alive) ws.terminate(); alive = false; }, 45_000);
     const finalize = (): Promise<void> => finalized ??= queue.then(async () => {
-      await session.settled(); await persistence;
+      await session.settled(); await durable?.settled(); await persistence;
       if (user && callId) {
         const key = JSON.stringify([user, callId]);
         try { await this.memory!.disconnectCall(user, callId, connection, ended); }
@@ -112,6 +117,8 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
           if (message.type === 'listen') {
             if ((message.resume !== undefined && typeof message.resume !== 'boolean')
               || (message.playbackFeedback !== undefined && typeof message.playbackFeedback !== 'boolean')
+              || (message.durableCapture !== undefined && typeof message.durableCapture !== 'boolean')
+              || (message.captureId !== undefined && (typeof message.captureId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(message.captureId)))
               || (message.callId !== undefined && (typeof message.callId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(message.callId)))) throw new Error('Invalid call options');
             if (validating) throw new Error('Concurrent initialization');
             validating = true;
@@ -153,8 +160,20 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
                 ws.send(JSON.stringify({ type: 'connected', turnId: message.turnId, elapsedMs: 0,
                   callId: callId ?? message.callId ?? randomUUID(), conversationId, resumed }));
               }
+              session.cancel(undefined, 'superseded');
+              await session.settled(); await durable?.settled();
+              captureId = undefined; captureTurn = message.turnId;
+              durable = user && callId && message.durableCapture && this.memory?.captureStore
+                ? new DurableAsr(this.asr, this.memory.captureStore(user, callId, connection, message.captureId), (type, id, sequence) => {
+                  captureId = id;
+                  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type, captureId: id, sequence, turnId: captureTurn, elapsedMs: 0 }));
+                }) : undefined;
               void session.listen(message.turnId, input, opening, message.playbackFeedback === true).catch(() => ws.close(1011, 'Voice session failed'));
             } finally { validating = false; }
+          } else if (message.type === 'capture.audio') {
+            if (!durable || message.turnId !== captureTurn || !Number.isSafeInteger(message.sequence) || message.sequence < 1
+              || typeof message.data !== 'string' || message.data.length > 42668 || !/^[A-Za-z0-9+/]*={0,2}$/.test(message.data)) throw new Error('Invalid capture audio');
+            session.audio(Buffer.from(message.data, 'base64'), message.sequence);
           } else if (message.type === 'playback') {
             if (!Number.isSafeInteger(message.playedSamples) || message.playedSamples < 0) throw new Error('Invalid playback');
             session.playback(message.turnId, message.playedSamples);

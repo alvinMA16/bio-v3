@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import { randomUUID } from 'node:crypto';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import WebSocket from 'ws';
@@ -87,11 +88,20 @@ export class VolcengineAsr implements AsrProvider {
     });
     ws.on('error', fail); ws.on('close', () => { if (!ended) fail(); });
     await started;
-    return {
+    const stream: AsrStream = {
       write(pcm) {
         if (ended || stopping || ws.readyState !== WebSocket.OPEN || ws.bufferedAmount > 256_000) throw new Error('ASR unavailable');
         if (pending) ws.send(volcPacket(2, sequence++, pending));
         pending = Uint8Array.from(pcm);
+      },
+      async replay(pcm) {
+        // Respect real-time packet pacing during recovery; never burst a saved tail into the socket.
+        for (let offset = 0; offset < pcm.length; offset += 3200) {
+          signal.throwIfAborted();
+          const part = pcm.subarray(offset, offset + 3200);
+          stream.write(part);
+          await delay(part.length / 32, undefined, { signal });
+        }
       },
       finish() {
         if (!ended && !stopping) {
@@ -103,5 +113,6 @@ export class VolcengineAsr implements AsrProvider {
       },
       close() { if (!ended) { ended = true; rejectDone(new Error('ASR closed')); } close(); },
     };
+    return stream;
   }
 }

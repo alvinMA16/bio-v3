@@ -34,7 +34,11 @@ window on the next interruption; failed retries do not extend the browser deadli
 After expiry a new call starts; stored messages and manuscripts remain durable.
 Explicit hangup skips the grace period. `MEMORY_RECONNECT_SECONDS` is superseded by
 the shared contract so environment overrides cannot shorten the server window.
-Unfinished recognition is not a durable transcript and is not recovered by this change.
+New clients journal unfinished capture audio and checkpoint recognition in PostgreSQL.
+Unacknowledged audio survives browser refresh in account-scoped sessionStorage.
+Recovery replays only the unsealed tail and deduplicates packets by capture/sequence;
+unfinished capture remains recoverable even after the call grace window expires.
+See `docs/realtime-voice.md` for storage semantics and device limitations.
 
 ## Publish
 

@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 
 const source = readFileSync(new URL('../src/voice/browser-voice.ts', import.meta.url), 'utf8').replace("import workletUrl from './pcm-worklet.js?url&no-inline';", "const workletUrl = 'mock-worklet';");
-const compiled = ts.transpileModule(source.replace("'@bio/contracts'", JSON.stringify(new URL('../../../packages/contracts/dist/index.js', import.meta.url).href)).replace("'../../../miniprogram/miniprogram/lib/fox-speech-signal'", JSON.stringify(new URL('../../miniprogram/miniprogram/lib/fox-speech-signal.ts', import.meta.url).href)), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+const compiled = ts.transpileModule(source.replace("'@bio/contracts'", JSON.stringify(new URL('../../../packages/contracts/dist/index.js', import.meta.url).href)).replace("'../../../miniprogram/miniprogram/lib/capture-buffer'", JSON.stringify(new URL('../../miniprogram/miniprogram/lib/capture-buffer.ts', import.meta.url).href)).replace("'../../../miniprogram/miniprogram/lib/fox-speech-signal'", JSON.stringify(new URL('../../miniprogram/miniprogram/lib/fox-speech-signal.ts', import.meta.url).href)), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
 const { BrowserVoice } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const flush = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
 
@@ -546,4 +546,33 @@ test('a failed recovery attempt preserves its original deadline and expiry start
   await expired.start(); f.sockets[1].onopen();
   const next = f.messages.map(JSON.parse).filter(m => m.type === 'listen').at(-1);
   assert.notEqual(next.callId, 'interrupted-call'); assert.equal(next.resume, false);
+});
+
+test('durable capture keeps offline frames, resends only missing sequences and survives a fresh client', async t => {
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen();
+  let turnId = f.starts[0];
+  const incoming = (socket, event) => socket.onmessage({ data: JSON.stringify({ turnId, ...event }) });
+  incoming(ws, { type: 'connected', callId: 'call', conversationId: 'conversation', resumed: false });
+  incoming(ws, { type: 'capture.ready', captureId: 'draft', sequence: 0 });
+  incoming(ws, { type: 'state', state: 'listening' });
+  const frame = () => f.captures[0].port.onmessage({ data: new Int16Array([100, 200]).buffer });
+  frame(); incoming(ws, { type: 'capture.saved', captureId: 'draft', sequence: 1 });
+  frame(); // server may have saved this; ACK lost
+  ws.onerror(); frame(); // recorded while offline
+  t.mock.timers.tick(1000); const reconnected = f.sockets[1]; reconnected.onopen(); turnId = f.starts.at(-1);
+  incoming(reconnected, { type: 'connected', callId: 'call', conversationId: 'conversation', resumed: true });
+  incoming(reconnected, { type: 'capture.ready', captureId: 'draft', sequence: 2 });
+  const before = f.messages.length;
+  incoming(reconnected, { type: 'state', state: 'listening' });
+  assert.deepEqual(f.messages.slice(before).map(JSON.parse).filter(m => m.type === 'capture.audio').map(m => m.sequence), [3]);
+  f.client.close(false);
+  const next = new BrowserVoice({ request: () => ({}), start() {}, event() {}, playback() {}, error() {}, ended() {} });
+  t.after(() => next.close()); await next.start(); t.mock.timers.tick(3000); f.sockets[2].onopen();
+  const listen = f.messages.map(JSON.parse).filter(m => m.type === 'listen').at(-1);
+  assert.equal(listen.captureId, 'draft'); assert.equal(listen.callId, 'call');
+  turnId = listen.turnId;
+  incoming(f.sockets[2], { type: 'capture.ready', captureId: 'draft', sequence: 2 });
+  const start = f.messages.length;
+  incoming(f.sockets[2], { type: 'state', state: 'listening' });
+  assert.deepEqual(f.messages.slice(start).map(JSON.parse).filter(m => m.type === 'capture.audio').map(m => m.sequence), [3]);
 });
