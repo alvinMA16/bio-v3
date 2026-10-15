@@ -50,17 +50,18 @@ export class VolcengineAsr implements AsrProvider {
     const done = new Promise<string>((resolve, reject) => { resolveDone = resolve; rejectDone = reject; });
     void done.catch(() => undefined);
     const close = () => {
-      clearTimeout(readTimer); clearTimeout(finishTimer); signal.removeEventListener('abort', fail);
+      clearTimeout(readTimer); clearTimeout(finishTimer); signal.removeEventListener('abort', abort);
       if (ws.readyState !== WebSocket.CLOSED) ws.terminate();
     };
-    const fail = () => {
+    const abort = () => fail('asr_aborted');
+    const fail = (code = 'asr_transport_failed') => {
       if (ended) return;
       ended = true;
       rejectReady(new Error('Volcengine ASR unavailable')); rejectDone(new Error('Volcengine ASR incomplete'));
-      close(); if (!signal.aborted) onResult({ text: '', final: false, error: true });
+      close(); if (!signal.aborted) onResult({ text: '', final: false, error: true, code });
     };
-    readTimer = setTimeout(fail, 10_000);
-    signal.addEventListener('abort', fail, { once: true });
+    readTimer = setTimeout(() => fail('asr_connect_timeout'), 10_000);
+    signal.addEventListener('abort', abort, { once: true });
     ws.on('open', () => ws.send(volcPacket(1, 1, Buffer.from(JSON.stringify({
       user: { uid: id }, audio: { format: 'pcm', rate: 16000, bits: 16, channel: 1 },
       request: { model_name: 'bigmodel', show_utterances: true, enable_itn: true, enable_punc: true,
@@ -70,7 +71,7 @@ export class VolcengineAsr implements AsrProvider {
       if (ended) return;
       try {
         const frame = parseVolcFrame(Buffer.from(bytes as Buffer));
-        clearTimeout(readTimer); readTimer = setTimeout(fail, 45_000);
+        clearTimeout(readTimer); readTimer = setTimeout(() => fail('asr_read_timeout'), 45_000);
         if (!ready) { ready = true; resolveReady(); }
         const data = frame.payload.length ? JSON.parse(frame.payload.toString()) as {
           result?: { text?: string; utterances?: { text?: string; definite?: boolean }[] };
@@ -84,9 +85,12 @@ export class VolcengineAsr implements AsrProvider {
           onResult({ text, final });
         }
         if (frame.last) { ended = true; resolveDone(lastText); close(); }
-      } catch { fail(); }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        fail(/^ASR provider error \d+$/.test(message) ? message.replaceAll(' ', '_').toLowerCase() : 'asr_invalid_response');
+      }
     });
-    ws.on('error', fail); ws.on('close', () => { if (!ended) fail(); });
+    ws.on('error', () => fail('asr_socket_error')); ws.on('close', () => { if (!ended) fail('asr_socket_closed'); });
     await started;
     const stream: AsrStream = {
       write(pcm) {
@@ -107,7 +111,7 @@ export class VolcengineAsr implements AsrProvider {
         if (!ended && !stopping) {
           stopping = true;
           ws.send(volcPacket(2, -sequence++, pending ?? new Uint8Array())); pending = undefined;
-          finishTimer = setTimeout(fail, 10_000);
+          finishTimer = setTimeout(() => fail('asr_finish_timeout'), 10_000);
         }
         return done;
       },

@@ -38,6 +38,9 @@ New clients journal unfinished capture audio and checkpoint recognition in Postg
 Unacknowledged audio survives browser refresh in account-scoped sessionStorage.
 Recovery replays only the unsealed tail and deduplicates packets by capture/sequence;
 unfinished capture remains recoverable even after the call grace window expires.
+Starting an independent new call parks the old local capture without deleting it;
+new calls do not automatically claim another call’s pending recording. Both clients
+pace retained audio and bound uploads by durable acknowledgements.
 See `docs/realtime-voice.md` for storage semantics and device limitations.
 
 ## Publish

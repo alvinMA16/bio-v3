@@ -82,3 +82,31 @@ Web 在账号隔离的 sessionStorage、小程序在账号隔离的缓存中保�
 恢复时读取服务端连续序号，只补发之后的音频包。确认回复丢失时重复包由服务端去重；仅重放未封存尾部给 ASR，按实时速度发送以避免突发拥塞。已经保存的块不重新识别。恢复可能需要等待尾部重放完成；正常情况下尾部不超过约 30 秒。通话五分钟恢复窗口到期后，未完成讲述仍可在新通话中接续。完成原文保存后不自动重放模型操作。
 
 自动化验证覆盖加速时钟下 50 分钟连续 PCM、分块和提交顺序、断线与进程重建、丢失确认、刷新创建新客户端、客户端缓存有界、数据库失败、跨账号隔离、旧连接写入隔离、过期通话恢复及重复提交归档。真实手机麦克风与系统后台行为仍需设备验证。
+
+
+## 2026-10-15 interruption recovery
+
+The product offers explicit continuation and an independent new call. Refresh preserves
+active capture metadata; starting a new call parks that metadata and its unacknowledged
+packets without deleting them. The shared product entry offers recovery when an active
+or parked capture remains. The server selects an unfinished capture only from the current
+call, unless an authenticated client explicitly supplies its capture ID. Unrelated pending
+captures are never implicitly adopted by new calls.
+
+Both clients use a PCM-duration-paced uploader with at most ten unacknowledged packets.
+The browser also pauses uploads when its socket buffer exceeds 64 KB. Transport loss
+pauses microphone capture; it resumes only after server tail replay and local pending
+packets have been durably acknowledged. Upload stalls stop after 20 seconds without
+progress and retain pending packets. A local finish waits for all durable ACKs. During
+backlog recovery, capture.sync prevents a silence endpoint from submitting only the
+first part of the upload. The server's existing 30-second recognition blocks still bound
+replay; capture.recovering reports remaining replay duration. ASR readiness has a
+60-second deadline and the browser bounds overall preparation at 120 seconds. Users
+can leave preparation at any time, without deleting unfinished captures.
+
+The public product and internal debugger share the recovery controls and failure state.
+Terminal failures remain visible instead of being replaced by subsequent done events.
+Structured diagnostics cover ASR failure codes, client upload/storage/preparation
+failures, handshake rejection and connection-close codes/duration; they exclude
+credentials, audio and provider response bodies. The original October 15 disconnect
+trigger remains unproven because the old version omitted several of these events.

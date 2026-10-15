@@ -9,6 +9,7 @@ import { useMaterialOriginal } from './use-material-original';
 import { accountCacheKey } from './account-cache';
 import { collectReceiptMessage, createReceipt, readReceipt, saveReceipt, type CallMessages } from './session-receipt';
 import { prepareCallUi } from './prepare-call-ui';
+import { CaptureBuffer } from '../../miniprogram/miniprogram/lib/capture-buffer';
 import { BrowserVoice } from './voice/browser-voice';
 import type { VoiceRequest, VoiceServerMessage } from '@bio/contracts';
 import { foxActivityOf } from './fox-activity';
@@ -228,16 +229,17 @@ export function App({ internal = false }: { internal?: boolean }) {
     setRunning(false); setPendingMessage('');
   }
 
+  const voiceFailure = useRef(false);
   function receiveVoice(event: VoiceServerMessage): void {
     const turn = voiceTurn.current;
-    if (!turn || turn.record.id !== event.turnId) return;
+    if (!turn || turn.record.id !== event.turnId || voiceFailure.current) return;
     if (receiptCall.current) collectReceiptMessage(receiptCall.current.messages, event);
     const record = turn.record;
     const timings = record.voiceTimings!;
     if (event.type === 'state') {
       setVoiceState(event.state);
       const labels = { connecting: '正在连接语音识别', listening: '正在听你说', finalizing: '正在确认识别结果', agent: 'Agent 正在处理', synthesizing: '正在合成语音' };
-      setVoiceStatus(labels[event.state]);
+      if (event.state !== 'listening') setVoiceStatus(labels[event.state]);
       if (event.state === 'finalizing') timings.inputEnded = event.elapsedMs;
     }
     if (event.type === 'asr') setPendingMessage(event.text || '正在听你说…');
@@ -262,6 +264,7 @@ export function App({ internal = false }: { internal?: boolean }) {
     if (event.type === 'done') { timings.synthesisDone = event.elapsedMs; setVoiceStatus('等待播放结束'); saveVoiceTurn(); }
     if (event.type === 'cancelled') { setVoiceState('connecting'); saveVoiceTurn('语音已打断'); }
     if (event.type === 'error') {
+      if (event.stage === 'asr' || !event.recoverable) voiceFailure.current = true;
       setVoiceStatus(event.message); saveVoiceTurn(event.message);
       // With no manual mic switch, offer a fresh call after ASR stops accepting speech.
       if (event.stage === 'asr' && event.recoverable) voiceRef.current?.close(false);
@@ -287,8 +290,22 @@ export function App({ internal = false }: { internal?: boolean }) {
     return () => { window.clearTimeout(timer); document.removeEventListener('visibilitychange', visible); };
   }, [recoveryUntil]);
 
-  function startVoice(): void {
+  function pendingCapture(): CaptureBuffer | undefined {
+    try { return new CaptureBuffer(sessionStorage, `${accountCacheKey('bio-voice-resume')}:audio`); } catch { return; }
+  }
+  const hasSavedCapture = !!(pendingCapture()?.id || pendingCapture()?.hasParked);
+  function requestVoice(): void {
+    if (!callOpen && hasSavedCapture) {
+      setCallOpen(true); setCallStartedAt(null); setVoiceEnabled(false);
+      setVoiceStatus('上次有未完成的讲述，可以继续恢复，也可以单独开始新通话。');
+      return;
+    }
+    startVoice(hasSavedCapture ? 'continue' : 'new');
+  }
+  function startVoice(mode: 'continue' | 'new' = 'continue'): void {
     if (busy) return;
+    voiceFailure.current = false;
+    if (mode === 'new') receiptCall.current = null;
     if (recoveryUntil !== null && recoveryUntil <= Date.now()) receiptCall.current = null;
     setRecoveryUntil(null);
     if (!receiptCall.current) receiptCall.current = { startedAt: Date.now(), messages: new Map() };
@@ -301,6 +318,7 @@ export function App({ internal = false }: { internal?: boolean }) {
     const initialMaterialId = voiceContext.current.context?.materialIds?.[0];
     const client = new BrowserVoice({
       prepare: () => prepareCallUi(initialMaterialId),
+      recovering: () => setCallStartedAt(null),
       connected: () => { setCallStartedAt(value => value ?? Date.now()); if (receiptCall.current) receiptCall.current.startedAt = Date.now(); },
       request: () => { window.dispatchEvent(new Event('bio:document-view-request')); return { ...voiceContext.current, context: { ...voiceContext.current.context, readingFontControl: true } }; },
       start: (id, request) => {
@@ -326,9 +344,9 @@ export function App({ internal = false }: { internal?: boolean }) {
           if (voiceTurn.current?.saved) setHistory(items => items.map(item => item.id === record.id ? { ...record } : item));
         }
       },
-      error: error => { setVoiceStatus(error); saveVoiceTurn(error); },
+      error: error => { voiceFailure.current = true; setVoiceStatus(error); saveVoiceTurn(error); },
       ended: recoveryUntil => { setRecoveryUntil(recoveryUntil ?? null); if (receiptCall.current) receiptCall.current.endedAt = Date.now(); saveVoiceTurn('语音会话已结束'); setCallStartedAt(null); setVoiceEnabled(false); setMicEnabled(false); setAudioPlaying(false); setSpokenSubtitle(''); voiceRef.current = null; },
-    }, accountCacheKey('bio-voice-resume'));
+    }, accountCacheKey('bio-voice-resume'), mode === 'new' ? 'new' : !pendingCapture()?.id && pendingCapture()?.hasParked ? 'saved' : 'continue');
     voiceRef.current = client; void client.start();
   }
 
@@ -497,7 +515,7 @@ export function App({ internal = false }: { internal?: boolean }) {
         startVoice();
       }}
       onMaterialChat={item => { setProvider('gemini'); setPendingMaterialPanel({ mode: 'attachment', revision: 0, attachment: { id: item.id, kind: item.kind, title: item.title, url: item.url, text: item.text || item.statusMessage } }); setMaterialTitle(item.title); setMaterialIds([item.id]); setScene('attachment_conversation'); setMessage(`我们聊聊《${item.title}》这份资料吧。`); voiceContext.current = { ...voiceContext.current, provider: 'gemini', context: { materialIds: [item.id], scene: 'attachment_conversation' } }; startVoice(); }}
-      startDisabled={busy} onStart={startVoice}
+      startDisabled={busy} onStart={requestVoice} onStartNew={() => startVoice('new')} hasSavedCapture={hasSavedCapture}
       onEnd={endCall}
       receipt={receipt} receiptVisible={receiptVisible} onReceiptClose={() => setReceiptVisible(false)}>
       {shownPanel ? <WorkspacePanel panel={shownPanel}
@@ -574,7 +592,7 @@ export function App({ internal = false }: { internal?: boolean }) {
             </div>
             {selectedBlockId && <div className="lab-selection">已选中 {selectedBlockId} · 版本 {documentVersion}<button type="button" disabled={busy} onClick={() => { setSelectedBlockId(''); setDocumentId(''); setExcerpt(''); }}>取消选区</button></div>}
             <div className="voice-controls">
-              {!voiceEnabled ? <button type="button" disabled={running} onClick={startVoice}>开始语音对话</button> : <>
+              {!voiceEnabled ? <button type="button" disabled={running} onClick={() => startVoice()}>开始语音对话</button> : <>
                 <button type="button" onClick={() => voiceRef.current?.finish()} disabled={!micEnabled || voiceStatus !== '正在听你说'}>说完了</button>
                 <button type="button" onClick={() => voiceRef.current?.interrupt()} disabled={voiceStatus === '正在听你说'}>打断并说话</button>
                 <button type="button" onClick={() => voiceRef.current?.close()}>结束语音</button>

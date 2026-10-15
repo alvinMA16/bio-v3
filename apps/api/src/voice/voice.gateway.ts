@@ -32,21 +32,24 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
     const server = this.adapter.httpAdapter.getHttpServer() as Server;
     server.on('upgrade', async (request, socket, head) => {
       if (request.url?.split('?')[0] !== '/api/v1/voice') return;
+      const rejected = (code: string) => this.logger.warn(JSON.stringify({ type: 'voice.failure', stage: 'handshake', code }));
       const origins = String(this.config.get('VOICE_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173')).split(',');
       const origin = request.headers.origin;
       const sameHost = origin && (() => { try { return new URL(origin).host === request.headers.host; } catch { return false; } })();
       if ((origin && !sameHost && !origins.includes(origin)) || this.wss.clients.size >= 8) {
+        rejected(this.wss.clients.size >= 8 ? 'connection_limit' : 'origin_rejected');
         socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); return;
       }
       if (!this.config.get('VOLCENGINE_ASR_APP_ID') || !this.config.get('VOLCENGINE_ASR_ACCESS_TOKEN')
         || !this.config.get('DOUBAO_TTS_APP_ID') || !this.config.get('DOUBAO_TTS_ACCESS_KEY')) {
+        rejected('voice_not_configured');
         socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n'); return;
       }
       let user: string | undefined;
       try { user = await this.memory?.resolveIdentity(request.headers.authorization, request.headers['sec-websocket-protocol']); }
-      catch { socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n'); return; }
+      catch { rejected('unauthorized'); socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n'); return; }
       if (socket.destroyed) return;
-      if (this.wss.clients.size >= 8) { socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n'); return; }
+      if (this.wss.clients.size >= 8) { rejected('connection_limit'); socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n'); return; }
       this.wss.handleUpgrade(request, socket, head, ws => {
         const authCheck = setInterval(() => {
           void this.memory?.resolveIdentity(request.headers.authorization, request.headers['sec-websocket-protocol'])
@@ -71,6 +74,15 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
     let durable: DurableAsr | undefined;
     let captureId: string | undefined;
     let captureTurn = '';
+    const startedAt = Date.now();
+    const diagnostic = (stage: string, code: string, pendingFrames = 0) => {
+      this.logger.warn(JSON.stringify({ type: 'voice.failure', callId, connection, turnId: captureTurn, stage, code, pendingFrames, elapsedMs: Date.now() - startedAt }));
+      if (user && callId && this.memory?.recordVoiceFailure) {
+        const id = callId;
+        persistence = persistence.then(() => this.memory!.recordVoiceFailure(user!, id, { turnId: captureTurn || 'connection', stage, code }))
+          .catch(() => this.logger.warn('Voice diagnostic persistence failed'));
+      }
+    };
     const provider = { open: (callback: Parameters<VolcengineAsr['open']>[0], signal: AbortSignal) => (durable ?? this.asr).open(callback, signal) };
     const session = new VoiceSession(provider, this.tts, (input, emit, signal, trigger, runtime) => this.agent.run({ ...input, ...(conversationId ? { conversationId } : {}) }, emit, signal, user ? { userId: user, ...(callId ? { callId } : {}), ...(captureId && !trigger ? { captureId } : {}) } : undefined, trigger, runtime), event => {
       if (ws.readyState !== WebSocket.OPEN) return;
@@ -96,7 +108,7 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
     let validating = false;
     const idle = setInterval(() => { if (ws.readyState === WebSocket.OPEN) { ws.ping(); if (user && callId) void this.memory!.touchCall(user, callId, connection).catch(() => this.logger.warn('Call heartbeat persistence failed')); } }, 20_000);
     let alive = true;
-    const heartbeat = setInterval(() => { if (!alive) ws.terminate(); alive = false; }, 45_000);
+    const heartbeat = setInterval(() => { if (!alive) { diagnostic('transport', 'heartbeat_timeout'); ws.terminate(); } alive = false; }, 45_000);
     const finalize = (): Promise<void> => finalized ??= queue.then(async () => {
       await session.settled(); await durable?.settled(); await persistence;
       if (user && callId) {
@@ -151,6 +163,8 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
               let opening = false;
               if (!initialized) {
                 opening = user && callId ? await this.memory!.claimCallOpening(user, callId, connection) : true;
+                // Explicit capture recovery must finish before greeting or microphone readiness.
+                if (message.captureId) opening = false;
                 conversationId ??= randomUUID();
                 initialized = true;
                 if (user && callId) this.calls.set(JSON.stringify([user, callId]), { connection, stop: () => {
@@ -166,10 +180,20 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
               durable = user && callId && message.durableCapture && this.memory?.captureStore
                 ? new DurableAsr(this.asr, this.memory.captureStore(user, callId, connection, message.captureId), (type, id, sequence) => {
                   captureId = id;
+                  if (type === 'capture.saved') session.captureSaved(captureTurn, sequence);
                   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type, captureId: id, sequence, turnId: captureTurn, elapsedMs: 0 }));
+                }, undefined, (remainingMs, totalMs) => {
+                  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'capture.recovering', remainingMs, totalMs, turnId: captureTurn, elapsedMs: Date.now() - startedAt }));
                 }) : undefined;
               void session.listen(message.turnId, input, opening, message.playbackFeedback === true).catch(() => ws.close(1011, 'Voice session failed'));
             } finally { validating = false; }
+          } else if (message.type === 'diagnostic') {
+            if (!['storage_unavailable', 'upload_stalled', 'recovery_timeout', 'receive_failed', 'startup_failed'].includes(message.code)
+              || (message.pendingFrames !== undefined && (!Number.isSafeInteger(message.pendingFrames) || message.pendingFrames < 0 || message.pendingFrames > 10000))) throw new Error('Invalid diagnostic');
+            diagnostic('client', message.code, message.pendingFrames ?? 0);
+          } else if (message.type === 'capture.sync') {
+            if (!durable || message.turnId !== captureTurn || !Number.isSafeInteger(message.through) || message.through < 1) throw new Error('Invalid capture sync');
+            session.holdCapture(message.turnId, message.through);
           } else if (message.type === 'capture.audio') {
             if (!durable || message.turnId !== captureTurn || !Number.isSafeInteger(message.sequence) || message.sequence < 1
               || typeof message.data !== 'string' || message.data.length > 42668 || !/^[A-Za-z0-9+/]*={0,2}$/.test(message.data)) throw new Error('Invalid capture audio');
@@ -196,14 +220,16 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
           }
           else throw new Error('Invalid message');
         } catch {
-          if (validatedRequest) { this.logger.warn('Voice initialization failed; connection may be retried'); ws.close(1011, 'Voice initialization failed'); }
-          else ws.close(1008, 'Invalid voice request');
+          if (validatedRequest) { diagnostic('transport', 'initialization_failed'); ws.close(1011, 'Voice initialization failed'); }
+          else { diagnostic('transport', 'invalid_request'); ws.close(1008, 'Invalid voice request'); }
         }
       }).catch(() => ws.close(1011, 'Voice request failed'));
     });
-    ws.on('error', () => session.close('transport_error'));
+    ws.on('error', () => { diagnostic('transport', 'socket_error'); session.close('transport_error'); });
     ws.on('close', (_code, rawReason) => {
       const reason = rawReason.toString();
+      const closeReason = ['page_hidden', 'client_error', 'user_hangup', 'Call ended', 'Connection replaced', 'Slow connection', 'Login expired'].includes(reason) ? reason : 'unspecified';
+      this.logger.log(JSON.stringify({ type: 'voice.closed', callId, connection, code: _code, reason: closeReason, elapsedMs: Date.now() - startedAt }));
       closing = true; clearInterval(idle); clearInterval(heartbeat);
       session.close(['page_hidden', 'client_error', 'user_hangup'].includes(reason) ? reason : 'connection_closed');
       void finalize().catch(() => this.logger.error('Call close persistence failed; stale-call recovery will retry'));

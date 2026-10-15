@@ -19,7 +19,7 @@ import { FoxFrameGate } from '../../miniprogram/miniprogram/lib/fox-frame-gate';
 import type { FoxActionId } from '../../miniprogram/miniprogram/lib/fox-animation-controller';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
-export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, callOpen, callStartedAt, status, callFailed = false, callRecovery, motionState = 'listen', getMotionLevel = () => 0, getDialPhase = () => -1, mode, startDisabled, onStart, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
+export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage, onManuscriptChat, children, subtitle, activity, running, callOpen, callStartedAt, status, callFailed = false, callRecovery, motionState = 'listen', getMotionLevel = () => 0, getDialPhase = () => -1, mode, startDisabled, onStart, onStartNew, hasSavedCapture = false, onEnd, receipt, receiptVisible, onReceiptClose, onMaterialChat }: {
   readingFontFeedback?: ReadingFontFeedback | undefined;
   onManuscriptChat?: ((document: import('@bio/contracts').PanelDocument) => void) | undefined;
   attachment?: PanelAttachment | undefined; onAttachmentPage?: ((materialId: string, page: number) => void) | undefined;
@@ -29,7 +29,7 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
   callOpen: boolean; callStartedAt: number | null; status: string; mode: 'conversation' | 'attachment' | 'editor';
   callFailed?: boolean; callRecovery?: 'available' | 'expired' | undefined; getDialPhase?: () => number;
   motionState?: 'listen' | 'speak' | 'think'; getMotionLevel?: () => number;
-  startDisabled: boolean; onStart: () => void; onEnd: () => void;
+  startDisabled: boolean; onStart: () => void; onStartNew?: (() => void) | undefined; hasSavedCapture?: boolean; onEnd: () => void;
 }) {
   useEffect(() => { void warmCallUi().catch(() => { /* Retry when the user calls. */ }); }, []);
   const dialing = callOpen && callStartedAt === null;
@@ -159,9 +159,10 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
       </> : <>
         {dialing ? <section className="phone-dialing" aria-label="呼叫令狸" aria-busy={!callFailed}>
           <DialAvatar active={!callFailed} getPhase={getDialPhase} />
-          <p role="status">{callFailed ? callRecovery === 'available' ? '通话已暂停' : callRecovery === 'expired' ? '上次通话已结束' : '暂时未能接通' : '正在呼叫'}</p>
+          <p role="status">{callFailed ? hasSavedCapture || callRecovery === 'available' ? '通话已暂停' : callRecovery === 'expired' ? '上次通话已结束' : '暂时未能接通' : status || '正在呼叫'}</p>
           {callFailed && <small>{status}</small>}
-          {callFailed && <div className="phone-dial-recovery"><button type="button" className="phone-redial" disabled={startDisabled} onClick={onStart}>{callRecovery === 'available' ? '继续刚才的对话' : callRecovery === 'expired' ? '开始新通话' : '重新呼叫'}</button><button type="button" className="phone-dial-back" onClick={onEnd}>返回</button></div>}
+          {!callFailed && <button type="button" className="phone-dial-back" onClick={onEnd}>返回</button>}
+          {callFailed && <div className="phone-dial-recovery"><button type="button" className="phone-redial" disabled={startDisabled} onClick={onStart}>{hasSavedCapture ? '继续讲述' : callRecovery === 'available' ? '继续刚才的对话' : callRecovery === 'expired' ? '开始新通话' : '重新呼叫'}</button>{onStartNew && (hasSavedCapture || callRecovery === 'available') && <button type="button" className="phone-dial-back" disabled={startDisabled} onClick={onStartNew}>开始新通话</button>}<button type="button" className="phone-dial-back" onClick={onEnd}>返回</button></div>}
         </section> : <>
           {mode === 'conversation' && <div className="phone-conversation-window" role="img" aria-label="令狸在书房里"><div className="phone-conversation-scene">{artwork}</div></div>}
           <section className={`phone-content-panel ${mode !== 'conversation' ? 'phone-content-panel--document' : ''}`} aria-label={mode === 'conversation' ? '对话内容' : mode === 'attachment' ? '附件内容' : '编辑内容'}>

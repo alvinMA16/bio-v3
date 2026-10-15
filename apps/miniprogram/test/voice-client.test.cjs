@@ -12,7 +12,7 @@ function setup(t) {
   const bufferExports = {};
   vm.runInNewContext(ts.transpileModule(readFileSync(resolve(__dirname, '../miniprogram/lib/capture-buffer.ts'), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  }).outputText, { exports: bufferExports });
+  }).outputText, { exports: bufferExports, setTimeout, clearTimeout, Date });
   const exports = {};
   const source = ts.transpileModule(readFileSync(resolve(__dirname, '../miniprogram/lib/voice-client.ts'), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -31,7 +31,7 @@ function setup(t) {
       }),
       connectSocket() {
         const socket = { onOpen(fn) { this.open = fn; }, onMessage(fn) { this.message = fn; }, onClose(fn) { this.closed = fn; },
-          onError(fn) { this.error = fn; }, send({ data }) { messages.push(JSON.parse(data)); }, close() {} };
+          onError(fn) { this.error = fn; }, send({ data, complete }) { messages.push(JSON.parse(data)); complete?.(); }, close() {} };
         sockets.push(socket); return socket;
       },
     },

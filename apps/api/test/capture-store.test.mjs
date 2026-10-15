@@ -26,6 +26,13 @@ test('PostgreSQL capture recovery: fencing, atomic block checkpoint, expired-cal
     await store.append(draft.id, 2, new Uint8Array([2, 0]));
     await store.checkpoint(draft.id, '后半段还没说完');
     await memory.disconnectCall(user, call, 'first', false);
+    const independentCall = randomUUID();
+    await memory.beginCall(user, independentCall, 'independent');
+    const independent = await memory.captureStore(user, independentCall, 'independent').load();
+    assert.notEqual(independent.id, draft.id, 'a new call must not implicitly adopt another call’s unfinished capture');
+    assert.equal(independent.sequence, 0);
+    const preserved = (await memory.pool.query('SELECT sequence,draft FROM bio_voice_captures WHERE id=$1', [draft.id])).rows[0];
+    assert.equal(preserved.sequence, 2); assert.equal(preserved.draft, '后半段还没说完');
     await memory.resumeCall(user, call, 'second');
     await assert.rejects(store.append(draft.id, 3, new Uint8Array([3, 0])), /replaced/);
     const resumed = memory.captureStore(user, call, 'second', draft.id);

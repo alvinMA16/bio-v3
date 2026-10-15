@@ -4,6 +4,8 @@ import type { DocumentView } from './documents.js';
 export type VoiceRequest = Omit<ChatCompletionRequest, 'message'>;
 export type VoiceClientMessage =
   | { type: 'document.view'; turnId: string; view: DocumentView }
+  | { type: 'diagnostic'; turnId: string; code: 'storage_unavailable' | 'upload_stalled' | 'recovery_timeout' | 'receive_failed' | 'startup_failed'; pendingFrames?: number }
+  | { type: 'capture.sync'; turnId: string; through: number }
   | { type: 'capture.audio'; turnId: string; sequence: number; data: string }
   | { type: 'listen'; durableCapture?: boolean; captureId?: string; turnId: string; callId?: string; resume?: boolean; playbackFeedback?: boolean; request: VoiceRequest }
   | { type: 'playback'; turnId: string; playedSamples: number }
@@ -17,6 +19,7 @@ export type VoiceState = 'connecting' | 'listening' | 'finalizing' | 'agent' | '
 export type VoiceServerMessage = { turnId: string; elapsedMs: number } & (
   | { type: 'connected'; callId: string; conversationId: string; resumed: boolean }
   | { type: 'state'; state: VoiceState }
+  | { type: 'capture.recovering'; remainingMs: number; totalMs: number }
   | { type: 'capture.ready'; captureId: string; sequence: number }
   | { type: 'capture.saved'; captureId: string; sequence: number }
   | { type: 'asr'; text: string; final: boolean }

@@ -130,3 +130,29 @@ test('hangup waits for Agent cleanup and ends the server-owned call, not each tu
   assert.deepEqual(await ended, { user: 'alice', call: 'phone-one', explicit: true });
   assert.deepEqual(order, ['agent-saved', 'ended']);
 });
+
+test('explicit saved capture recovery reports progress before readiness and does not start a new greeting', { timeout: 10000 }, async t => {
+  const server=createServer(), captureId=randomUUID(), events=[];let runs=0, releaseReplay, replayStarted;
+  const replaying=new Promise(r=>replayStarted=r), replayGate=new Promise(r=>releaseReplay=r);
+  const memory={
+    async resolveIdentity(){return 'owner';},async beginCall(){return randomUUID();},async claimCallOpening(){return true;},
+    async savePlayback(){},async disconnectCall(){},
+    captureStore(_user,_call,_connection,requested){assert.equal(requested,captureId);return {
+      async load(){return {id:captureId,sequence:1,block:0,text:'',frames:[{sequence:1,pcm:new Uint8Array(3200)}]};},
+      async text(){return '';},async checkpoint(){},
+    };},
+  };
+  const gateway=new VoiceGateway({httpAdapter:{getHttpServer:()=>server}},new ConfigService({VOLCENGINE_ASR_APP_ID:'fixture',VOLCENGINE_ASR_ACCESS_TOKEN:'fixture',DOUBAO_TTS_APP_ID:'fixture',DOUBAO_TTS_ACCESS_KEY:'fixture'}),{async run(){runs++;}},memory);
+  gateway.asr={async open(){return {async replay(){replayStarted();await replayGate;},write(){},close(){},async finish(){return '';}};}};
+  gateway.onApplicationBootstrap();server.listen(0,'127.0.0.1');await once(server,'listening');
+  t.after(async()=>{releaseReplay();gateway.onApplicationShutdown();await new Promise(r=>server.close(r));});
+  const ws=new WebSocket(`ws://127.0.0.1:${server.address().port}/api/v1/voice`);
+  let ready;const listening=new Promise(r=>ready=r);
+  ws.on('message',raw=>{const event=JSON.parse(raw);events.push(event);if(event.type==='state'&&event.state==='listening')ready();});
+  await once(ws,'open');ws.send(JSON.stringify({type:'listen',callId:'saved',turnId:'recover',durableCapture:true,captureId,request:{}}));
+  await replaying;assert.equal(runs,0);assert.equal(events.some(e=>e.type==='state'&&e.state==='listening'),false);
+  releaseReplay();await listening;
+  assert.equal(events.find(e=>e.type==='capture.recovering').totalMs,100);
+  assert.ok(events.findIndex(e=>e.type==='capture.recovering')<events.findIndex(e=>e.type==='capture.ready'));
+  assert.equal(runs,0);ws.close();await once(ws,'close');
+});

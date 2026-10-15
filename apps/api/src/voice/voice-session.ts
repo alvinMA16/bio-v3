@@ -9,6 +9,7 @@ type Runner = (input: ChatCompletionRequest, emit: (event: AgentEvent) => void, 
 type Payload = VoiceServerMessage extends infer M ? M extends VoiceServerMessage ? Omit<M, 'turnId' | 'elapsedMs'> : never : never;
 interface Turn {
   id: string; request: VoiceRequest; abort: AbortController; started: number;
+  captureThrough?: number; recognitionFinal?: boolean;
   asr?: AsrStream; endpoint?: ReturnType<typeof setTimeout>; deadline?: ReturnType<typeof setTimeout>;
   task: Promise<void>; state: VoiceState; audioBytes: number;
   speech: AbortController; window: PlaybackWindow; progress: VoicePlaybackSnapshot;
@@ -46,17 +47,20 @@ export class VoiceSession {
       this.lastTask = turn.task;
       return;
     }
+    turn.deadline = setTimeout(() => this.fail(turn, 'asr', '恢复语音超时，已保存的讲述仍然保留，请重试或开始新通话。', 'asr_ready_timeout'), 60_000);
     try {
       const stream = await this.asr.open(result => {
         if (!this.isCurrent(turn)) return;
-        if (result.error) { this.fail(turn, 'asr', '语音识别连接中断，请重试。'); return; }
+        if (result.error) { this.fail(turn, 'asr', '语音识别连接中断，已保存的讲述仍然保留。', result.code ?? 'asr_stream_failed'); return; }
         this.emit(turn, { type: 'asr', text: result.text, final: result.final });
+        turn.recognitionFinal = result.final && !!result.text.trim();
         clearTimeout(turn.endpoint);
-        if (result.final && result.text.trim() && turn.state === 'listening') {
+        if (!turn.captureThrough && result.final && result.text.trim() && turn.state === 'listening') {
           turn.endpoint = setTimeout(() => this.finish(turn.id), this.endpointMs);
         }
       }, turn.abort.signal);
       if (!this.isCurrent(turn)) { stream.close(); return; }
+      clearTimeout(turn.deadline);
       turn.asr = stream;
       this.state(turn, 'listening');
     } catch { this.fail(turn, 'asr', '语音识别连接失败，请检查服务配置后重试。'); }
@@ -70,6 +74,17 @@ export class VoiceSession {
     try { turn.asr?.write(pcm, sequence); } catch { this.fail(turn, 'asr', '语音识别连接中断。'); }
   }
 
+  holdCapture(id: string, through: number): void {
+    const turn = this.current;
+    if (!turn || turn.id !== id || turn.state !== 'listening') return;
+    turn.captureThrough = through; clearTimeout(turn.endpoint);
+  }
+  captureSaved(id: string, sequence: number): void {
+    const turn = this.current;
+    if (!turn || turn.id !== id || !turn.captureThrough || sequence < turn.captureThrough) return;
+    turn.captureThrough = 0;
+    if (turn.recognitionFinal && turn.state === 'listening') turn.endpoint = setTimeout(() => this.finish(id), this.endpointMs);
+  }
   finish(id: string): void {
     const turn = this.current;
     if (!turn || turn.id !== id || turn.state !== 'listening') return;
@@ -246,9 +261,8 @@ export class VoiceSession {
       const message = error instanceof Error ? error.message : '';
       const code = /^(TTS HTTP \d{3}|TTS synthesis failed \(\d+\)|TTS stream incomplete|Invalid TTS PCM|TTS frame too large|Playback acknowledgement timeout)$/.test(message)
         ? message : error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name) ? error.name : `${stage}_failed`;
-      if (this.isCurrent(turn)) this.observe?.diagnostic({ turnId: turn.id, stage, code, queuedSamples: turn.window.sent - turn.window.played });
       this.fail(turn, stage, stage === 'asr' ? '没有得到完整识别结果，请重新说一遍。'
-        : stage === 'tts' ? '语音播放内容合成失败，文字和面板结果已保留。' : 'Agent 运行失败，请重试。');
+        : stage === 'tts' ? '语音播放内容合成失败，文字和面板结果已保留。' : 'Agent 运行失败，请重试。', code);
     } finally {
       this.cleanup(turn);
       await ttsQueue;
@@ -260,10 +274,11 @@ export class VoiceSession {
     this.send({ ...payload, turnId: turn.id, elapsedMs: Math.round(performance.now() - turn.started) } as VoiceServerMessage);
   }
   private state(turn: Turn, state: VoiceState): void { turn.state = state; this.emit(turn, { type: 'state', state }); }
-  private fail(turn: Turn, stage: 'asr' | 'agent' | 'tts', message: string): void {
+  private fail(turn: Turn, stage: 'asr' | 'agent' | 'tts', message: string, code = `${stage}_failed`): void {
     if (!this.isCurrent(turn)) return;
+    this.observe?.diagnostic({ turnId: turn.id, stage, code, queuedSamples: turn.window.sent - turn.window.played });
     this.report(turn, true);
-    this.emit(turn, { type: 'error', stage, message, recoverable: true });
+    this.emit(turn, { type: 'error', stage, code, message, recoverable: true });
     this.emit(turn, { type: 'done' }); this.cleanup(turn, `${stage}_error`);
     if (this.current === turn) this.current = undefined;
   }

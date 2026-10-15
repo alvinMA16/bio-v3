@@ -558,7 +558,8 @@ test('durable capture keeps offline frames, resends only missing sequences and s
   const frame = () => f.captures[0].port.onmessage({ data: new Int16Array([100, 200]).buffer });
   frame(); incoming(ws, { type: 'capture.saved', captureId: 'draft', sequence: 1 });
   frame(); // server may have saved this; ACK lost
-  ws.onerror(); frame(); // recorded while offline
+  frame(); // queued before transport loss
+  ws.onerror(); frame(); // capture pauses while offline; the worklet's late frame is ignored
   t.mock.timers.tick(1000); const reconnected = f.sockets[1]; reconnected.onopen(); turnId = f.starts.at(-1);
   incoming(reconnected, { type: 'connected', callId: 'call', conversationId: 'conversation', resumed: true });
   incoming(reconnected, { type: 'capture.ready', captureId: 'draft', sequence: 2 });
@@ -575,4 +576,43 @@ test('durable capture keeps offline frames, resends only missing sequences and s
   const start = f.messages.length;
   incoming(f.sockets[2], { type: 'state', state: 'listening' });
   assert.deepEqual(f.messages.slice(start).map(JSON.parse).filter(m => m.type === 'capture.audio').map(m => m.sequence), [3]);
+});
+
+test('four seconds of backlog no longer bursts or opens microphone before all ACKs', async t => {
+  const f=environment(t);await f.client.start();t.mock.timers.tick(3000);const ws=f.sockets[0];ws.onopen();
+  let turnId=f.starts[0];const incoming=(socket,event)=>socket.onmessage({data:JSON.stringify({turnId,...event})});
+  incoming(ws,{type:'connected',callId:'call',conversationId:'conversation',resumed:false});
+  incoming(ws,{type:'capture.ready',captureId:'draft',sequence:0});incoming(ws,{type:'state',state:'listening'});
+  // Congestion retains audio locally instead of disconnecting.
+  ws.bufferedAmount=200000;
+  const frame=()=>f.captures[0].port.onmessage({data:new Int16Array(1600).buffer});
+  for(let i=0;i<40;i++)frame();assert.equal(f.ended(),0);
+  ws.onerror();t.mock.timers.tick(1000);const next=f.sockets[1];next.onopen();turnId=f.starts.at(-1);
+  incoming(next,{type:'connected',callId:'call',conversationId:'conversation',resumed:true});
+  incoming(next,{type:'capture.ready',captureId:'draft',sequence:0});
+  const before=f.messages.length;incoming(next,{type:'state',state:'listening'});
+  assert.equal(f.client.listening,false);
+  let audio=()=>f.messages.slice(before).map(JSON.parse).filter(m=>m.type==='capture.audio');
+  assert.equal(audio().length,1);
+  for(let i=0;i<40;i++) {incoming(next,{type:'capture.saved',captureId:'draft',sequence:i+1});t.mock.timers.tick(100);}
+  assert.equal(audio().length,40);assert.equal(f.client.listening,true);assert.equal(f.ended(),0);
+});
+
+test('fresh call does not send the previous capture ID or resume call; parked audio survives', async t => {
+  const f=environment(t);const old=f.client.captureBuffer;old.ready('old-draft',0);old.append('AAAA');
+  f.cache.set('bio-voice-resume',JSON.stringify({callId:'old-call',expiresAt:Date.now()+300000}));
+  f.client.close(false);
+  const fresh=new BrowserVoice({request:()=>({}),start(){},event(){},playback(){},error(){},ended(){}},'bio-voice-resume','new');
+  t.after(()=>fresh.close());await fresh.start();t.mock.timers.tick(3000);const ws=f.sockets.at(-1);ws.onopen();
+  const listen=f.messages.map(JSON.parse).filter(m=>m.type==='listen').at(-1);
+  assert.notEqual(listen.callId,'old-call');assert.equal(listen.resume,false);assert.equal(listen.captureId,undefined);
+  assert.equal(fresh.captureBuffer.hasParked,true);assert.equal(f.cache.get('bio-voice-resume:audio:old-draft:1'),'AAAA');
+});
+
+test('handshake alone does not report readiness and recovery timeout preserves the capture', async t => {
+  const f=environment(t);await f.client.start();t.mock.timers.tick(3000);const ws=f.sockets[0];ws.onopen();const turnId=f.starts[0];
+  ws.onmessage({data:JSON.stringify({turnId,type:'connected',callId:'call',conversationId:'conversation',resumed:true})});
+  assert.equal(f.connected(),0);assert.equal(f.client.listening,false);
+  t.mock.timers.tick(120000);assert.equal(f.ended(),1);
+  assert.ok(f.messages.map(JSON.parse).some(m=>m.type==='diagnostic'&&m.code==='recovery_timeout'));
 });

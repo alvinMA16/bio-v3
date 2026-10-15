@@ -98,3 +98,38 @@ test('journal failure cannot acknowledge unsaved audio or invoke Agent', async (
   assert.equal(inputs.length, 0); assert.ok(events.some(e => e.type === 'error'));
   session.close(); await durable.settled();
 });
+
+test('24.5 second tail reports recovery progress before ready and preserves sealed text', async () => {
+  const store=storeFixture();store.state.sequence=245;store.state.block=4;store.state.blocks=['已保存'];
+  store.state.frames=Array.from({length:245},(_,i)=>({sequence:i+1,pcm:new Uint8Array(3200)}));
+  const events=[];let replayed=0;
+  const durable=new DurableAsr({async open(){return {async replay(){replayed++;},write(){},close(){},async finish(){return '尾音';}};}},store,(type)=>events.push({type,replayed}),undefined,(remainingMs,totalMs)=>events.push({type:'progress',remainingMs,totalMs,replayed}));
+  const stream=await durable.open(()=>{},new AbortController().signal);
+  assert.equal(events[0].remainingMs,24500);assert.equal(events[0].replayed,0);
+  assert.equal(events.at(-1).type,'capture.ready');assert.equal(events.at(-1).replayed,245);
+  assert.equal(events.at(-2).remainingMs,0);
+  stream.close();await durable.settled();
+});
+
+test('ASR stream and readiness failures are recorded exactly once without raw provider messages', async t => {
+  t.mock.timers.enable({apis:['setTimeout']});
+  let callback;const diagnostics=[],events=[];
+  const session=new VoiceSession({async open(cb){callback=cb;return {write(){},close(){},async finish(){return '';}};}},{},async()=>{},e=>events.push(e),2500,{progress(){},diagnostic:e=>diagnostics.push(e)});
+  await session.listen('failure',{});callback({text:'',final:false,error:true,code:'asr_read_timeout'});
+  callback({text:'',final:false,error:true,code:'asr_read_timeout'});
+  assert.equal(diagnostics.length,1);assert.equal(diagnostics[0].code,'asr_read_timeout');session.close();
+  let release;const stalled=new VoiceSession({open:()=>new Promise(r=>release=r)},{},async()=>{},e=>events.push(e),2500,{progress(){},diagnostic:e=>diagnostics.push(e)});
+  const listening=stalled.listen('timeout',{});await Promise.resolve();await Promise.resolve();
+  t.mock.timers.tick(60000);assert.equal(diagnostics.at(-1).code,'asr_ready_timeout');
+  let closed=false;release({write(){},close(){closed=true;},async finish(){return '';}});await listening;
+  assert.equal(closed,true);assert.equal(events.some(e=>e.turnId==='timeout'&&e.type==='state'&&e.state==='listening'),false);stalled.close();
+});
+
+test('a silence endpoint cannot submit half a recovered upload before its last packet is saved', async t => {
+  t.mock.timers.enable({apis:['setTimeout']});let callback;const inputs=[];
+  const session=new VoiceSession({async open(cb){callback=cb;return {write(){},close(){},async finish(){return '完整讲述';}};}},{async synthesize(){}},async input=>{inputs.push(input);return {conversationId:'test',message:{content:''}};},()=>{});
+  await session.listen('tail',{});session.holdCapture('tail',40);
+  callback({text:'前半段',final:true});t.mock.timers.tick(3000);assert.equal(inputs.length,0);
+  session.captureSaved('tail',39);t.mock.timers.tick(3000);assert.equal(inputs.length,0);
+  session.captureSaved('tail',40);t.mock.timers.tick(2500);await session.settled();assert.equal(inputs.length,1);session.close();
+});

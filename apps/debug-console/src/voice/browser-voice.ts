@@ -1,4 +1,4 @@
-import { CaptureBuffer } from '../../../miniprogram/miniprogram/lib/capture-buffer';
+import { CaptureBuffer, CaptureUpload } from '../../../miniprogram/miniprogram/lib/capture-buffer';
 import { VOICE_RECOVERY_WINDOW_MS } from '@bio/contracts';
 import type { VoiceClientMessage, VoiceRequest, VoiceServerMessage } from '@bio/contracts';
 import workletUrl from './pcm-worklet.js?url&no-inline';
@@ -12,6 +12,7 @@ type Callbacks = {
   error: (message: string) => void;
   ended: (recoveryUntil?: number) => void;
   connected?: () => void;
+  recovering?: () => void;
   prepare?: () => Promise<void>;
   microphone?: (enabled: boolean) => void;
   inputLevel?: (level: number) => void;
@@ -24,8 +25,13 @@ type Callbacks = {
 /** Owns microphone, socket, and PCM playback; closing releases all browser resources. */
 export class BrowserVoice {
   private socket: WebSocket | undefined;
-  private captureBuffer?: CaptureBuffer;
+  private captureBuffer: CaptureBuffer | undefined;
   private durableCapture = false;
+  private upload?: CaptureUpload;
+  private restoring = false;
+  private acceptingAudio = false;
+  private finishSent = false;
+  private readinessTimer?: ReturnType<typeof setTimeout>;
   private stream: MediaStream | undefined;
   private context?: AudioContext;
   private capture?: AudioWorkletNode;
@@ -94,9 +100,19 @@ export class BrowserVoice {
       this.close(false, 'page_hidden');
     } else void this.keepScreenAwake();
   };
-  constructor(private callbacks: Callbacks, storageKey = 'bio-voice-resume') {
+  constructor(private callbacks: Callbacks, storageKey = 'bio-voice-resume', mode: 'continue' | 'new' | 'saved' = 'continue') {
     this.storageKey = storageKey;
-    try { this.captureBuffer = new CaptureBuffer(sessionStorage, `${storageKey}:audio`); } catch { /* Start reports unavailable durable storage. */ }
+    try {
+      this.captureBuffer = new CaptureBuffer(sessionStorage, `${storageKey}:audio`);
+      if (mode === 'new') { this.captureBuffer.park(); sessionStorage.removeItem(storageKey); }
+      if (mode === 'saved') { this.captureBuffer.park(); this.captureBuffer.restoreParked(); sessionStorage.removeItem(storageKey); }
+      this.upload = new CaptureUpload(this.captureBuffer, {
+        writable: () => this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 64_000,
+        send: frame => this.send({ type: 'capture.audio', turnId: this.turnId, ...frame }),
+        drained: () => this.uploadDrained(),
+        failed: () => this.fail('录音上传暂时停住，已保存的讲述仍然保留。请继续恢复或开始新通话。', 'upload_stalled'),
+      });
+    } catch { this.captureBuffer = undefined; /* Start reports unavailable durable storage. */ }
     try {
       const saved = JSON.parse(sessionStorage.getItem(storageKey) ?? 'null');
       if (saved && typeof saved.callId === 'string' && saved.expiresAt > Date.now()) {
@@ -151,11 +167,15 @@ export class BrowserVoice {
         if (this.closed) return;
         if (!this.durableCapture && (!ws || ws.readyState !== WebSocket.OPEN)) return;
         if (event.data?.type === 'flushed') {
-          if (this.finishing) { if (this.durableCapture) this.captureBuffer?.finish(); this.finishing = false; this.setListening(false); this.send({ type: 'finish', turnId: this.turnId }); }
+          if (this.finishing) {
+            this.finishing = false; this.setListening(false);
+            if (this.durableCapture) { this.captureBuffer?.finish(); this.upload?.wake(); this.uploadDrained(); }
+            else this.send({ type: 'finish', turnId: this.turnId });
+          }
           return;
         }
         if (!this.listening) return;
-        if (ws && ws.bufferedAmount > 128_000) { this.fail('音频上传拥塞，请检查网络后重试。'); return; }
+        if (!this.durableCapture && ws && ws.bufferedAmount > 128_000) { this.fail('音频上传拥塞，请检查网络后重试。'); return; }
         // Meter only the PCM being accepted for ASR, never reply audio.
         const samples = new Int16Array(event.data as ArrayBuffer);
         let energy = 0;
@@ -168,10 +188,13 @@ export class BrowserVoice {
         if (this.durableCapture) {
           try {
             const data = btoa(String.fromCharCode(...new Uint8Array(event.data as ArrayBuffer)));
-            const sequence = this.captureBuffer!.append(data);
-            this.send({ type: 'capture.audio', turnId: this.turnId, sequence, data });
+            this.captureBuffer!.append(data);
+            this.upload?.wake();
+            if (this.captureBuffer!.pendingBytes > 2_400_000) {
+              this.setListening(false); this.fail('网络暂时无法保存更多录音，已暂停收音。已保存的讲述可继续恢复。', 'upload_stalled'); return;
+            }
             if (!this.recoveryUntil || this.recoveryUntil < Date.now() + VOICE_RECOVERY_WINDOW_MS - 10000) this.remember(true);
-          } catch { this.fail('暂时无法安全保存录音，已保存的讲述可在重新连接后继续。'); }
+          } catch { this.fail('暂时无法安全保存录音，已保存的讲述可在重新连接后继续。', 'storage_unavailable'); }
         } else ws?.send(event.data as ArrayBuffer);
       };
       if (this.closed) return;
@@ -274,7 +297,7 @@ export class BrowserVoice {
       }
       catch (error) {
         console.error('Voice receive failed', { callId: this.callId, turnId: this.turnId, name: error instanceof Error ? error.name : 'unknown' });
-        this.fail('语音数据处理失败，请重试。');
+        this.fail('语音数据处理失败，已保存的讲述仍然保留。', 'receive_failed');
       }
     };
     ws.onerror = () => this.reconnect(ws);
@@ -294,7 +317,8 @@ export class BrowserVoice {
     this.send({ type: 'disconnect', turnId: this.turnId || 'disconnect', reason: 'client_error' });
     this.socket = undefined; ws.close();
     this.pendingEvents = []; this.pendingEventBytes = 0;
-    if (!this.durableCapture) this.setListening(false);
+    this.upload?.stop(); clearTimeout(this.readinessTimer);
+    this.setListening(false); this.callReady = false; this.callbacks.recovering?.();
     this.stopAudio(); this.turnActive = false;
     this.callbacks.event({ type: 'cancelled', turnId: this.turnId, elapsedMs: 0, reason: 'connection_lost' });
     if (document.hidden || this.reconnects >= 3) { this.fail('连接暂时中断，重新连接可尝试恢复刚才的对话。'); return; }
@@ -315,7 +339,10 @@ export class BrowserVoice {
   private listen(): void {
     if (this.closed) return;
     if (!this.micEnabled || (this.callReady && !this.stream) || this.turnActive) return;
-    this.turnActive = true; this.submitted = false;
+    this.turnActive = true; this.submitted = false; this.finishSent = false;
+    this.upload?.stop(); this.acceptingAudio = false; this.setListening(false);
+    clearTimeout(this.readinessTimer);
+    this.readinessTimer = setTimeout(() => this.fail('语音恢复超时，已保存的讲述仍然保留。可以重试或开始新通话。', 'recovery_timeout'), 120_000);
     this.stopAudio(); this.drained = false; this.audioFailed = false; this.receivedSamples = 0; this.acknowledgedSamples = 0;
     this.turnId = crypto.randomUUID();
     const request = this.callbacks.request();
@@ -369,37 +396,48 @@ export class BrowserVoice {
       }
       this.pendingEvents.push(event); return;
     }
+    if (event.type === 'capture.recovering') {
+      this.restoring = true; this.setListening(false);
+      this.callbacks.status?.(`正在恢复讲述，还需重放约 ${Math.ceil(event.remainingMs / 1000)} 秒录音…`);
+    }
     if (event.type === 'capture.ready') {
       this.durableCapture = true;
       this.captureBuffer!.ready(event.captureId, event.sequence);
     }
-    if (event.type === 'capture.saved' && event.captureId === this.captureBuffer?.id) this.captureBuffer.acknowledge(event.sequence);
-    if (event.type === 'transcript') { this.captureBuffer?.clear(); this.durableCapture = false; }
+    if (event.type === 'capture.saved' && event.captureId === this.captureBuffer?.id) {
+      this.captureBuffer.acknowledge(event.sequence); this.upload?.wake();
+      if (this.restoring && this.captureBuffer.pendingCount) this.callbacks.status?.(`正在补存剩余 ${this.captureBuffer.pendingCount} 段录音…`);
+      this.uploadDrained();
+    }
+    if (event.type === 'transcript') { this.upload?.stop(); this.captureBuffer?.clear(); this.durableCapture = false; }
     if (event.type === 'connected') {
       this.callId = event.callId; this.conversationId = event.conversationId;
-      this.confirmed = true; this.resume = false; this.reconnects = 0; this.recoveryUntil = undefined; this.remember();
-      if (event.resumed) this.callbacks.status?.('已恢复刚才的对话，可以继续说。');
+      this.confirmed = true; this.resume = false; this.remember();
+      this.callbacks.status?.(event.resumed ? '已连上，正在准备恢复讲述…' : '已连上，正在准备语音…');
     }
     if (event.type === 'error' && event.code === 'CALL_BUSY') { if (this.socket) this.reconnect(this.socket); return; }
     if (event.type === 'asr' && this.listening) this.speechSignal.recognize(event.text);
     if (event.type === 'state') {
+      this.acceptingAudio = event.state === 'listening';
       if (event.state === 'listening') {
-        this.stopRingback();
-        if (this.durableCapture) for (const frame of this.captureBuffer!.pending()) this.send({ type: 'capture.audio', turnId: this.turnId, ...frame });
+        if (this.durableCapture) {
+          this.restoring = !!this.captureBuffer?.pendingCount;
+          if (this.restoring) {
+            this.callbacks.status?.('正在补存中断前的录音…');
+            this.send({ type: 'capture.sync', turnId: this.turnId, through: this.captureBuffer!.acknowledged + this.captureBuffer!.pendingCount });
+          }
+          this.upload?.start();
+        } else { this.mediaReady(); this.setListening(this.micEnabled); }
+      } else {
+        this.upload?.stop(); this.acceptingAudio = false; this.setListening(false);
       }
-      if (event.state === 'listening' && this.durableCapture && this.captureBuffer?.finished) {
-        this.setListening(false); this.send({ type: 'finish', turnId: this.turnId });
-      } else if (!(event.state === 'connecting' && this.durableCapture && this.listening)) {
-        this.setListening(this.micEnabled && event.state === 'listening');
-      }
-      if (event.state === 'listening' && !this.callReady) { this.callReady = true; this.callbacks.connected?.(); }
     }
     if (event.type === 'transcript' || event.type === 'audio' || event.type === 'agent') this.submitted = true;
     if (event.type === 'agent') this.conversationId = event.event.conversationId;
     if (event.type === 'result') this.conversationId = event.result.conversationId;
     if (event.type === 'audio' && !this.audioFailed) {
       this.stopRingback();
-      if (!this.callReady) { this.callReady = true; this.callbacks.connected?.(); }
+      this.mediaReady();
       try { this.enqueue(event); }
       catch (error) {
         const code = error instanceof Error && ['invalid_audio', 'audio_queue_limit'].includes(error.message) ? error.message : 'audio_context_failed';
@@ -410,6 +448,8 @@ export class BrowserVoice {
       }
     }
     this.callbacks.event(event);
+    if (event.type === 'state' && event.state === 'listening' && this.restoring) this.callbacks.status?.('正在补存中断前的录音…');
+    if (this.closed) return;
     // A broken ASR connection must not create an automatic open/fail/listen loop.
     if (event.type === 'error' && event.recoverable && event.stage === 'asr') void this.setMicrophone(false);
     if (event.type === 'done') { this.drained = true; this.afterDrain(); }
@@ -516,14 +556,31 @@ export class BrowserVoice {
     for (const source of this.sources) { source.onended = null; source.stop(); source.disconnect(); }
     this.sources.clear(); this.nextTime = 0; this.queuedBytes = 0; this.callbacks.playback(false, '');
   }
+  private mediaReady(): void {
+    clearTimeout(this.readinessTimer); this.reconnects = 0; this.recoveryUntil = undefined; this.remember();
+    this.stopRingback();
+    if (!this.callReady) { this.callReady = true; this.callbacks.connected?.(); }
+  }
+  private uploadDrained(): void {
+    if (this.closed || !this.acceptingAudio || !this.durableCapture || this.captureBuffer?.pendingCount) return;
+    if (this.captureBuffer?.finished) {
+      if (!this.finishSent) { clearTimeout(this.readinessTimer); this.finishSent = true; this.send({ type: 'finish', turnId: this.turnId }); }
+    } else if (this.restoring || !this.listening) {
+      this.restoring = false; this.mediaReady(); this.callbacks.status?.('正在听你说'); this.setListening(this.micEnabled);
+    }
+  }
   private send(message: VoiceClientMessage): void {
     if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message));
   }
-  private fail(message: string): void { if (!this.closed) { this.callbacks.error(message); this.close(false); } }
+  private fail(message: string, code: 'storage_unavailable' | 'upload_stalled' | 'recovery_timeout' | 'receive_failed' | 'startup_failed' = 'startup_failed'): void {
+    if (this.closed) return;
+    this.send({ type: 'diagnostic', turnId: this.turnId || 'startup', code, pendingFrames: this.captureBuffer?.pendingCount ?? 0 });
+    this.callbacks.error(message); this.close(false);
+  }
   close(hangup = true, reason: 'page_hidden' | 'client_error' = 'client_error'): void {
     if (this.closed) return;
-    clearTimeout(this.reconnectTimer); clearTimeout(this.connectionTimer);
-    const recoveryUntil = hangup ? undefined : this.remember(this.confirmed);
+    clearTimeout(this.reconnectTimer); clearTimeout(this.connectionTimer); clearTimeout(this.readinessTimer); this.upload?.stop();
+    const recoveryUntil = hangup ? undefined : this.remember();
     if (hangup) this.forget();
     if (hangup) this.send({ type: 'hangup', turnId: this.turnId || 'hangup' });
     else this.send({ type: 'disconnect', turnId: this.turnId || 'disconnect', reason });

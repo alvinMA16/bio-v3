@@ -27,7 +27,7 @@ export class PostgresCaptureStore implements CaptureStore {
       await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`capture:${this.user}`]);
       const row = (await db.query(`SELECT d.* FROM bio_voice_captures d JOIN bio_memory_calls c ON c.id=d.call_id
         WHERE d.user_id=$1 AND d.status='pending' AND (d.call_id=$2 OR c.status<>'active')
-          AND ($3::uuid IS NULL OR d.id=$3)
+          AND (($3::uuid IS NULL AND d.call_id=$2) OR d.id=$3)
         ORDER BY d.updated_at DESC LIMIT 1 FOR UPDATE OF d`, [this.user, this.call, this.requested ?? null])).rows[0];
       if (!row && this.requested) {
         const busy = await db.query("SELECT id FROM bio_voice_captures WHERE id=$1 AND user_id=$2 AND status='pending'", [this.requested, this.user]);

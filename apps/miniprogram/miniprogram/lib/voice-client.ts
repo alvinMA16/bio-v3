@@ -1,4 +1,4 @@
-import { CaptureBuffer } from './capture-buffer';
+import { CaptureBuffer, CaptureUpload } from './capture-buffer';
 import type { VoiceClientMessage, VoiceRequest, VoiceServerMessage } from '@bio/contracts';
 import { FoxSpeechSignal } from './fox-speech-signal';
 
@@ -35,6 +35,9 @@ function sharedRecorder(): WechatMiniprogram.RecorderManager {
 export class MiniVoiceClient {
   private captureBuffer?: CaptureBuffer;
   private durableCapture = false;
+  private upload: CaptureUpload | undefined;
+  private acceptingAudio = false;
+  private finishSent = false;
   private socket: WechatMiniprogram.SocketTask | undefined;
   private recorder = sharedRecorder();
   private audio: WechatMiniprogram.WebAudioContext | undefined;
@@ -69,6 +72,16 @@ export class MiniVoiceClient {
   }) {}
   start(): void {
     try { this.captureBuffer = new CaptureBuffer({ getItem: key => wx.getStorageSync(key) || null, setItem: (key, value) => wx.setStorageSync(key, value), removeItem: key => wx.removeStorageSync(key) }, `${this.storageKey}:audio`); } catch { /* Legacy transport remains available. */ }
+    if (this.captureBuffer) this.upload = new CaptureUpload(this.captureBuffer, {
+      writable: () => !!this.socket && this.queuedBytes < 64_000,
+      send: frame => {
+        const data = JSON.stringify({ type: 'capture.audio', turnId: this.turnId, ...frame });
+        this.queuedBytes += data.length;
+        this.socket?.send({ data, fail: () => this.fail('录音上传失败，已保存的讲述仍然保留。'), complete: () => { this.queuedBytes -= data.length; } });
+      },
+      drained: () => this.uploadDrained(),
+      failed: () => this.fail('录音上传停住，已保存的讲述仍然保留，请重新连接。'),
+    });
     const saved = wx.getStorageSync(this.storageKey);
     if (saved && typeof saved.callId === 'string' && saved.expiresAt > Date.now()) { this.callId = saved.callId; this.resume = true; }
     wx.authorize({ scope: 'scope.record', success: () => this.connect(), fail: () => this.fail('请允许麦克风权限后重试。') });
@@ -102,7 +115,7 @@ export class MiniVoiceClient {
   }
   private reconnect(socket: WechatMiniprogram.SocketTask): void {
     if (this.closed || this.socket !== socket) return;
-    clearTimeout(this.connectionTimer); this.remember();
+    clearTimeout(this.connectionTimer); this.remember(); this.upload?.stop(); this.acceptingAudio = false;
     this.socket = undefined;
     socket.send({ data: JSON.stringify({ type: 'disconnect', turnId: this.turnId || 'disconnect', reason: 'client_error' }), fail: () => undefined });
     socket.close({ code: 1000, reason: 'client_error' });
@@ -114,7 +127,7 @@ export class MiniVoiceClient {
   }
   private listen(): void {
     if (this.closed) return;
-    this.awaitingRetry = false;
+    this.awaitingRetry = false; this.finishSent = false; this.acceptingAudio = false; this.upload?.stop();
     this.stopAudio(); this.drained = false; this.audioFailed = false; this.receivedSamples = 0; this.acknowledgedSamples = 0;
     this.turnId = `voice-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const request = this.callbacks.request();
@@ -129,8 +142,8 @@ export class MiniVoiceClient {
     this.speechSignal.update(samples.length ? Math.sqrt(energy / samples.length) : 0, samples.length / 16);
     if (this.durableCapture) {
       try {
-        const data = wx.arrayBufferToBase64(frameBuffer), sequence = this.captureBuffer!.append(data);
-        this.send({ type: 'capture.audio', turnId: this.turnId, sequence, data }); this.remember();
+        const data = wx.arrayBufferToBase64(frameBuffer); this.captureBuffer!.append(data);
+        this.upload?.wake(); this.remember();
       } catch { this.fail('暂时无法安全保存录音，重新连接可继续已保存的讲述。'); }
       return;
     }
@@ -142,7 +155,9 @@ export class MiniVoiceClient {
     this.recording = false;
     this.speechSignal.reset();
     if (this.closed) return;
-    if (this.finishing) { this.finishing = false; this.wantRecording = false; this.send({ type: 'finish', turnId: this.turnId }); }
+    if (this.finishing) { this.finishing = false; this.wantRecording = false;
+      if (this.durableCapture) { this.captureBuffer?.finish(); this.upload?.wake(); this.uploadDrained(); }
+      else this.send({ type: 'finish', turnId: this.turnId }); }
     else if (!expected && this.wantRecording) void this.beginRecording().catch(() => this.fail('无法继续录音。'));
   };
   private onRecorderError = (): void => this.fail('录音失败，请检查麦克风权限。');
@@ -163,8 +178,8 @@ export class MiniVoiceClient {
   private receive(event: VoiceServerMessage): void {
     if (this.closed || event.turnId !== this.turnId) return;
     if (event.type === 'capture.ready') { this.durableCapture = true; this.captureBuffer!.ready(event.captureId, event.sequence); }
-    if (event.type === 'capture.saved' && event.captureId === this.captureBuffer?.id) this.captureBuffer.acknowledge(event.sequence);
-    if (event.type === 'transcript') { this.captureBuffer?.clear(); this.durableCapture = false; }
+    if (event.type === 'capture.saved' && event.captureId === this.captureBuffer?.id) { this.captureBuffer.acknowledge(event.sequence); this.upload?.wake(); this.uploadDrained(); }
+    if (event.type === 'transcript') { this.upload?.stop(); this.captureBuffer?.clear(); this.durableCapture = false; }
     if (event.type === 'connected') {
       this.callId = event.callId; this.conversationId = event.conversationId;
       this.confirmed = true; this.resume = false; this.reconnects = 0; this.remember();
@@ -172,11 +187,14 @@ export class MiniVoiceClient {
     if (event.type === 'error' && event.code === 'CALL_BUSY') { if (this.socket) this.reconnect(this.socket); return; }
     if (event.type === 'asr' && this.recording) this.speechSignal.recognize(event.text);
     if (event.type === 'state') {
+      this.acceptingAudio = event.state === 'listening';
       if (event.state === 'listening' && !this.recording) {
-        if (this.durableCapture) for (const frame of this.captureBuffer!.pending()) this.send({ type: 'capture.audio', turnId: this.turnId, ...frame });
-        this.wantRecording = true;
-        void this.beginRecording().catch(() => this.fail('无法启动录音。'));
+        if (this.durableCapture) {
+          if (this.captureBuffer!.pendingCount) this.send({ type: 'capture.sync', turnId: this.turnId, through: this.captureBuffer!.acknowledged + this.captureBuffer!.pendingCount });
+          this.upload?.start();
+        } else { this.wantRecording = true; void this.beginRecording().catch(() => this.fail('无法启动录音。')); }
       } else if (event.state !== 'listening') {
+        this.upload?.stop();
         this.speechSignal.reset();
         this.wantRecording = false; this.recording = false; stopRecorder();
       }
@@ -254,13 +272,19 @@ export class MiniVoiceClient {
     for (const source of this.sources) { source.onended = () => undefined; source.stop(); source.disconnect(); }
     this.sources.clear(); this.nextTime = 0; this.playbackBytes = 0; this.callbacks.playback(false);
   }
+  private uploadDrained(): void {
+    if (this.closed || !this.acceptingAudio || !this.durableCapture || this.captureBuffer?.pendingCount) return;
+    if (this.captureBuffer?.finished) {
+      if (!this.finishSent) { this.finishSent = true; this.send({ type: 'finish', turnId: this.turnId }); }
+    } else { this.wantRecording = true; void this.beginRecording().catch(() => this.fail('无法启动录音。')); }
+  }
   private send(message: VoiceClientMessage): void {
     this.socket?.send({ data: JSON.stringify(message), fail: () => this.fail('语音请求发送失败。') });
   }
   private fail(message: string): void { if (!this.closed) { this.callbacks.error(message); this.close(false); } }
   close(hangup = true, reason: 'page_hidden' | 'client_error' = 'client_error'): void {
     if (this.closed) return;
-    this.closed = true;
+    this.closed = true; this.upload?.stop();
     clearTimeout(this.reconnectTimer); clearTimeout(this.connectionTimer);
     if (hangup) wx.removeStorageSync(this.storageKey); else this.remember();
     if (hangup) this.send({ type: 'hangup', turnId: this.turnId || 'hangup' });

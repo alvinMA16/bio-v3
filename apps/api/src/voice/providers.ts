@@ -1,4 +1,4 @@
-export interface Recognition { text: string; final: boolean; speechStart?: boolean; error?: boolean }
+export interface Recognition { text: string; final: boolean; speechStart?: boolean; error?: boolean; code?: string }
 export interface AsrStream {
   write(pcm: Uint8Array, sequence?: number): void;
   replay?(pcm: Uint8Array): Promise<void>;

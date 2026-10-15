@@ -6,7 +6,7 @@ export class DurableAsr implements AsrProvider {
   private tasks = new Set<Promise<unknown>>();
   constructor(private provider: AsrProvider, private store: CaptureStore,
     private progress: (type: 'capture.ready' | 'capture.saved', id: string, sequence: number) => void,
-    private blockBytes = 30 * 32000) {}
+    private blockBytes = 30 * 32000, private recovery?: (remainingMs: number, totalMs: number) => void) {}
   async settled(): Promise<void> { while (this.tasks.size) await Promise.allSettled([...this.tasks]); }
   async open(onResult: (result: Recognition) => void, signal: AbortSignal): Promise<AsrStream> {
     const saved = await this.store.load();
@@ -20,18 +20,18 @@ export class DurableAsr implements AsrProvider {
       this.tasks.add(task); void task.finally(() => this.tasks.delete(task)).catch(() => undefined);
       return task;
     };
-    const fail = () => { if (!closed && !signal.aborted) onResult({ text: '', final: false, error: true }); };
+    const fail = (code = 'capture_persistence_or_stream_failed') => { if (!closed && !signal.aborted) onResult({ text: '', final: false, error: true, code }); };
     const full = () => [prefix, draft].filter(Boolean).join('\n');
     const openStream = async () => this.provider.open(result => {
       if (closed || signal.aborted) return;
-      if (result.error) { fail(); return; }
+      if (result.error) { fail(result.code ?? 'asr_stream_failed'); return; }
       draft = result.text;
       onResult({ text: full(), final: result.final && live && !rotating && !finishing });
       if (!checkpoint && !rotating && !finishing) checkpoint = setTimeout(() => {
         checkpoint = undefined;
         const text = draft, version = block;
         queue = track(queue.then(async () => { if (version === block) await this.store.checkpoint(saved.id, text); }));
-        void queue.catch(fail);
+        void queue.catch(() => fail());
       }, 5000);
     }, signal);
     const seal = async () => {
@@ -46,11 +46,18 @@ export class DurableAsr implements AsrProvider {
     };
     stream = await openStream();
     // Replay only the unsealed tail. Sealed blocks are already canonical text.
+    const totalBytes = saved.frames.reduce((sum, frame) => sum + frame.pcm.length, 0);
+    let replayed = 0, reported = -1;
+    if (totalBytes) this.recovery?.(totalBytes / 32, totalBytes / 32);
     try {
       for (const frame of saved.frames) {
         signal.throwIfAborted();
         if (stream.replay) await stream.replay(frame.pcm); else stream.write(frame.pcm);
-        bytes += frame.pcm.length;
+        bytes += frame.pcm.length; replayed += frame.pcm.length;
+        const second = Math.floor(replayed / 32000);
+        if (second !== reported || replayed === totalBytes) {
+          reported = second; this.recovery?.((totalBytes - replayed) / 32, totalBytes / 32);
+        }
       }
     } catch (error) {
       closed = true; clearTimeout(checkpoint); stream.close(); throw error;
@@ -88,7 +95,7 @@ export class DurableAsr implements AsrProvider {
             if (!closed && !signal.aborted) stream = await openStream();
           }
         }).finally(() => { queuedBytes -= copy.length; }));
-        void queue.catch(fail);
+        void queue.catch(() => fail());
       },
       finish: async () => {
         finishing = true;
