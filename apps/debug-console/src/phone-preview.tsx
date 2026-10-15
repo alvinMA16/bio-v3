@@ -1,5 +1,6 @@
+import { SceneLoadingCurtain } from './scene-loading-curtain';
 import { DialAvatar } from './dial-avatar';
-import { prepareDeskScene, warmCallUi, type SceneManifest } from './prepare-call-ui';
+import { prepareDeskScene, subscribeSceneProgress, warmCallUi, type SceneManifest } from './prepare-call-ui';
 import { SlideToEnd } from './slide-to-end';
 import { VoiceCallStatus } from './voice-call-status';
 import { AttachmentViewer } from './attachment-viewer';
@@ -34,6 +35,8 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
   const dialing = callOpen && callStartedAt === null;
   const { phase, notebook, speech } = activity;
   const [manifest, setManifest] = useState<SceneManifest>();
+  const [scenePrepared, setScenePrepared] = useState(false);
+  const [sceneProgress, setSceneProgress] = useState(0);
   const [sceneReady, setSceneReady] = useState(false);
   const [sceneAttempt, setSceneAttempt] = useState(0);
   const [assetError, setAssetError] = useState(false);
@@ -60,6 +63,7 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
   useEffect(() => {
     let active = true;
     setAssetError(false);
+    const unsubscribe = subscribeSceneProgress(setSceneProgress);
     void prepareDeskScene().then(value => {
       if (!active) return;
       // Seed the frame gate before mounting sheets; no partial actor is shown.
@@ -69,7 +73,7 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
       }));
       setManifest(value);
     }).catch(() => { if (active) setAssetError(true); });
-    return () => { active = false; };
+    return () => { active = false; unsubscribe(); };
   }, [sceneAttempt]);
   useEffect(() => {
     if (!manifest) return;
@@ -78,7 +82,7 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
     const images = Array.from(screenRef.current?.querySelectorAll<HTMLImageElement>('.phone-scene-frame img, .phone-conversation-scene img') ?? []);
     void Promise.all(images.map(image => image.decode())).then(() => {
       if (!active) return;
-      first = requestAnimationFrame(() => { second = requestAnimationFrame(() => { if (active) setSceneReady(true); }); });
+      first = requestAnimationFrame(() => { second = requestAnimationFrame(() => { if (active) setScenePrepared(true); }); });
     }).catch(() => { if (active) setAssetError(true); });
     return () => { active = false; cancelAnimationFrame(first); cancelAnimationFrame(second); };
   }, [manifest, sceneAttempt]);
@@ -128,11 +132,8 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
   return <div className="phone-preview" aria-label="手机用户界面预览">
     <link rel="preload" as="image" href={uiAsset('lingli-avatar.png')} />
     <div ref={screenRef} aria-busy={!sceneReady} className={`phone-screen ${sceneReady ? 'phone-screen--ready' : 'phone-screen--preparing'} ${callOpen ? 'phone-screen--call' : ''} ${mode === 'attachment' ? 'phone-screen--attachment' : ''} ${mode === 'editor' ? 'phone-screen--editor' : ''} ${callOpen && mode === 'conversation' ? 'phone-screen--conversation' : ''} ${dialing ? 'phone-screen--dialing' : ''}`} style={{ aspectRatio: '320/692' }}>
-      <div className={`phone-scene-curtain ${sceneReady ? 'phone-scene-curtain--open' : ''}`} inert={sceneReady} aria-hidden={sceneReady}>
-        <span className="phone-scene-glow" aria-hidden="true" />
-        <p role={assetError ? 'alert' : 'status'}>{assetError ? '书房暂时未能打开' : '正在打开书房…'}</p>
-        {assetError && <button type="button" onClick={() => setSceneAttempt(value => value + 1)}>重新加载</button>}
-      </div>
+      <SceneLoadingCurtain prepared={scenePrepared} revealed={sceneReady} progress={sceneProgress} error={assetError}
+        onReveal={() => setSceneReady(true)} onRetry={() => { setScenePrepared(false); setSceneAttempt(value => value + 1); }} />
       {callOpen && !dialing && mode === 'editor' && <DocumentGlassBackdrop source={documentScroller} />}
       {readingFontFeedback && <ReadingFontToast key={readingFontFeedback.id} feedback={readingFontFeedback} />}
       {!callOpen ? <>

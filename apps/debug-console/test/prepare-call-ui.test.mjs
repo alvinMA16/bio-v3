@@ -81,3 +81,26 @@ test('decode failure keeps the scene closed and allows a fresh retry', async t =
   await prepareDeskScene();
   assert.equal(fixture.urls.filter(url => url.includes('manifest')).length, 2);
 });
+
+test('progress counts decoded assets, reserves completion for rendering, and supports late subscribers', async t => {
+  const { prepareDeskScene, subscribeSceneProgress } = await fresh();
+  setup(t);
+  const decoders = [];
+  globalThis.Image.prototype.decode = function () { return new Promise(resolve => decoders.push(resolve)); };
+  const updates = [];
+  const unsubscribe = subscribeSceneProgress(value => updates.push(value));
+  const pending = prepareDeskScene();
+  await flush();
+  assert.equal(updates.at(-1), 8);
+  for (const resolve of decoders.slice(0, -1)) { resolve(); await flush(); }
+  assert.ok(updates.at(-1) > 70 && updates.at(-1) < 90);
+  const late = [];
+  const stopLate = subscribeSceneProgress(value => late.push(value));
+  assert.equal(late.at(-1), updates.at(-1));
+  unsubscribe();
+  const count = updates.length;
+  decoders.at(-1)(); await pending;
+  assert.equal(updates.length, count);
+  assert.equal(late.at(-1), 90);
+  stopLate();
+});

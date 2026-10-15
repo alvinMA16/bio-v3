@@ -1,0 +1,7 @@
+{
+  "tool": "built-in image_gen",
+  "reference": "apps/miniprogram/miniprogram/assets/animations/fox-clerk/lingli-avatar.png",
+  "output": "apps/debug-console/src/assets/lingli-loading.png",
+  "processing": "Downscaled to 384px with sips; generated alpha preserved.",
+  "prompt": "Use case: stylized-concept. Asset type: compact loading-screen mascot for the Lingli biography app. Use the supplied image only as a character and handmade material reference. Create a NEW isolated head-and-two-paws portrait of the same friendly orange needle-felt fox: symmetrical upright triangular ears with dark brown rims and cream inner ears, cream cheek tufts and muzzle, tiny black wool nose, warm shiny black bead eyes, subtle kind smile. Front view, head centered, two tiny orange felt paws with brown pads resting just below the cheeks, no torso or clothing. Photographed real handmade wool sculpture / stop-motion miniature, clearly visible dense wool fibers, soft upper-left studio light. Rounded soft silhouette, readable at 100px, entire ears and paws inside the frame with narrow transparent padding. True transparent background. No circle, no badge, no scenery, no shadow plane, no text, no progress bar, no UI, no watermark. Preserve the character's gentle proportions and tactile wool texture from the reference, no cartoon outlines or glossy plastic."
+}

@@ -10,14 +10,28 @@ export interface SceneManifest {
 }
 // Retain decoded backgrounds and sheets for the lifetime of the cached scene.
 const decodedSceneAssets = new WeakMap<SceneManifest, HTMLImageElement[]>();
+let sceneProgress = 0;
+const progressListeners = new Set<(progress: number) => void>();
+function reportSceneProgress(progress: number) {
+  sceneProgress = progress;
+  for (const listener of progressListeners) listener(progress);
+}
+export function subscribeSceneProgress(listener: (progress: number) => void): () => void {
+  progressListeners.add(listener);
+  listener(sceneProgress);
+  return () => { progressListeners.delete(listener); };
+}
 let deskPreparation: Promise<SceneManifest> | undefined;
 
 /** Resolve only after every visible scene asset has downloaded and decoded. */
 export function prepareDeskScene(): Promise<SceneManifest> {
-  if (!deskPreparation) deskPreparation = loadCallUi(undefined, true).then(manifest => manifest!).catch(error => {
-    deskPreparation = undefined;
-    throw error;
-  });
+  if (!deskPreparation) {
+    reportSceneProgress(0);
+    deskPreparation = loadCallUi(undefined, true).then(manifest => manifest!).catch(error => {
+      deskPreparation = undefined;
+      throw error;
+    });
+  }
   return deskPreparation;
 }
 
@@ -81,7 +95,14 @@ async function loadCallUi(materialId?: string, includeScene = true): Promise<Sce
         const manifest = await json('/animations/fox-clerk/manifest.json') as SceneManifest;
         const sources = [...Object.values(manifest.layers), ...manifest.animations].flatMap(item => item.src ? [uiAsset(item.src)] : []);
         sources.push(...['folder.png', 'phone.png', 'manuscripts.png', 'manuscripts-label.png', 'lingli-avatar.png'].map(uiAsset));
-        await Promise.all([...new Set(sources)].map(image));
+        const uniqueSources = [...new Set(sources)];
+        let decoded = 0;
+        reportSceneProgress(8);
+        await Promise.all(uniqueSources.map(async src => {
+          await image(src);
+          // Reserve the final 10% for mounted-image decoding and the first paint.
+          reportSceneProgress(8 + Math.floor(++decoded / uniqueSources.length * 82));
+        }));
         scene = { ...manifest,
           layers: { environment: { src: uiAsset(manifest.layers.environment.src) }, innerPanel: { src: uiAsset(manifest.layers.innerPanel.src) } },
           animations: manifest.animations.map(animation => ({ ...animation, src: uiAsset(animation.src) })),
