@@ -158,7 +158,8 @@ Page({
             }, 1000);
           }
         }
-        if (event.type === 'state') this.setData({ voiceStatus: ({ connecting: '正在连接语音', listening: '正在听你说', finalizing: '正在确认识别结果', agent: 'Agent 正在处理', synthesizing: '正在合成语音' })[event.state] });
+        if (event.type === 'state' && event.state !== 'connecting') this.setData({ voiceStatus: ({ listening: '正在听你说', finalizing: '正在回应', agent: '正在回应', synthesizing: '正在回应' })[event.state] });
+        if (event.type === 'capture.recovering' || event.type === 'connected' && event.resumed) this.setData({ voiceStatus: '正在恢复对话' });
         if (event.type === 'asr') this.setData({ voiceTranscript: event.text });
         if (event.type === 'transcript') this.setData({ voiceTranscript: '', messages: [...this.data.messages, { id: event.turnId, role: 'user', content: event.text }] });
         if (event.type === 'agent') {

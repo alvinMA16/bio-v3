@@ -238,8 +238,8 @@ export function App({ internal = false }: { internal?: boolean }) {
     const timings = record.voiceTimings!;
     if (event.type === 'state') {
       setVoiceState(event.state);
-      const labels = { connecting: '正在连接语音识别', listening: '正在听你说', finalizing: '正在确认识别结果', agent: 'Agent 正在处理', synthesizing: '正在合成语音' };
-      if (event.state !== 'listening') setVoiceStatus(labels[event.state]);
+      const labels = { connecting: '正在呼叫', listening: '正在听你说', finalizing: '正在回应', agent: '正在回应', synthesizing: '正在回应' };
+      if (event.state !== 'listening' && event.state !== 'connecting') setVoiceStatus(labels[event.state]);
       if (event.state === 'finalizing') timings.inputEnded = event.elapsedMs;
     }
     if (event.type === 'asr') setPendingMessage(event.text || '正在听你说…');
@@ -279,7 +279,7 @@ export function App({ internal = false }: { internal?: boolean }) {
     if (recoveryUntil === null) return;
     const expire = () => {
       setRecoveryExpired(true);
-      setVoiceStatus('已超过 5 分钟，请开始新通话；已保存的内容仍然保留。');
+      setVoiceStatus('通话已结束，请重新连接。');
     };
     const remaining = recoveryUntil - Date.now();
     if (remaining <= 0) { expire(); return; }
@@ -297,7 +297,7 @@ export function App({ internal = false }: { internal?: boolean }) {
   function requestVoice(): void {
     if (!callOpen && hasSavedCapture) {
       setCallOpen(true); setCallStartedAt(null); setVoiceEnabled(false);
-      setVoiceStatus('上次有未完成的讲述，可以继续恢复，也可以单独开始新通话。');
+      setVoiceStatus('上次的对话尚未结束');
       return;
     }
     startVoice(hasSavedCapture ? 'continue' : 'new');

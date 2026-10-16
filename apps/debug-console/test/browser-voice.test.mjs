@@ -29,7 +29,7 @@ function environment(t, pendingMic, moduleError, prepare) {
   if (!timerContexts.has(t)) { t.mock.timers.enable({ apis: ['setTimeout'] }); timerContexts.add(t); }
   const cache = new Map();
   const visibility = new EventTarget();
-  const recoveries = [];
+  const recoveries = [], statuses = [];
   const tones = [];
   const sockets = [], nodes = [], messages = [], events = [], starts = [], playback = [], captures = [], levels = [], gains = [];
   let stopped = 0, ended = 0, connected = 0;
@@ -66,10 +66,10 @@ function environment(t, pendingMic, moduleError, prepare) {
     Object.defineProperty(globalThis, key, { configurable: true, value });
     restore.push(() => original ? Object.defineProperty(globalThis, key, original) : delete globalThis[key]);
   }
-  const client = new BrowserVoice({ prepare, connected: () => connected++, request: () => ({}), start: id => starts.push(id), event: event => events.push(event),
+  const client = new BrowserVoice({ prepare, status: value => statuses.push(value), connected: () => connected++, request: () => ({}), start: id => starts.push(id), event: event => events.push(event),
     inputLevel: level => levels.push(level), playback: (...args) => playback.push(args), error: message => events.push({ type: 'local.error', message }), ended: until => { recoveries.push(until); ended++; } });
   t.after(() => { client.close(); restore.forEach(fn => fn()); });
-  return { client, cache, recoveries, navigator: globals.navigator, document: globals.document, tones, sockets, nodes, captures, levels, gains, starts, messages, events, playback, stream, connected: () => connected, stopped: () => stopped, ended: () => ended };
+  return { client, cache, recoveries, statuses, navigator: globals.navigator, document: globals.document, tones, sockets, nodes, captures, levels, gains, starts, messages, events, playback, stream, connected: () => connected, stopped: () => stopped, ended: () => ended };
 }
 
 test('interruption clears scheduled audio and rejects old turn callbacks', async t => {
@@ -633,4 +633,18 @@ test('server endpoint flushes the worklet and sends finish only after the last P
   incoming({type:'capture.saved',captureId:'draft',sequence:2});
   assert.equal(f.messages.map(JSON.parse).filter(m=>m.type==='finish').length,1);
   assert.equal(f.client.listening,false);
+});
+
+
+test('recovery displays only the user-facing state throughout provider and upload preparation', async t => {
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000);
+  const ws = f.sockets[0]; ws.onopen(); const turnId = f.starts[0];
+  const receive = event => ws.onmessage({ data: JSON.stringify({ turnId, ...event }) });
+  receive({ type: 'connected', callId: 'saved-call', conversationId: 'conversation', resumed: true });
+  assert.equal(f.statuses.at(-1), '正在恢复对话');
+  receive({ type: 'capture.recovering', remainingMs: 24500, totalMs: 24500 });
+  receive({ type: 'capture.recovering', remainingMs: 12000, totalMs: 24500 });
+  assert.equal(f.statuses.at(-1), '正在恢复对话');
+  assert.doesNotMatch(f.statuses.join(' '), /重放|补存|转写|上传|秒|段录音/);
+  assert.equal(f.connected(), 0);
 });

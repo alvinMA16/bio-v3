@@ -36,7 +36,12 @@ Explicit hangup skips the grace period. `MEMORY_RECONNECT_SECONDS` is superseded
 the shared contract so environment overrides cannot shorten the server window.
 New clients journal unfinished capture audio and checkpoint recognition in PostgreSQL.
 Unacknowledged audio survives browser refresh in account-scoped sessionStorage.
-Recovery replays only the unsealed tail and deduplicates packets by capture/sequence;
+A background worker prepares disconnected captures with the existing ASR service,
+sealing at most 30 seconds per pass. It also discovers persisted tails after restart;
+active calls are excluded unless their heartbeat is older than five minutes. A
+failed pass retains all audio and retries after one minute. Authenticated recovery
+waits for any in-progress block, reuses its text, and replays only the remaining
+unsealed tail; packets are deduplicated by capture/sequence;
 unfinished capture remains recoverable even after the call grace window expires.
 Starting an independent new call parks the old local capture without deleting it;
 new calls do not automatically claim another call’s pending recording. Both clients

@@ -110,7 +110,7 @@ export class BrowserVoice {
         writable: () => this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 64_000,
         send: frame => this.send({ type: 'capture.audio', turnId: this.turnId, ...frame }),
         drained: () => this.uploadDrained(),
-        failed: () => this.fail('录音上传暂时停住，已保存的讲述仍然保留。请继续恢复或开始新通话。', 'upload_stalled'),
+        failed: () => this.fail('暂时无法继续通话，请重试。', 'upload_stalled'),
       });
     } catch { this.captureBuffer = undefined; /* Start reports unavailable durable storage. */ }
     try {
@@ -131,7 +131,7 @@ export class BrowserVoice {
       void Promise.resolve().then(() => this.callbacks.prepare?.()).then(() => {
         if (this.closed) return;
         this.uiReady = true; this.flushPreparedEvents();
-      }).catch(() => this.fail('通话资源加载失败，请重新呼叫。'));
+      }).catch(() => this.fail('暂时无法接通，请重试。'));
       this.context = new AudioContext();
       this.output = this.context.createGain();
       this.output.gain.value = this.speakerEnabled ? 1 : 0;
@@ -175,7 +175,7 @@ export class BrowserVoice {
           return;
         }
         if (!this.listening) return;
-        if (!this.durableCapture && ws && ws.bufferedAmount > 128_000) { this.fail('音频上传拥塞，请检查网络后重试。'); return; }
+        if (!this.durableCapture && ws && ws.bufferedAmount > 128_000) { this.fail('连接不畅，请稍后重试。'); return; }
         // Meter only the PCM being accepted for ASR, never reply audio.
         const samples = new Int16Array(event.data as ArrayBuffer);
         let energy = 0;
@@ -191,10 +191,10 @@ export class BrowserVoice {
             this.captureBuffer!.append(data);
             this.upload?.wake();
             if (this.captureBuffer!.pendingBytes > 2_400_000) {
-              this.setListening(false); this.fail('网络暂时无法保存更多录音，已暂停收音。已保存的讲述可继续恢复。', 'upload_stalled'); return;
+              this.setListening(false); this.fail('通话已暂停，请重试。', 'upload_stalled'); return;
             }
             if (!this.recoveryUntil || this.recoveryUntil < Date.now() + VOICE_RECOVERY_WINDOW_MS - 10000) this.remember(true);
-          } catch { this.fail('暂时无法安全保存录音，已保存的讲述可在重新连接后继续。', 'storage_unavailable'); }
+          } catch { this.fail('通话已暂停，请重试。', 'storage_unavailable'); }
         } else ws?.send(event.data as ArrayBuffer);
       };
       if (this.closed) return;
@@ -297,7 +297,7 @@ export class BrowserVoice {
       }
       catch (error) {
         console.error('Voice receive failed', { callId: this.callId, turnId: this.turnId, name: error instanceof Error ? error.name : 'unknown' });
-        this.fail('语音数据处理失败，已保存的讲述仍然保留。', 'receive_failed');
+        this.fail('暂时无法继续通话，请重试。', 'receive_failed');
       }
     };
     ws.onerror = () => this.reconnect(ws);
@@ -321,8 +321,8 @@ export class BrowserVoice {
     this.setListening(false); this.callReady = false; this.callbacks.recovering?.();
     this.stopAudio(); this.turnActive = false;
     this.callbacks.event({ type: 'cancelled', turnId: this.turnId, elapsedMs: 0, reason: 'connection_lost' });
-    if (document.hidden || this.reconnects >= 3) { this.fail('连接暂时中断，重新连接可尝试恢复刚才的对话。'); return; }
-    this.callbacks.status?.('连接中断，正在恢复刚才的对话…');
+    if (document.hidden || this.reconnects >= 3) { this.fail('通话已暂停，请重试。'); return; }
+    this.callbacks.status?.('正在恢复对话');
     const delay = [1000, 3000, 7000][this.reconnects++]!;
     this.reconnectTimer = setTimeout(() => this.connectSocket(), delay);
   }
@@ -342,7 +342,7 @@ export class BrowserVoice {
     this.turnActive = true; this.submitted = false; this.finishSent = false;
     this.upload?.stop(); this.acceptingAudio = false; this.setListening(false);
     clearTimeout(this.readinessTimer);
-    this.readinessTimer = setTimeout(() => this.fail('语音恢复超时，已保存的讲述仍然保留。可以重试或开始新通话。', 'recovery_timeout'), 120_000);
+    this.readinessTimer = setTimeout(() => this.fail('暂时无法恢复对话，请重试。', 'recovery_timeout'), 120_000);
     this.stopAudio(); this.drained = false; this.audioFailed = false; this.receivedSamples = 0; this.acknowledgedSamples = 0;
     this.turnId = crypto.randomUUID();
     const request = this.callbacks.request();
@@ -399,7 +399,7 @@ export class BrowserVoice {
     if (event.type === 'capture.finish') this.finish();
     if (event.type === 'capture.recovering') {
       this.restoring = true; this.setListening(false);
-      this.callbacks.status?.(`正在恢复讲述，还需重放约 ${Math.ceil(event.remainingMs / 1000)} 秒录音…`);
+      this.callbacks.status?.('正在恢复对话');
     }
     if (event.type === 'capture.ready') {
       this.durableCapture = true;
@@ -407,14 +407,14 @@ export class BrowserVoice {
     }
     if (event.type === 'capture.saved' && event.captureId === this.captureBuffer?.id) {
       this.captureBuffer.acknowledge(event.sequence); this.upload?.wake();
-      if (this.restoring && this.captureBuffer.pendingCount) this.callbacks.status?.(`正在补存剩余 ${this.captureBuffer.pendingCount} 段录音…`);
+      if (this.restoring && this.captureBuffer.pendingCount) this.callbacks.status?.('正在恢复对话');
       this.uploadDrained();
     }
     if (event.type === 'transcript') { this.upload?.stop(); this.captureBuffer?.clear(); this.durableCapture = false; }
     if (event.type === 'connected') {
       this.callId = event.callId; this.conversationId = event.conversationId;
       this.confirmed = true; this.resume = false; this.remember();
-      this.callbacks.status?.(event.resumed ? '已连上，正在准备恢复讲述…' : '已连上，正在准备语音…');
+      this.callbacks.status?.(event.resumed || this.captureBuffer?.id ? '正在恢复对话' : '正在呼叫');
     }
     if (event.type === 'error' && event.code === 'CALL_BUSY') { if (this.socket) this.reconnect(this.socket); return; }
     if (event.type === 'asr' && this.listening) this.speechSignal.recognize(event.text);
@@ -424,7 +424,7 @@ export class BrowserVoice {
         if (this.durableCapture) {
           this.restoring = !!this.captureBuffer?.pendingCount;
           if (this.restoring) {
-            this.callbacks.status?.('正在补存中断前的录音…');
+            this.callbacks.status?.('正在恢复对话');
             this.send({ type: 'capture.sync', turnId: this.turnId, through: this.captureBuffer!.acknowledged + this.captureBuffer!.pendingCount });
           }
           this.upload?.start();
@@ -449,7 +449,7 @@ export class BrowserVoice {
       }
     }
     this.callbacks.event(event);
-    if (event.type === 'state' && event.state === 'listening' && this.restoring) this.callbacks.status?.('正在补存中断前的录音…');
+    if (event.type === 'state' && event.state === 'listening' && this.restoring) this.callbacks.status?.('正在恢复对话');
     if (this.closed) return;
     // A broken ASR connection must not create an automatic open/fail/listen loop.
     if (event.type === 'error' && event.recoverable && event.stage === 'asr') void this.setMicrophone(false);

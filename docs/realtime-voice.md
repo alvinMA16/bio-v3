@@ -113,3 +113,27 @@ Structured diagnostics cover ASR failure codes, client upload/storage/preparatio
 failures, handshake rejection and connection-close codes/duration; they exclude
 credentials, audio and provider response bodies. The original October 15 disconnect
 trigger remains unproven because the old version omitted several of these events.
+
+
+### Background preparation after disconnect (2026-10-16)
+
+Disconnected and ended calls with pending audio are transcribed ahead of the next
+restore request using the existing streaming ASR resource. A single background
+connection processes at most 30 seconds per pass with a 50-second deadline; no
+additional ASR product is required. The PostgreSQL audio journal is the durable
+work queue, including after process restart. Active calls are excluded; calls with
+heartbeats older than five minutes are treated as abandoned. Failures retain audio
+and draft text and back off for one minute. No Agent run or user message submission
+occurs in this worker.
+
+A per-capture PostgreSQL advisory lock coordinates workers and authenticated live
+takeover. The worker atomically saves canonical block text and deletes only the
+corresponding audio, checking capture block, sequence and connection ownership.
+Live recovery waits for an in-flight block before loading the snapshot. A crash
+releases the lock; a committed block is reused and an uncommitted block is retried.
+Sequence acknowledgements remain unchanged, including when the browser missed an ACK.
+
+Audio that has not reached the server still requires the browser to reconnect.
+While preparation or upload is pending, product UI shows only “正在恢复对话”.
+Processing stages, packet counts, replay duration and diagnostic causes belong in
+internal telemetry, not product copy. Failures offer a concise retry action.

@@ -25,6 +25,12 @@ export class PostgresCaptureStore implements CaptureStore {
   async load(): Promise<CaptureSnapshot> {
     return this.transaction(async db => {
       await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`capture:${this.user}`]);
+      // Wait for an already-running background block before taking ownership. Acquire
+      // this before row locks so the worker can commit its canonical text.
+      const candidate = (await db.query(
+        "SELECT id FROM bio_voice_captures WHERE user_id=$1 AND status='pending' AND (($3::uuid IS NULL AND call_id=$2) OR id=$3) ORDER BY updated_at DESC LIMIT 1",
+        [this.user, this.call, this.requested ?? null])).rows[0]?.id;
+      if (candidate) await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`capture-recovery:${candidate}`]);
       const row = (await db.query(`SELECT d.* FROM bio_voice_captures d JOIN bio_memory_calls c ON c.id=d.call_id
         WHERE d.user_id=$1 AND d.status='pending' AND (d.call_id=$2 OR c.status<>'active')
           AND (($3::uuid IS NULL AND d.call_id=$2) OR d.id=$3)

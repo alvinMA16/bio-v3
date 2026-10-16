@@ -120,7 +120,7 @@ test('ASR stream and readiness failures are recorded exactly once without raw pr
   assert.equal(diagnostics.length,1);assert.equal(diagnostics[0].code,'asr_read_timeout');session.close();
   let release;const stalled=new VoiceSession({open:()=>new Promise(r=>release=r)},{},async()=>{},e=>events.push(e),2500,{progress(){},diagnostic:e=>diagnostics.push(e)});
   const listening=stalled.listen('timeout',{});await Promise.resolve();await Promise.resolve();
-  t.mock.timers.tick(60000);assert.equal(diagnostics.at(-1).code,'asr_ready_timeout');
+  t.mock.timers.tick(90000);assert.equal(diagnostics.at(-1).code,'asr_ready_timeout');
   let closed=false;release({write(){},close(){closed=true;},async finish(){return '';}});await listening;
   assert.equal(closed,true);assert.equal(events.some(e=>e.turnId==='timeout'&&e.type==='state'&&e.state==='listening'),false);stalled.close();
 });

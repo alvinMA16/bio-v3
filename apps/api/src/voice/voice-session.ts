@@ -48,11 +48,11 @@ export class VoiceSession {
       this.lastTask = turn.task;
       return;
     }
-    turn.deadline = setTimeout(() => this.fail(turn, 'asr', '恢复语音超时，已保存的讲述仍然保留，请重试或开始新通话。', 'asr_ready_timeout'), 60_000);
+    turn.deadline = setTimeout(() => this.fail(turn, 'asr', '暂时无法恢复对话，请重试。', 'asr_ready_timeout'), 90_000);
     try {
       const stream = await this.asr.open(result => {
         if (!this.isCurrent(turn)) return;
-        if (result.error) { this.fail(turn, 'asr', '语音识别连接中断，已保存的讲述仍然保留。', result.code ?? 'asr_stream_failed'); return; }
+        if (result.error) { this.fail(turn, 'asr', '通话已暂停，请重试。', result.code ?? 'asr_stream_failed'); return; }
         this.emit(turn, { type: 'asr', text: result.text, final: result.final });
         turn.recognitionFinal = result.final && !!result.text.trim();
         clearTimeout(turn.endpoint);
@@ -64,15 +64,15 @@ export class VoiceSession {
       clearTimeout(turn.deadline);
       turn.asr = stream;
       this.state(turn, 'listening');
-    } catch { this.fail(turn, 'asr', '语音识别连接失败，请检查服务配置后重试。'); }
+    } catch { this.fail(turn, 'asr', '暂时无法接通，请重试。'); }
   }
 
   audio(pcm: Uint8Array, sequence?: number): void {
     const turn = this.current;
     if (!turn || turn.state !== 'listening' || !this.isCurrent(turn)) return;
-    if (!pcm.length || pcm.length % 2 || pcm.length > 32_000) { this.fail(turn, 'asr', '音频帧格式无效。'); return; }
+    if (!pcm.length || pcm.length % 2 || pcm.length > 32_000) { this.fail(turn, 'asr', '暂时无法继续通话，请重试。'); return; }
     turn.audioBytes += pcm.length;
-    try { turn.asr?.write(pcm, sequence); } catch { this.fail(turn, 'asr', '语音识别连接中断。'); }
+    try { turn.asr?.write(pcm, sequence); } catch { this.fail(turn, 'asr', '通话已暂停，请重试。'); }
   }
 
   holdCapture(id: string, through: number): void {
@@ -93,7 +93,7 @@ export class VoiceSession {
     turn.finishRequested = true;
     this.emit(turn, { type: 'capture.finish' });
     // The client flushes its worklet and waits for every packet's durable ACK.
-    turn.deadline = setTimeout(() => this.fail(turn, 'asr', '尾部录音保存超时，已保存的讲述仍然保留。', 'capture_flush_timeout'), 90_000);
+    turn.deadline = setTimeout(() => this.fail(turn, 'asr', '通话已暂停，请重试。', 'capture_flush_timeout'), 90_000);
   }
   finish(id: string): void {
     const turn = this.current;
@@ -271,8 +271,8 @@ export class VoiceSession {
       const message = error instanceof Error ? error.message : '';
       const code = /^(TTS HTTP \d{3}|TTS synthesis failed \(\d+\)|TTS stream incomplete|Invalid TTS PCM|TTS frame too large|Playback acknowledgement timeout)$/.test(message)
         ? message : error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name) ? error.name : `${stage}_failed`;
-      this.fail(turn, stage, stage === 'asr' ? '没有得到完整识别结果，请重新说一遍。'
-        : stage === 'tts' ? '语音播放内容合成失败，文字和面板结果已保留。' : 'Agent 运行失败，请重试。', code);
+      this.fail(turn, stage, stage === 'asr' ? '通话已暂停，请重试。'
+        : stage === 'tts' ? '暂时无法播放语音，可以查看文字回复。' : '暂时无法回复，请重试。', code);
     } finally {
       this.cleanup(turn);
       await ttsQueue;

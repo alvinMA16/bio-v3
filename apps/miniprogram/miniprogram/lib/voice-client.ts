@@ -77,10 +77,10 @@ export class MiniVoiceClient {
       send: frame => {
         const data = JSON.stringify({ type: 'capture.audio', turnId: this.turnId, ...frame });
         this.queuedBytes += data.length;
-        this.socket?.send({ data, fail: () => this.fail('录音上传失败，已保存的讲述仍然保留。'), complete: () => { this.queuedBytes -= data.length; } });
+        this.socket?.send({ data, fail: () => this.fail('通话已暂停，请重试。'), complete: () => { this.queuedBytes -= data.length; } });
       },
       drained: () => this.uploadDrained(),
-      failed: () => this.fail('录音上传停住，已保存的讲述仍然保留，请重新连接。'),
+      failed: () => this.fail('通话已暂停，请重试。'),
     });
     const saved = wx.getStorageSync(this.storageKey);
     if (saved && typeof saved.callId === 'string' && saved.expiresAt > Date.now()) { this.callId = saved.callId; this.resume = true; }
@@ -99,7 +99,7 @@ export class MiniVoiceClient {
       socket.onMessage(({ data }) => {
         if (this.socket !== socket || this.closed) return;
         try { this.receive(JSON.parse(String(data)) as VoiceServerMessage); }
-        catch { console.error('Voice receive failed', { callId: this.callId, turnId: this.turnId }); this.fail('语音数据处理失败。'); }
+        catch { console.error('Voice receive failed', { callId: this.callId, turnId: this.turnId }); this.fail('暂时无法继续通话，请重试。'); }
       });
       socket.onError(() => this.reconnect(socket));
       socket.onClose(event => {
@@ -144,12 +144,12 @@ export class MiniVoiceClient {
       try {
         const data = wx.arrayBufferToBase64(frameBuffer); this.captureBuffer!.append(data);
         this.upload?.wake(); this.remember();
-      } catch { this.fail('暂时无法安全保存录音，重新连接可继续已保存的讲述。'); }
+      } catch { this.fail('通话已暂停，请重试。'); }
       return;
     }
     this.queuedBytes += frameBuffer.byteLength;
-    if (this.queuedBytes > 128_000) { this.fail('音频上传拥塞。'); return; }
-    this.socket?.send({ data: frameBuffer, fail: () => this.fail('音频上传失败。'), complete: () => { this.queuedBytes -= frameBuffer.byteLength; } });
+    if (this.queuedBytes > 128_000) { this.fail('连接不畅，请稍后重试。'); return; }
+    this.socket?.send({ data: frameBuffer, fail: () => this.fail('连接不畅，请稍后重试。'), complete: () => { this.queuedBytes -= frameBuffer.byteLength; } });
   };
   private onStop = (expected: boolean): void => {
     this.recording = false;

@@ -1,3 +1,5 @@
+import { Pool } from 'pg';
+import { CaptureRecovery } from './capture-recovery.js';
 import { DurableAsr } from './durable-asr.js';
 import { Injectable, Optional, Logger, OnApplicationBootstrap, OnApplicationShutdown, ConflictException } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
@@ -20,6 +22,8 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
   private wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
   private readonly logger = new Logger(VoiceGateway.name);
   private calls = new Map<string, { connection: string; stop: () => Promise<void> }>();
+  private recovery?: CaptureRecovery;
+  private recoveryPool?: Pool;
   private asr: VolcengineAsr;
   private tts: DoubaoTts;
   constructor(private adapter: HttpAdapterHost, private config: ConfigService, private agent: AgentService, @Optional() private memory?: MemoryService) {
@@ -29,6 +33,13 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
       resourceId: config.get('DOUBAO_TTS_RESOURCE_ID', 'seed-tts-2.0'), speaker: config.get('DOUBAO_TTS_SPEAKER', 'zh_female_kefunvsheng_uranus_bigtts') });
   }
   onApplicationBootstrap(): void {
+    const database = this.config.get<string>('MEMORY_DATABASE_URL');
+    if (database && this.config.get('VOLCENGINE_ASR_APP_ID') && this.config.get('VOLCENGINE_ASR_ACCESS_TOKEN')) {
+      this.recoveryPool = new Pool({ connectionString: database, max: 1, connectionTimeoutMillis: 5000 });
+      this.recovery = new CaptureRecovery(this.recoveryPool, this.asr, event =>
+        this.logger.log(JSON.stringify({ type: 'voice.capture_recovery', ...event })));
+      this.recovery.start();
+    }
     const server = this.adapter.httpAdapter.getHttpServer() as Server;
     server.on('upgrade', async (request, socket, head) => {
       if (request.url?.split('?')[0] !== '/api/v1/voice') return;
@@ -113,7 +124,7 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
       await session.settled(); await durable?.settled(); await persistence;
       if (user && callId) {
         const key = JSON.stringify([user, callId]);
-        try { await this.memory!.disconnectCall(user, callId, connection, ended); }
+        try { await this.memory!.disconnectCall(user, callId, connection, ended); this.recovery?.wake(); }
         finally { if (this.calls.get(key)?.connection === connection) this.calls.delete(key); }
       }
     });
@@ -236,5 +247,8 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
       void finalize().catch(() => this.logger.error('Call close persistence failed; stale-call recovery will retry'));
     });
   }
-  onApplicationShutdown(): void { for (const ws of this.wss.clients) ws.terminate(); this.wss.close(); }
+  async onApplicationShutdown(): Promise<void> {
+    await this.recovery?.stop(); await this.recoveryPool?.end();
+    for (const ws of this.wss.clients) ws.terminate(); this.wss.close();
+  }
 }
