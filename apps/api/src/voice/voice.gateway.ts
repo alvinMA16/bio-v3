@@ -176,7 +176,7 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
               if (!initialized) {
                 opening = user && callId ? await this.memory!.claimCallOpening(user, callId, connection) : true;
                 // Explicit capture recovery must finish before greeting or microphone readiness.
-                if (message.captureId) opening = false;
+                if (message.captureId || resumed) opening = false;
                 conversationId ??= randomUUID();
                 initialized = true;
                 if (user && callId) this.calls.set(JSON.stringify([user, callId]), { connection, stop: () => {
@@ -197,7 +197,9 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
                 }, undefined, (remainingMs, totalMs) => {
                   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'capture.recovering', remainingMs, totalMs, turnId: captureTurn, elapsedMs: Date.now() - startedAt }));
                 }) : undefined;
-              void session.listen(message.turnId, input, opening, message.playbackFeedback === true, !!durable && message.orderedCapture === true).catch(() => ws.close(1011, 'Voice session failed'));
+              const resumeTask = resumed && !message.captureId && !!user && !!callId && !!conversationId
+                && await this.agent.hasPausedTask?.(conversationId, user, callId);
+              void session.listen(message.turnId, input, opening, message.playbackFeedback === true, !!durable && message.orderedCapture === true, !!resumeTask).catch(() => ws.close(1011, 'Voice session failed'));
             } finally { validating = false; }
           } else if (message.type === 'diagnostic') {
             if (!['storage_unavailable', 'upload_stalled', 'recovery_timeout', 'receive_failed', 'startup_failed'].includes(message.code)

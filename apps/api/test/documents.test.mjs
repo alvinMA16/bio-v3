@@ -265,3 +265,18 @@ test('normalization reaches storage, history and displayed highlights atomically
     assert.deepEqual(workspace.state(), shown);
   } finally { f.clean(); }
 });
+
+test('partial edits survive interruption, reject stale continuation, and retain the original version', async () => {
+  const f = fixture(), conversationId = randomUUID();
+  try {
+    await f.store.edit(undefined, conversationId, create());
+    await f.store.edit(undefined, conversationId, { documentId: 'story', expectedVersion: 1, operations: [{action:'replace', targetId:'p1', block:paragraph('p1','第一部分已改好')}] });
+    // Another user edit arrives while the task is paused.
+    await f.store.edit(undefined, randomUUID(), { documentId:'story', expectedVersion:2, operations:[{action:'replace', targetId:'p2', block:paragraph('p2','用户的新修改')}] });
+    await assert.rejects(f.store.edit(undefined, conversationId, { documentId:'story', expectedVersion:2, operations:[{action:'replace', targetId:'p3', block:paragraph('p3','剩余部分')}] }), /版本冲突/);
+    await f.store.edit(undefined, conversationId, { documentId:'story', expectedVersion:3, operations:[{action:'replace', targetId:'p3', block:paragraph('p3','剩余部分')}] });
+    assert.deepEqual((await f.store.get(undefined,'story')).blocks.map(b=>b.text), ['第一部分已改好','用户的新修改','剩余部分']);
+    await f.store.restore(undefined, conversationId, 'story', 4, 1);
+    assert.deepEqual((await f.store.get(undefined,'story')).blocks, create().operations.map(o=>o.block));
+  } finally { f.clean(); }
+});

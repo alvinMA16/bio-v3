@@ -129,6 +129,7 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
       const first = join(directory, 'first'); const second = join(directory, 'second');
       const release = await memory.acquireSession(user, conversation, randomUUID(), first);
       await writeFile(join(first, 'session.jsonl'), 'persisted-sdk-state');
+      await writeFile(join(first, 'task.json'), JSON.stringify({callId:call, message:'继续改稿', paused:true}));
       await writeFile(join(first, 'panel.json'), JSON.stringify({ documents: [{ id: 'saved-draft', title: '保存的文稿', version: 2, blocks: [{ id: 'p1', kind: 'paragraph', text: '可恢复的正文' }] }] }));
       await assert.rejects(memory.acquireSession(user, conversation, randomUUID(), second));
       await release();
@@ -137,6 +138,10 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
       await assert.rejects(memory.acquireSession(other, conversation, randomUUID(), second));
       const release2 = await memory.acquireSession(user, conversation, randomUUID(), second);
       assert.equal(await readFile(join(second, 'session.jsonl'), 'utf8'), 'persisted-sdk-state');
+      assert.equal(JSON.parse(await readFile(join(second, 'task.json'), 'utf8')).paused, true);
+      assert.equal(await memory.pausedTask(user, conversation, call), true);
+      assert.equal(await memory.pausedTask(other, conversation, call), false);
+      assert.equal(await memory.pausedTask(user, conversation, 'different-call'), false);
       await release2();
     });
 
@@ -293,6 +298,10 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
       assert.equal(first.messages[0].text + target.text, original); assert.equal(target.nextTextOffset, null);
       const next = await memory.source(user, undefined, longCall, first.nextAfter);
       assert.equal(next.messages.length, 2); assert.equal(next.nextAfter, null);
+      const batch = await memory.source(user, undefined, longCall, 0, 0, 32);
+      assert.equal(batch.messages.length, 10); assert.equal(batch.nextAfter, null);
+      await assert.rejects(memory.source(user, undefined, longCall, 0, 0, 33), /limit/);
+      await assert.rejects(memory.source(other, undefined, longCall, 0, 0, 32));
     });
     await t.test('disconnect grace is visible to new calls; reconnect preserves history and playback ownership', async () => {
       const id = `voice-${prefix}`, connection = 'first';

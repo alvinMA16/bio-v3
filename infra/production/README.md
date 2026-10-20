@@ -37,7 +37,7 @@ the shared contract so environment overrides cannot shorten the server window.
 New clients journal unfinished capture audio and checkpoint recognition in PostgreSQL.
 Unacknowledged audio survives browser refresh in account-scoped sessionStorage.
 A background worker prepares disconnected captures with the existing ASR service,
-sealing at most 30 seconds per pass. It also discovers persisted tails after restart;
+sealing at most 8 seconds per pass. It also discovers persisted tails after restart;
 active calls are excluded unless their heartbeat is older than five minutes. A
 failed pass retains all audio and retries after one minute. Authenticated recovery
 waits for any in-progress block, reuses its text, and replays only the remaining
@@ -47,6 +47,17 @@ Starting an independent new call parks the old local capture without deleting it
 new calls do not automatically claim another call’s pending recording. Both clients
 pace retained audio and bound uploads by durable acknowledgements.
 See `docs/realtime-voice.md` for storage semantics and device limitations.
+
+Same-call recovery skips the new-call greeting. Interrupted Agent work is paused
+in the account-scoped session snapshot (`task.json` alongside SDK history), and
+resumes only for the same call after an unexpected transport interruption.
+Explicit cancel/hangup, completed work and independent new calls do not auto-resume.
+A retained capture takes precedence over task continuation. Resumed tasks reuse
+persisted tool results and verify the latest document before further edits.
+Long edits are instructed to save complete sections in version-checked batches;
+each saved version remains available through document history. This reduces time
+to the first visible edit, but does not promise a lower total generation time.
+
 
 ## Publish
 

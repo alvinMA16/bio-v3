@@ -252,14 +252,14 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
       if (!row) throw new NotFoundException('Conversation not found');
       await c.query('INSERT INTO bio_memory_runs(id,user_id) VALUES($1,$2)', [run, user]);
       await mkdir(directory, { recursive: true, mode: 0o700 });
-      for (const file of ['session.jsonl', 'panel.json', 'persona.json']) {
+      for (const file of ['session.jsonl', 'panel.json', 'persona.json', 'task.json']) {
         if (typeof row.snapshot[file] === 'string') await writeFile(join(directory, file), row.snapshot[file], { mode: 0o600 });
         else await rm(join(directory, file), { force: true });
       }
       return async () => {
         try {
           const snapshot: Record<string, string> = {};
-          for (const file of ['session.jsonl', 'panel.json', 'persona.json']) {
+          for (const file of ['session.jsonl', 'panel.json', 'persona.json', 'task.json']) {
             try { snapshot[file] = await readFile(join(directory, file), 'utf8'); }
             catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
           }
@@ -268,6 +268,12 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
       };
     } catch (e) { await unlockAndRelease(); throw e; }
   }
+  async pausedTask(user: string, conversationId: string, callId: string): Promise<boolean> {
+    const row = (await this.pool!.query("SELECT snapshot->>'task.json' AS task FROM bio_memory_sessions WHERE id=$1 AND user_id=$2", [conversationId, user])).rows[0];
+    const task = row?.task ? JSON.parse(row.task) : undefined;
+    return task?.paused === true && task.callId === callId;
+  }
+
   async assertRun(user: string, id: string): Promise<void> {
     if (!(await this.pool!.query('SELECT 1 FROM bio_memory_runs WHERE user_id=$1 AND id=$2', [user, id])).rowCount) throw new NotFoundException('Run not found');
   }
@@ -296,7 +302,8 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
     return { id: row.id, type: row.type, title: row.title, summary: row.summary, version: row.version,
       body: row.body.slice(offset, offset + 6000), nextOffset: row.body.length > offset + 6000 ? offset + 6000 : null, sources };
   }
-  async source(user: string, sourceRef?: string, callId?: string, after = 0, textOffset = 0) {
+  async source(user: string, sourceRef?: string, callId?: string, after = 0, textOffset = 0, limit = 8) {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 32) throw new Error('Invalid source limit');
     if (sourceRef) {
       const row = (await this.pool!.query('SELECT * FROM bio_memory_messages WHERE user_id=$1 AND id=$2', [user, sourceRef])).rows[0];
       if (!row) throw new NotFoundException('Source not found');
@@ -305,8 +312,15 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
       return { messages: [...before, row, ...next].map(item => this.publicMessage(item, item.id === sourceRef ? textOffset : 0)), callId: row.call_id, nextAfter: Number(next.at(-1)?.ordinal ?? row.ordinal) };
     }
     if (!callId || !(await this.pool!.query('SELECT 1 FROM bio_memory_calls WHERE user_id=$1 AND id=$2', [user, callId])).rowCount) throw new NotFoundException('Call not found');
-    const rows = (await this.pool!.query('SELECT * FROM bio_memory_messages WHERE user_id=$1 AND call_id=$2 AND ordinal>$3 ORDER BY ordinal LIMIT 9', [user, callId, after])).rows;
-    return { messages: rows.slice(0, 8).map(row => this.publicMessage(row)), callId, nextAfter: rows.length > 8 ? Number(rows[7].ordinal) : null };
+    const rows = (await this.pool!.query('SELECT * FROM bio_memory_messages WHERE user_id=$1 AND call_id=$2 AND ordinal>$3 ORDER BY ordinal LIMIT $4', [user, callId, after, limit + 1])).rows;
+    // Bound the response by both message count and text size. Never skip an unreturned row.
+    const messages = []; let characters = 0;
+    for (const row of rows.slice(0, limit)) {
+      const message = this.publicMessage(row);
+      if (messages.length && characters + message.text.length > 16000) break;
+      messages.push(message); characters += message.text.length;
+    }
+    return { messages, callId, nextAfter: rows.length > messages.length ? messages.at(-1)!.ordinal : null };
   }
   private publicMessage(row: Record<string, any>, textOffset = 0) { return { source_ref: row.id, role: row.role, text: row.body.slice(textOffset, textOffset + 4000), origin: row.origin, createdAt: row.created_at, ordinal: Number(row.ordinal), textOffset, totalCharacters: row.body.length, nextTextOffset: row.body.length > textOffset + 4000 ? textOffset + 4000 : null }; }
 

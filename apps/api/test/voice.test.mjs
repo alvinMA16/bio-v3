@@ -342,3 +342,18 @@ test('preamble starts synthesis while tool is pending and completed text does no
   assert.ok(!f.events.some(e => e.type === 'done'));
   finishTool(); await f.done; assert.deepEqual(f.spoken, ['我先查一下。', '找到资料了。']); f.session.close();
 });
+
+test('a paused task resumes without ASR or a new-call greeting and can be interrupted', async () => {
+  let trigger, signal;
+  const f = fixture({ run: async (_input, _emit, incoming, incomingTrigger) => {
+    trigger = incomingTrigger; signal = incoming;
+    await new Promise(resolve => incoming.addEventListener('abort', resolve, { once: true }));
+    return response;
+  } });
+  await f.session.listen('resume-task', {}, false, false, true, true);
+  await flush();
+  assert.equal(trigger, 'call_resume'); assert.equal(f.asrCallbacks.length, 0);
+  assert.equal(f.events.some(e => e.type === 'transcript'), false);
+  f.session.cancel('resume-task'); await f.session.settled();
+  assert.equal(signal.reason, 'user_interrupt');
+});

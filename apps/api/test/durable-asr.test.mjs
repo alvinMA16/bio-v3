@@ -48,9 +48,9 @@ test('50 minutes of continuous PCM rotates bounded ASR streams, preserves order 
   }
   assert.equal(inputs.length, 0);
   assert.equal(events.some(e => e.type === 'error'), false);
-  assert.equal(store.state.blocks.length, 100);
+  assert.equal(store.state.blocks.length, 375);
   assert.equal(store.state.frames.length, 0);
-  assert.ok(raw.streams.every(s => s.values.length <= 30));
+  assert.ok(raw.streams.every(s => s.values.length <= 8));
   session.finish('long'); await session.settled();
   const actual = inputs[0].split(/[\n,]/).map(Number);
   assert.deepEqual(actual, Array.from({ length: 3000 }, (_, i) => i + 1));
@@ -143,4 +143,21 @@ test('ordered capture endpoint requests client flush and never submits before ex
   assert.equal(events.filter(e=>e.type==='capture.finish').length,1);assert.equal(inputs.length,0);
   session.audio(new Uint8Array([2,0]),2);session.audio(new Uint8Array([3,0]),3);
   session.finish('ordered');await session.settled();assert.equal(inputs[0].message,'1,2,3');session.close();
+});
+
+test('interruption during an older long tail retains sealed replay progress and every remaining frame', async () => {
+  const store=storeFixture();
+  for(let i=1;i<=20;i++) await store.append('capture',i,pcm(i));
+  const controller=new AbortController(); let count=0;
+  const provider={async open(callback){
+    const raw=await providerFixture().open(callback);
+    return {...raw, async replay(frame){if(++count===11){controller.abort('page_hidden');throw new Error('interrupted');}raw.write(frame);}};
+  }};
+  await assert.rejects(new DurableAsr(provider,store,()=>{}).open(()=>{},controller.signal), /interrupted/);
+  assert.equal(store.state.block,1);
+  assert.equal(store.state.frames[0].sequence,9,'only the completed eight-second block is retired');
+  const durable=new DurableAsr(providerFixture(),store,()=>{});
+  const stream=await durable.open(()=>{},new AbortController().signal);
+  assert.deepEqual((await stream.finish()).split(/[\n,]/).map(Number),Array.from({length:20},(_,i)=>i+1));
+  stream.close();await durable.settled();
 });

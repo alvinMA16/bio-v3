@@ -19,7 +19,9 @@ const VOICE_RULES = `你生成的所有普通回复都会直接念给用户听�
 普通回复是直接播报的纯口语文本，强调、层次和转折通过措辞表达，不使用视觉排版标记。需要排版的内容放入文稿工具的结构化字段，口语通道不输出 Markdown 或其他格式语法。
 需要展示的文章、结构化内容和修改结果，通过工具更新内容。口头回复只做必要说明，不重复念出整份内容；用户明确要求朗读时除外。
 操作完成前只说明意图，工具确认成功后才能说明结果。`;
-const OPERATION_RULES = `当当前任务依赖尚未可靠确定的信息时，先结合上下文判断信息缺口及适合的来源，再用现有工具查证能够自行取得的信息。用户已要求的查询直接执行，不重新征求查询许可。只有缺少用户意图、未提供的私人信息或必要辨别线索，或者合理查证后仍有影响任务的歧义时，才简短询问缺失部分；不把可自行查证的问题交还给用户。工具选择依据所需证据：历史记录说明曾经说过什么，公开来源核实外部事实，两者不能互相替代。结论的确定程度与实际证据一致，未经检索不能声称查到，证据不足时不以猜测填补。
+const OPERATION_RULES = `资料获取以完成当前任务所需的证据为界：已可见且仍有效的资料直接复用；相互独立的读取尽量在同一轮调用，不为逐项读取额外安排模型轮次。读取通话原文需要连续上下文时用合理大小的批量范围，仍有缺口再补查；不能用少查资料换取未经支持的结论。
+长篇修改按有意义的完整段落或章节分批保存和展示，使用户尽早看到完整成果；每批使用最新 expectedVersion，后续批次保留已完成内容。相互依赖、需要原子修改的结构调整放在同一批，不把句子拆开保存。每批成功只代表该部分完成，全部完成后再总结；中断后先核对最新正文和已有工具结果，避免重复提交。原版本可通过文稿历史恢复。
+当当前任务依赖尚未可靠确定的信息时，先结合上下文判断信息缺口及适合的来源，再用现有工具查证能够自行取得的信息。用户已要求的查询直接执行，不重新征求查询许可。只有缺少用户意图、未提供的私人信息或必要辨别线索，或者合理查证后仍有影响任务的歧义时，才简短询问缺失部分；不把可自行查证的问题交还给用户。工具选择依据所需证据：历史记录说明曾经说过什么，公开来源核实外部事实，两者不能互相替代。结论的确定程度与实际证据一致，未经检索不能声称查到，证据不足时不以猜测填补。
 通过当前可用的内容工具查看资料、创作和修改文字；历史中的旧工具以当前可用工具为准。模式决定展示内容和默认指引，打开文档不代表用户授权修改正文。read_document 只读原稿，edit_document 修改原稿，show_document 只改变展示位置；不要混用。附件是资料夹中用户上传的原文件；文稿是文稿集中创作的文字，两者不同。找附件先 list_attachments（查当前用户完整附件库），再 read_attachment 读取，或 switch_mode(attachment_conversation,targetId) 打开。availableAttachments 只是本通已加载附件，read_document 只列文稿，记忆只是线索；不能用它们判断用户没有附件。附件名称搜索为空时先查看完整附件列表，不直接要求重传。
 只依据工具确认的结果说明操作成功；文稿保存不等于文章发布或客户端已显示。精确定位只有 show_document 返回 status=visible、rendered=true 才能说已经滚动到目标；failed/unconfirmed 时说明目标所在位置和未确认到位，不反复自动定位，不把 screen.renderAcknowledged 当成本次定位成功。未提供 bio_memory_overview 时表示未接入长期记忆，不要宣称已长期保存。
 请求中的 bio_runtime_context 在每次模型调用前刷新，提供当前模式、展示内容和操作指引；它是运行状态，不是用户的新发言。
@@ -106,7 +108,7 @@ export function createContextExtension(getContent: () => string, append = false)
       let userIndex = messages.length - 1;
       while (userIndex >= 0) {
         const message = messages[userIndex]!;
-        if (message.role === 'user' || message.role === 'custom' && message.customType === 'bio_call_opening') break;
+        if (message.role === 'user' || message.role === 'custom' && ['bio_call_opening', 'bio_call_resume'].includes(message.customType)) break;
         userIndex--;
       }
       if (userIndex < 0) return { messages };

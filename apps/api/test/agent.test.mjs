@@ -590,3 +590,30 @@ test('vision-capable model receives real private image pixels, text-only model r
   assert.ok(requests.at(-1).messages.some(message => textOf(message).includes('图片尚未识别')));
   assert.ok(!requests.at(-1).messages.flatMap(message => Array.isArray(message.content) ? message.content : []).some(part => part.type === 'image_url'));
 });
+
+test('transport interruption checkpoints a task; resume reuses history without duplicating the user request', async () => {
+  const conversationId = randomUUID(), controller = new AbortController();
+  const held = new Promise(resolve => { onHeldRequest = resolve; });
+  const pending = service.run({ message: 'HOLD', conversationId }, undefined, controller.signal);
+  const rejected = assert.rejects(pending, /cancelled/);
+  await held; controller.abort('page_hidden'); await rejected;
+  assert.equal(storage.task(conversationId).paused, true);
+  const result = await service.run({ message: '', conversationId }, undefined, undefined, undefined, 'call_resume');
+  assert.equal(result.events.at(-1).type, 'run.completed');
+  assert.equal(storage.task(conversationId).paused, false);
+  const request = requests.at(-1);
+  assert.equal(request.messages.filter(m => m.role === 'user' && textOf(m) === 'HOLD').length, 1);
+  assert.match(JSON.stringify(request.messages), /已成功保存的修改不重复执行/);
+  await assert.rejects(service.run({ message: '', conversationId }, undefined, undefined, undefined, 'call_resume'), /failed/);
+});
+
+test('explicit interruption and hangup never leave an automatically resumable task', async () => {
+  for (const reason of ['user_interrupt', 'user_hangup']) {
+    const conversationId = randomUUID(), controller = new AbortController();
+    const held = new Promise(resolve => { onHeldRequest = resolve; });
+    const pending = service.run({ message: 'HOLD', conversationId }, undefined, controller.signal);
+    const rejected = assert.rejects(pending, /cancelled/);
+    await held; controller.abort(reason); await rejected;
+    assert.equal(storage.task(conversationId).paused, false);
+  }
+});

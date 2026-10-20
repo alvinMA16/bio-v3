@@ -86,9 +86,12 @@ test('background recovery persists text, coordinates takeover and retains audio 
       await memory.pool.query("UPDATE bio_memory_calls SET touched_at=now()-interval '6 minutes' WHERE id=$1", [c.call]);
       const restarted = new CaptureRecovery(memory.pool, provider);
       assert.equal(await restarted.runOnce(), true);
-      assert.deepEqual((await memory.pool.query('SELECT sequence FROM bio_voice_capture_audio WHERE capture_id=$1', [c.id])).rows, [{ sequence: 31 }]);
+      assert.deepEqual((await memory.pool.query('SELECT sequence FROM bio_voice_capture_audio WHERE capture_id=$1 ORDER BY sequence', [c.id])).rows, Array.from({length: 23}, (_, i) => ({sequence: i + 9})));
       assert.equal(await restarted.runOnce(), true);
-      assert.equal(await c.store.text(c.id), Array.from({ length: 30 }, (_, i) => i + 1).join(',') + '\n31');
+      assert.equal(await restarted.runOnce(), true);
+      assert.equal(await restarted.runOnce(), true);
+      assert.equal(await c.store.text(c.id), [1,9,17,25].map(start => Array.from({length: Math.min(8, 32-start)}, (_, i) => start+i).join(',')).join('\n'));
+      assert.equal(await restarted.runOnce(), false);
     });
     assert.ok(events.some(e => e.code === 'capture_recovery_retry'));
   } finally {

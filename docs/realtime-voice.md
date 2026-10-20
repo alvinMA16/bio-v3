@@ -73,13 +73,13 @@ TTS 仅在当前片段尚未发出音频时重试一次；部分播出的片段�
 
 ## 连续讲述与持久化恢复（2026-10-15）
 
-新版客户端通过 `durableCapture` 协商持久化采集。收听没有两分钟时长或累计音频大小限制；原有最终识别稳定窗口和“说完了”仍决定何时提交 Agent。内部每约 30 秒音频完成一个 ASR 块，保存确认文本后打开下一条识别连接；切块不触发 Agent。小程序录音管理器单次采集结束后继续采集，不提交整段讲述。
+新版客户端通过 `durableCapture` 协商持久化采集。收听没有两分钟时长或累计音频大小限制；原有最终识别稳定窗口和“说完了”仍决定何时提交 Agent。内部每约 8 秒音频完成一个 ASR 块，保存确认文本后打开下一条识别连接；切块不触发 Agent。小程序录音管理器单次采集结束后继续采集，不提交整段讲述。
 
 `bio_voice_captures` 标识未完成讲述；`bio_voice_capture_audio` 按连续包序号保存尾部 PCM；`bio_voice_capture_blocks` 按块保存最终转写。识别草稿最多每五秒更新一次。音频先事务落盘才返回 `capture.saved`；块文本与尾部音频删除在同一事务提交。数据库连接所有权隔离旧连接，账号隔离恢复查询。用户原文入库和讲述已提交标记原子完成，不因重连重复归档。
 
 Web 在账号隔离的 sessionStorage、小程序在账号隔离的缓存中保存未确认音频。小记录逐包写入，确认后清除；缓存上限约一分钟，写入失败或溢出停止采集并提示重连，不静默丢弃。Web 自动重连期间继续暂存音频。页面刷新保留 sessionStorage；主动清除站点数据、关闭整个标签页或系统未交付的最后一个采集帧不属于此缓存的保证范围。
 
-恢复时读取服务端连续序号，只补发之后的音频包。确认回复丢失时重复包由服务端去重；仅重放未封存尾部给 ASR，按实时速度发送以避免突发拥塞。已经保存的块不重新识别。恢复可能需要等待尾部重放完成；正常情况下尾部不超过约 30 秒。通话五分钟恢复窗口到期后，未完成讲述仍可在新通话中接续。完成原文保存后不自动重放模型操作。
+恢复时读取服务端连续序号，只补发之后的音频包。确认回复丢失时重复包由服务端去重；仅重放未封存尾部给 ASR，按实时速度发送以避免突发拥塞。已经保存的块不重新识别。恢复可能需要等待尾部重放完成；正常情况下尾部不超过约 8 秒。通话五分钟恢复窗口到期后，未完成讲述仍可在新通话中接续。完成原文保存后不自动重放模型操作。
 
 自动化验证覆盖加速时钟下 50 分钟连续 PCM、分块和提交顺序、断线与进程重建、丢失确认、刷新创建新客户端、客户端缓存有界、数据库失败、跨账号隔离、旧连接写入隔离、过期通话恢复及重复提交归档。真实手机麦克风与系统后台行为仍需设备验证。
 
@@ -102,7 +102,7 @@ the server requests capture.finish at a silence endpoint so the client can flush
 its recorder and obtain the final durable ACK before sending finish. Legacy
 clients retain their existing endpoint behavior. During
 backlog recovery, capture.sync prevents a silence endpoint from submitting only the
-first part of the upload. The server's existing 30-second recognition blocks still bound
+first part of the upload. The server's existing 8-second recognition blocks still bound
 replay; capture.recovering reports remaining replay duration. ASR readiness has a
 60-second deadline and the browser bounds overall preparation at 120 seconds. Users
 can leave preparation at any time, without deleting unfinished captures.
@@ -119,7 +119,7 @@ trigger remains unproven because the old version omitted several of these events
 
 Disconnected and ended calls with pending audio are transcribed ahead of the next
 restore request using the existing streaming ASR resource. A single background
-connection processes at most 30 seconds per pass with a 50-second deadline; no
+connection processes at most 8 seconds per pass with a 50-second deadline; no
 additional ASR product is required. The PostgreSQL audio journal is the durable
 work queue, including after process restart. Active calls are excluded; calls with
 heartbeats older than five minutes are treated as abandoned. Failures retain audio

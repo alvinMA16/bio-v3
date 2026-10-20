@@ -648,3 +648,19 @@ test('recovery displays only the user-facing state throughout provider and uploa
   assert.doesNotMatch(f.statuses.join(' '), /重放|补存|转写|上传|秒|段录音/);
   assert.equal(f.connected(), 0);
 });
+
+test('resumed task stops ringing before model speech and remains interruptible', async t => {
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000);
+  const ws=f.sockets[0]; ws.onopen(); const id=f.starts[0];
+  const emit = event => ws.onmessage({data:JSON.stringify({turnId:id,elapsedMs:0,...event})});
+  emit({type:'connected',callId:'resumed-call',conversationId:'conv',resumed:true});
+  assert.equal(f.connected(),0);
+  emit({type:'state',state:'agent'});
+  assert.equal(f.connected(),1);
+  assert.equal(f.statuses.at(-1),'正在继续刚才的任务');
+  assert.equal(f.nodes.length,0,'no greeting audio required for readiness');
+  f.client.interrupt();
+  assert.ok(f.messages.map(JSON.parse).some(m=>m.type==='cancel' && m.turnId===id));
+  emit({type:'state',state:'agent'});
+  assert.equal(f.connected(),1,'stale state must not reconnect the call');
+});

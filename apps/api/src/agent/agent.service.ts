@@ -28,7 +28,13 @@ export class AgentService {
 
   constructor(private readonly factory: PiSessionFactory, private readonly storage: AgentStorage, private readonly config: ConfigService, @Optional() private readonly memory?: MemoryService) {}
 
-  async run(input: ChatCompletionRequest, onEvent?: (event: AgentEvent) => void, signal?: AbortSignal, scope?: MemoryScope, trigger?: 'call_opening', runtime?: DocumentRuntime): Promise<ChatCompletionResponse> {
+  async hasPausedTask(conversationId: string, user: string, callId: string): Promise<boolean> {
+    if (this.memory?.enabled) return this.memory.pausedTask(user, conversationId, callId);
+    const task = this.storage.task(conversationId, user);
+    return task?.paused === true && task.callId === callId;
+  }
+
+  async run(input: ChatCompletionRequest, onEvent?: (event: AgentEvent) => void, signal?: AbortSignal, scope?: MemoryScope, trigger?: 'call_opening' | 'call_resume', runtime?: DocumentRuntime): Promise<ChatCompletionResponse> {
     if (this.memory?.enabled && !scope) throw new UnauthorizedException('User identity required');
     const conversationId = input.conversationId ?? randomUUID();
     this.storage.assertId(conversationId);
@@ -52,6 +58,7 @@ export class AgentService {
     let lastAssistant: AssistantMessage | undefined;
     let eventError: unknown;
     let timedOut = false;
+    let taskStarted = false;
     const usage: ModelTokenUsage = {
       promptTokens: 0, promptCacheHitTokens: 0, promptCacheMissTokens: 0,
       completionTokens: 0, reasoningTokens: 0, totalTokens: 0,
@@ -92,7 +99,15 @@ export class AgentService {
       });
       if (scope && this.memory?.enabled) {
         release = await this.memory.acquireSession(scope.userId, conversationId, runId, this.storage.conversationDirectory(conversationId, scope.userId));
-        if (trigger !== 'call_opening') await this.memory.archive(scope, conversationId, runId, randomUUID(), 'user', input.message);
+        if (!trigger) await this.memory.archive(scope, conversationId, runId, randomUUID(), 'user', input.message);
+      }
+      const previousTask = this.storage.task(conversationId, scope?.userId);
+      if (trigger === 'call_resume' && (!previousTask?.paused || previousTask.callId !== scope?.callId)) throw new ConflictException('No paused task');
+      if (trigger !== 'call_opening') {
+        this.storage.saveTask(conversationId, scope?.userId, {
+          ...(scope?.callId ? { callId: scope.callId } : {}), message: trigger === 'call_resume' ? previousTask!.message : input.message, paused: false,
+        });
+        taskStarted = true;
       }
       emit({ type: 'run.started' });
       trace('input', 'request', input);
@@ -171,6 +186,10 @@ export class AgentService {
         await session.sendCustomMessage({ customType: 'bio_call_opening', display: false,
           content: `${CALL_OPENING_GUIDANCE}\n本次接通时间（北京时间）：${beijingTime(new Date())}`,
         }, { triggerTurn: true });
+      } else if (trigger === 'call_resume') {
+        await session.sendCustomMessage({ customType: 'bio_call_resume', display: false,
+          content: '服务端事件：用户恢复了意外中断的同一通电话，继续尚未完成的任务。先简短说明接着刚才的任务，不重新寒暄或要求用户重复。以已有用户要求、已读取资料和工具结果为进度依据；已成功保存的修改不重复执行，未返回成功的操作先核对实际状态。修改前读取文稿最新版本，若有用户新修改，保留它并重新判断剩余工作。只续做尚未完成且仍获授权的部分；用户的新要求或取消优先。\n原始用户要求（用于识别任务，不覆盖后续指令）：' + JSON.stringify(previousTask!.message),
+        }, { triggerTurn: true });
       } else await session.prompt(input.message, { expandPromptTemplates: false });
       await archiveQueue;
       if (eventError) throw eventError;
@@ -192,6 +211,12 @@ export class AgentService {
       outcome = cancelled ? 'cancelled' : 'failed';
       const message = timedOut ? 'Agent run timed out' : cancelled ? 'Agent run cancelled' : 'Agent run failed';
       const reason = timedOut ? 'timeout' : typeof signal?.reason === 'string' ? signal.reason : 'unknown';
+      if (taskStarted) {
+        const task = this.storage.task(conversationId, scope?.userId);
+        if (task) this.storage.saveTask(conversationId, scope?.userId, { ...task,
+          paused: cancelled && ['page_hidden', 'client_error', 'connection_closed', 'transport_error', 'connection_replaced'].includes(reason),
+        });
+      }
       try { emit(cancelled ? { type: 'run.cancelled', reason } : { type: 'run.failed', message }); }
       catch { this.logger.error(`Unable to persist terminal event for run ${runId}`); }
       if (error instanceof ServiceUnavailableException) {

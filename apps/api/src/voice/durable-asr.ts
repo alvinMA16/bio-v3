@@ -6,7 +6,7 @@ export class DurableAsr implements AsrProvider {
   private tasks = new Set<Promise<unknown>>();
   constructor(private provider: AsrProvider, private store: CaptureStore,
     private progress: (type: 'capture.ready' | 'capture.saved', id: string, sequence: number) => void,
-    private blockBytes = 30 * 32000, private recovery?: (remainingMs: number, totalMs: number) => void) {}
+    private blockBytes = 8 * 32000, private recovery?: (remainingMs: number, totalMs: number) => void) {}
   async settled(): Promise<void> { while (this.tasks.size) await Promise.allSettled([...this.tasks]); }
   async open(onResult: (result: Recognition) => void, signal: AbortSignal): Promise<AsrStream> {
     const saved = await this.store.load();
@@ -54,6 +54,10 @@ export class DurableAsr implements AsrProvider {
         signal.throwIfAborted();
         if (stream.replay) await stream.replay(frame.pcm); else stream.write(frame.pcm);
         bytes += frame.pcm.length; replayed += frame.pcm.length;
+        sequence = frame.sequence;
+        // Older clients can leave a longer tail. Seal replay progress too, so a
+        // second interruption cannot force recognition of the whole tail again.
+        if (bytes >= this.blockBytes) { await seal(); stream = await openStream(); }
         const second = Math.floor(replayed / 32000);
         if (second !== reported || replayed === totalBytes) {
           reported = second; this.recovery?.((totalBytes - replayed) / 32, totalBytes / 32);

@@ -52,6 +52,7 @@ export class BrowserVoice {
   private uiReady = false;
   private captureReady = false;
   private dialingFinished = false;
+  private resumedCall = false;
   private pendingEvents: VoiceServerMessage[] = [];
   private pendingEventBytes = 0;
   private ringback: { tones: OscillatorNode[]; gain: GainNode; startedAt: number; timer: ReturnType<typeof setTimeout> } | undefined;
@@ -412,6 +413,7 @@ export class BrowserVoice {
     }
     if (event.type === 'transcript') { this.upload?.stop(); this.captureBuffer?.clear(); this.durableCapture = false; }
     if (event.type === 'connected') {
+      this.resumedCall = event.resumed;
       this.callId = event.callId; this.conversationId = event.conversationId;
       this.confirmed = true; this.resume = false; this.remember();
       this.callbacks.status?.(event.resumed || this.captureBuffer?.id ? '正在恢复对话' : '正在呼叫');
@@ -419,8 +421,12 @@ export class BrowserVoice {
     if (event.type === 'error' && event.code === 'CALL_BUSY') { if (this.socket) this.reconnect(this.socket); return; }
     if (event.type === 'asr' && this.listening) this.speechSignal.recognize(event.text);
     if (event.type === 'state') {
+      if (event.state === 'agent' && this.resumedCall) {
+        this.resumedCall = false; this.mediaReady(); this.callbacks.status?.('正在继续刚才的任务');
+      }
       this.acceptingAudio = event.state === 'listening';
       if (event.state === 'listening') {
+        this.resumedCall = false;
         if (this.durableCapture) {
           this.restoring = !!this.captureBuffer?.pendingCount;
           if (this.restoring) {

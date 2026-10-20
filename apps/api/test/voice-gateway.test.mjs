@@ -156,3 +156,27 @@ test('explicit saved capture recovery reports progress before readiness and does
   assert.ok(events.findIndex(e=>e.type==='capture.recovering')<events.findIndex(e=>e.type==='capture.ready'));
   assert.equal(runs,0);ws.close();await once(ws,'close');
 });
+
+test('same-call reconnect resumes a persisted task without greeting or empty capture submission', { timeout: 10000 }, async t => {
+  const server = createServer(), conversation = randomUUID(); let trigger, asrOpens=0, checks=0;
+  const memory={
+    async resolveIdentity(){return 'owner';},
+    async resumeCall(_u,callId){return {callId,conversationId:conversation,resumed:true};},
+    async claimCallOpening(){return true;},
+    async savePlayback(){}, async disconnectCall(){},
+  };
+  const agent={
+    async hasPausedTask(id,user,call){assert.deepEqual([id,user,call],[conversation,'owner','paused-call']);checks++;return true;},
+    async run(input,_emit,_signal,scope,incoming){trigger=incoming;assert.equal(input.message,'');assert.equal(scope.captureId,undefined);return {conversationId:conversation,message:{content:''}};},
+  };
+  const gateway = new VoiceGateway({httpAdapter:{getHttpServer:()=>server}},new ConfigService({VOLCENGINE_ASR_APP_ID:'fixture',VOLCENGINE_ASR_ACCESS_TOKEN:'fixture',DOUBAO_TTS_APP_ID:'fixture',DOUBAO_TTS_ACCESS_KEY:'fixture'}),agent,memory);
+  gateway.asr={async open(){asrOpens++;return {write(){},close(){},async finish(){return '';}};}};
+  gateway.tts={async synthesize(){}};gateway.onApplicationBootstrap();
+  server.listen(0,'127.0.0.1');await once(server,'listening');
+  t.after(async()=>{await gateway.onApplicationShutdown();await new Promise(resolve=>server.close(resolve));});
+  const ws=new WebSocket(`ws://127.0.0.1:${server.address().port}/api/v1/voice`);await once(ws,'open');
+  const done=new Promise(resolve=>ws.on('message',raw=>{if(JSON.parse(raw).type==='done')resolve();}));
+  ws.send(JSON.stringify({type:'listen',resume:true,callId:'paused-call',turnId:'resume',request:{}}));
+  await done;assert.equal(trigger,'call_resume');assert.equal(asrOpens,0);assert.equal(checks,1);
+  ws.close();await once(ws,'close');
+});

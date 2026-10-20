@@ -21,12 +21,12 @@ export function createMemoryTools(memory: MemoryService, user: string, onSource?
       parameters: Type.Object({ memoryId: uuid, offset }),
       execute: async (_id, p, signal) => { signal?.throwIfAborted(); return result(await memory.read(user, p.memoryId, p.offset)); },
     }),
-    defineTool({ name: 'read_source', label: '回看讲述', description: '提供 sourceRef 读取一条原始讲述及相邻上下文；或提供 callId 和 after 顺序读取一通电话，nextAfter 可继续翻页。只能二选一。消息 nextTextOffset 非空时，用其 source_ref 作为 sourceRef 并传 textOffset 继续读该消息。引用原话和核实矛盾时使用。role=assistant 不是用户事实来源，asr_final 可能误识别。',
-      parameters: Type.Object({ sourceRef: Type.Optional(uuid), callId: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })), after: offset, textOffset: offset }),
+    defineTool({ name: 'read_source', label: '回看讲述', description: '提供 sourceRef 读取一条原始讲述及相邻上下文；或提供 callId 和 after 顺序读取一通电话，nextAfter 可继续翻页。需要连续上下文时可传 limit（最多32条），减少反复翻页；默认8条。只能二选一。消息 nextTextOffset 非空时，用其 source_ref 作为 sourceRef 并传 textOffset 继续读该消息。引用原话和核实矛盾时使用。role=assistant 不是用户事实来源，asr_final 可能误识别。',
+      parameters: Type.Object({ sourceRef: Type.Optional(uuid), callId: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })), after: offset, textOffset: offset, limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 32 })) }),
       execute: async (_id, p, signal) => {
         signal?.throwIfAborted();
         if (!!p.sourceRef === !!p.callId) throw new Error('Specify sourceRef or callId');
-        const value = await memory.source(user, p.sourceRef, p.callId, p.after, p.textOffset); onSource?.(value); return result(value);
+        const value = await memory.source(user, p.sourceRef, p.callId, p.after, p.textOffset, p.limit); onSource?.(value); return result(value);
       },
     }),
   ];

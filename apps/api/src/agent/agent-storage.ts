@@ -52,6 +52,17 @@ export class AgentStorage {
     return directory;
   }
 
+  task(id: string, user?: string): { callId?: string; message: string; paused: boolean } | undefined {
+    const path = join(this.conversationDirectory(id, user), 'task.json');
+    return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : undefined;
+  }
+
+  saveTask(id: string, user: string | undefined, task: { callId?: string; message: string; paused: boolean }): void {
+    const path = join(this.conversationDirectory(id, user), 'task.json');
+    writeFileSync(`${path}.tmp`, JSON.stringify(task), { mode: 0o600 });
+    renameSync(`${path}.tmp`, path);
+  }
+
   appendTrace(entry: AgentTraceEntry): void {
     this.assertId(entry.runId);
     const directory = join(this.root, 'traces');

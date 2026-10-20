@@ -47,10 +47,10 @@ export class CaptureRecovery {
         if (!row) { await db.query('SELECT pg_advisory_unlock(hashtext($1))', [key]); locked = undefined; continue; }
         const frames = (await db.query('SELECT sequence,pcm FROM bio_voice_capture_audio WHERE capture_id=$1 ORDER BY sequence', [row.id])).rows;
         if (!frames.length) return false;
-        // Bound each background connection and lock to one 30-second block. Remaining audio
+        // Bound each background connection and lock to one 8-second block. Remaining audio
         // stays in the journal for the next pass or a live takeover.
         const batch: typeof frames = []; let bytes = 0;
-        for (const frame of frames) { batch.push(frame); bytes += frame.pcm.length; if (bytes >= 30 * 32000) break; }
+        for (const frame of frames) { batch.push(frame); bytes += frame.pcm.length; if (bytes >= 8 * 32000) break; }
         const controller = new AbortController(); this.controller = controller;
         timeout = setTimeout(() => controller.abort(), 50_000);
         try {

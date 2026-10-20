@@ -93,7 +93,7 @@ test('Agent releases its database session even when SDK disposal throws', async 
     async create() {
       return { subscribe() { return () => {}; }, async prompt() { throw new Error('model failed'); }, dispose() { throw new Error('dispose failed'); } };
     },
-  }, { assertId() {}, conversationDirectory() { return '/unused'; }, appendTrace() {} }, new ConfigService(), memory);
+  }, { task() {}, saveTask() {}, assertId() {}, conversationDirectory() { return '/unused'; }, appendTrace() {} }, new ConfigService(), memory);
   const input = { conversationId: randomUUID(), message: 'synthetic' };
   for (let index = 0; index < 2; index++) await assert.rejects(agent.run(input, undefined, undefined, { userId: 'user' }), /dispose failed/);
   assert.equal(held, false);
@@ -169,7 +169,7 @@ test('PostgreSQL session saturation preserves archival capacity and rejects exce
           dispose() {},
         };
       },
-    }, { assertId() {}, conversationDirectory(id) { return join(root, id); }, appendTrace() {} }, new ConfigService(), memory);
+    }, { task() {}, saveTask() {}, assertId() {}, conversationDirectory(id) { return join(root, id); }, appendTrace() {} }, new ConfigService(), memory);
     const inputs = Array.from({ length: 12 }, () => ({ controller: new AbortController(), id: randomUUID() }));
     const pending = inputs.map(({ controller, id }) => agent.run({ conversationId: id, message: 'slow synthetic run' }, undefined, controller.signal, { userId: user })
       .then(value => ({ value }), error => ({ error })));

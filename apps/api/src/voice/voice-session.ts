@@ -5,7 +5,7 @@ import { PlaybackWindow } from './playback-window.js';
 import type { DocumentRuntime } from '../agent/document-runtime.js';
 import type { DocumentView } from '@bio/contracts';
 
-type Runner = (input: ChatCompletionRequest, emit: (event: AgentEvent) => void, signal: AbortSignal, trigger?: 'call_opening', runtime?: DocumentRuntime) => Promise<ChatCompletionResponse>;
+type Runner = (input: ChatCompletionRequest, emit: (event: AgentEvent) => void, signal: AbortSignal, trigger?: 'call_opening' | 'call_resume', runtime?: DocumentRuntime) => Promise<ChatCompletionResponse>;
 type Payload = VoiceServerMessage extends infer M ? M extends VoiceServerMessage ? Omit<M, 'turnId' | 'elapsedMs'> : never : never;
 interface Turn {
   id: string; request: VoiceRequest; abort: AbortController; started: number;
@@ -30,7 +30,7 @@ export class VoiceSession {
     private send: (event: VoiceServerMessage) => void, private endpointMs = 2500,
     private observe?: { progress: (value: VoicePlaybackSnapshot) => void; diagnostic: (value: { turnId: string; stage: string; code: string; queuedSamples: number }) => void }) {}
 
-  async listen(id: string, request: VoiceRequest, opening = false, playbackFeedback = false, orderedCapture = false): Promise<void> {
+  async listen(id: string, request: VoiceRequest, opening = false, playbackFeedback = false, orderedCapture = false, resumeTask = false): Promise<void> {
     const generation = ++this.generation;
     this.cancel(undefined, 'superseded');
     // Agent abort is asynchronous; release the conversation lock before reusing it.
@@ -43,8 +43,8 @@ export class VoiceSession {
       progress: { turnId: id, generated: false, sentSamples: 0, playedSamples: 0, interrupted: false } };
     this.current = turn;
     this.state(turn, 'connecting');
-    if (opening) {
-      turn.task = this.complete(turn, true);
+    if (opening || resumeTask) {
+      turn.task = this.complete(turn, opening, resumeTask);
       this.lastTask = turn.task;
       return;
     }
@@ -167,14 +167,14 @@ export class VoiceSession {
 
   async settled(): Promise<void> { await this.lastTask.catch(() => undefined); }
 
-  private async complete(turn: Turn, opening = false): Promise<void> {
+  private async complete(turn: Turn, opening = false, resumeTask = false): Promise<void> {
     this.playbackTurn = turn;
-    let stage: 'asr' | 'agent' | 'tts' = opening ? 'agent' : 'asr';
+    let stage: 'asr' | 'agent' | 'tts' = opening || resumeTask ? 'agent' : 'asr';
     let ttsQueue = Promise.resolve();
     let ttsError: unknown;
     try {
       let text = '';
-      if (!opening) {
+      if (!opening && !resumeTask) {
         text = (await turn.asr!.finish()).trim();
         turn.asr!.close();
         if (!this.isCurrent(turn)) return;
@@ -230,7 +230,7 @@ export class VoiceSession {
             }
           }).catch(error => { ttsError = error; });
         }
-      }, turn.abort.signal, opening ? 'call_opening' : undefined, {
+      }, turn.abort.signal, opening ? 'call_opening' : resumeTask ? 'call_resume' : undefined, {
         getView: () => turn.request.context?.documentView,
         observeViews: listener => { turn.viewObservers.add(listener); return () => { turn.viewObservers.delete(listener); }; },
         waitForNavigation: (target, signal) => new Promise((resolve, reject) => {
