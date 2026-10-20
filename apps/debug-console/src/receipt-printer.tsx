@@ -60,6 +60,6 @@ export function ReceiptPrinter({ receipt, onClose }: { receipt: SessionReceipt; 
       </div>
     </div>
     <span className="receipt-readable" aria-live="polite">{finished ? '打印完成' : '正在打印'}</span>
-    <div className="receipt-actions">{finished && <button type="button" ref={button} className="receipt-dismiss" onClick={close}>我知道了</button>}</div>
+    <div className="receipt-actions">{finished && <button type="button" ref={button} className="product-control product-control--primary receipt-dismiss" onClick={close}>我知道了</button>}</div>
   </section>;
 }

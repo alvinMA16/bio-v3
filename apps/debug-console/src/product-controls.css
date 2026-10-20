@@ -1,0 +1,47 @@
+/* Shared product action material. Layout belongs to each component. */
+.phone-screen {
+  --control-ink: #344e3d;
+  --control-glass: linear-gradient(135deg, #f4faeeb5, #c8dcc75c 58%, #e3efdc85);
+  --control-primary: linear-gradient(135deg, #e8f4dcce, #b8d1b58f 58%, #d4e6cbb0);
+  --control-highlight: #ffffffcf;
+  --control-shadow: #344d3524;
+  --control-ring: #66856b;
+}
+.phone-screen--conversation, .phone-screen--dialing {
+  --control-ink: #edf5ed;
+  --control-glass: linear-gradient(145deg, #eefbe52b, #c4dec511 55%, #e4f2dc21);
+  --control-primary: linear-gradient(135deg, #e5f5d970, #aecbb540 58%, #d3e8ce52);
+  --control-highlight: #ffffff70;
+  --control-shadow: #06120b30;
+  --control-ring: #c5deca;
+}
+.phone-screen button.product-control {
+  position: relative; isolation: isolate; border: 0; border-radius: 24px;
+  min-height: 44px; color: var(--control-ink); background: var(--control-surface, var(--control-glass));
+  box-shadow: inset 0 1px 0 var(--control-highlight), inset 0 -1px 0 #c5dec52b, 0 4px 14px var(--control-shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(135%); backdrop-filter: blur(22px) saturate(135%);
+  font-family: inherit; font-size: 14px; line-height: 1.5; letter-spacing: normal;
+  cursor: pointer; transition: filter 150ms ease, transform 150ms ease;
+}
+.phone-screen button.product-control::after {
+  content: ''; position: absolute; inset: 1px; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(ellipse at 24% 0, #ffffff24, transparent 65%); z-index: -1;
+}
+.phone-screen button.product-control--primary { --control-surface: var(--control-primary); }
+.phone-screen button.product-control--danger { color: #8b3939; --control-surface: linear-gradient(135deg,#fff1ecb0,#e1bdb65c); }
+.phone-screen button.product-control:hover:not(:disabled) { filter: brightness(1.06); }
+.phone-screen button.product-control:active:not(:disabled) { transform: translateY(1px); background: var(--control-surface, var(--control-glass)); }
+.phone-screen button.product-control:focus-visible { outline: 2px solid var(--control-ring); outline-offset: 3px; }
+.phone-screen button.product-control:disabled { opacity: .45; cursor: default; }
+.phone-screen :is(.phone-folder-nav,.material-preview-header,.material-search-header) button.product-control { min-width: 44px; }
+.phone-screen .material-actions-menu { background: none; border: 0; box-shadow: none; padding: 0; overflow: visible; display: grid; gap: 10px; }
+.phone-screen .material-actions button.product-control + button { border: 0; }
+@media (prefers-reduced-motion: reduce) { .phone-screen button.product-control { transition: none; } }
+/* Composite controls share the material while retaining their selection/drag behavior. */
+.phone-screen.phone-screen--call .slide-to-end,
+.phone-screen .material-folder .material-filters {
+  background: var(--control-glass);
+  box-shadow: inset 0 1px 0 var(--control-highlight), 0 4px 14px var(--control-shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(135%); backdrop-filter: blur(22px) saturate(135%);
+}
+.phone-screen.phone-screen--call .slide-to-end-label { color: var(--control-ink); }

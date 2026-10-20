@@ -19,11 +19,16 @@
 
 # Visual language
 
+- Follow `docs/ui-controls.md` and reuse `apps/debug-console/src/product-controls.css` for product actions. Shared control changes must be reviewed across call states, receipts, folders, and previews; do not introduce a new per-page button style.
+
 - Scene and background elements use handmade felt / stop-motion textures.
 - Core CTA buttons use frosted glass with a subtle pale sage-green tint, soft optical highlights and translucent depth. Avoid opaque beige panels or conspicuous outline-button borders.
 - Keep related CTA text and character art grouped and centered; distribute actions rather than crowding the top of the screen.
 
 # UI change discipline
+
+- Treat visual consistency as a requirement across every state of a flow, including waiting, paused, recovery, failure, disabled, and active states. Review related states together before shipping; never polish only the state named in the latest report.
+- Separate status information from actions with clear spatial grouping. Every action must visibly read as a button; never mix unstyled text actions into status copy. Use a shared frosted-glass treatment with translucent sage tint, optical highlights, depth, and consistent geometry; distinguish primary and secondary actions within that same material family rather than mixing opaque fills, outlines, and bare text. Validate the actual rendered states at phone and desktop sizes before deployment.
 
 - The public entry and `/internal/` must share the same product components, content, styling, and interactions. Device adaptation belongs to the outer viewport and phone frame; do not maintain separate product implementations for public/internal or desktop/mobile.
 
