@@ -11,19 +11,5 @@
   margin-inline: -.18em;
   animation: document-highlight-arrive .5s cubic-bezier(.2,.65,.35,1) both;
 }
-.document-highlight-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #687a69; font-size: 11px; line-height: 1.7; margin: 0 0 18px; }
-.document-highlight-note > span { display: inline-flex; align-items: center; gap: 7px; }
-.document-reader { --marker-swatch: #f2df38; }
-.document-reader[data-marker-color="green"] { --marker-swatch: #8ddd68; }
-.document-reader[data-marker-color="purple"] { --marker-swatch: #c59aef; }
-.document-reader[data-marker-color="blue"] { --marker-swatch: #80cafa; }
-.document-reader[data-marker-color="pink"] { --marker-swatch: #ff95b6; }
-.document-highlight-note i { width: 15px; height: 8px; border-radius: 2px 1px 3px 1px; transform: rotate(-7deg); background: var(--marker-swatch); }
-.document-highlight-note button { margin-left: auto; min-height: 32px; padding: 0 8px; color: #718074; background: transparent; border: 0; cursor: pointer; font: inherit; }
-.document-highlight-note button:hover { color: #354d3b; background: #b8d1ba24; border-radius: 8px; }
-.document-highlight-note details, .document-highlight-note > small { flex-basis: 100%; }
-.document-highlight-note summary { cursor: pointer; }
-.document-highlight-note details > div { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; max-height: 150px; overflow: auto; }
-.document-highlight-note del { color: #876e65; background: #e1c7ba26; padding: 1px 4px; border-radius: 3px; white-space: pre-wrap; }
 @keyframes document-highlight-arrive { from { background-size: 0% 100%; } to { background-size: 100% 100%; } }
 @media (prefers-reduced-motion: reduce) { .document-highlight { animation: none; } }

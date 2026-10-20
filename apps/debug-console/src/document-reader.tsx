@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { documentPages, documentTextSegments, type DocumentHighlight, type DocumentNavigationReceipt, type DocumentRange, type DocumentView, type PanelDocument } from '@bio/contracts';
 import { markerBrush } from './marker-brush';
 import { documentViewport } from './document-viewport';
@@ -25,8 +25,7 @@ export function DocumentReader({ document, view, onView }: {
   document: PanelDocument; view?: DocumentView | undefined;
   onView?: ((view: DocumentView) => void) | undefined;
 }) {
-  const [dismissed, setDismissed] = useState<string>();
-  const highlight = view?.version === document.version && view.highlight?.requestId !== dismissed ? view.highlight : undefined;
+  const highlight = view?.version === document.version ? view.highlight : undefined;
   const ranges = highlight?.ranges ?? [];
   const renderText = (text: string, blockId: string) => textSpans(text, blockId, ranges, 0, highlight);
   const titleBlock = document.blocks[0]?.kind === 'heading' && document.blocks[0].text.trim() === document.title.trim() ? document.blocks[0] : undefined;
@@ -124,12 +123,6 @@ export function DocumentReader({ document, view, onView }: {
   useEffect(() => { report.current(); }, [document.version]);
   return <section className={`document-reader document-reader--${highlight?.kind ?? 'plain'}`} data-marker-color={highlight?.color ?? 'yellow'} ref={content} aria-label="文稿阅读">
     <header className="document-heading"><h3>{titleBlock ? renderText(titleBlock.text, titleBlock.id) : document.title}</h3><small>已保存 · 版本 {document.version}</small></header>
-    {highlight && <aside className="document-highlight-note" aria-label="文稿标记">
-      <span><i aria-hidden="true" />{highlight.kind === 'focus' ? '定位与高亮标记' : highlight.ranges.length ? '本次文字改动标记' : highlight.deletions?.length ? '本次移除了文字' : '本次未标记正文文字'}</span>
-      <button type="button" aria-label="清除高亮" onClick={() => setDismissed(highlight.requestId)}>清除</button>
-      {!!highlight.deletions?.length && <details><summary>查看移除的文字</summary><div>{highlight.deletions.map((item, index) => <del key={index}>{item.text}</del>)}</div></details>}
-      {highlight.notice && <small>{highlight.notice}</small>}
-    </aside>}
     {document.blocks.filter((block, index) => !(index === 0 && block.kind === 'heading' && block.text.trim() === document.title.trim())).map(block =>
       <section key={block.id} className="panel-block">
         {block.kind === 'heading' ? <h4>{renderText(block.text, block.id)}</h4>
