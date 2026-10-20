@@ -157,11 +157,13 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
         </section>}
 
       </> : <>
-        {dialing ? <section className="phone-dialing" aria-label="呼叫令狸" aria-busy={!callFailed}>
-          <DialAvatar active={!callFailed} getPhase={getDialPhase} />
-          <p role="status">{callFailed ? hasSavedCapture || callRecovery === 'available' ? '通话已暂停' : callRecovery === 'expired' ? '上次通话已结束' : '暂时未能接通' : status || '正在呼叫'}</p>
-          {callFailed && <small>{status}</small>}
-          {!callFailed && <button type="button" className="phone-dial-back" onClick={onEnd}>返回</button>}
+        {dialing ? <section className={`phone-dialing ${!callFailed ? 'phone-dialing--pending' : ''}`} aria-label="呼叫令狸" aria-busy={!callFailed}>
+          <div className="phone-dial-center">
+            <DialAvatar active={!callFailed} getPhase={getDialPhase} />
+            <p role="status">{callFailed ? hasSavedCapture || callRecovery === 'available' ? '通话已暂停' : callRecovery === 'expired' ? '上次通话已结束' : '暂时未能接通' : status || '正在呼叫'}</p>
+            {callFailed && <small>{status}</small>}
+          </div>
+          {!callFailed && <div className="phone-dial-actions"><button type="button" className="phone-dial-cancel" onClick={onEnd}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 15v-3c4-4 12-4 16 0v3l-4 1v-3a12 12 0 0 0-8 0v3z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>取消呼叫</button></div>}
           {callFailed && <div className="phone-dial-recovery"><button type="button" className="phone-redial" disabled={startDisabled} onClick={onStart}>{hasSavedCapture ? '继续讲述' : callRecovery === 'available' ? '继续刚才的对话' : callRecovery === 'expired' ? '开始新通话' : '重新呼叫'}</button>{onStartNew && (hasSavedCapture || callRecovery === 'available') && <button type="button" className="phone-dial-back" disabled={startDisabled} onClick={onStartNew}>开始新通话</button>}<button type="button" className="phone-dial-back" onClick={onEnd}>返回</button></div>}
         </section> : <>
           {mode === 'conversation' && <div className="phone-conversation-window" role="img" aria-label="令狸在书房里"><div className="phone-conversation-scene">{artwork}</div></div>}

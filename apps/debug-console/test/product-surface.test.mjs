@@ -41,7 +41,7 @@ test('public and internal entries render identical product content without publi
     const recoverable = renderToStaticMarkup(createElement(PhonePreview, { ...callProps, hasSavedCapture: true, onStartNew() {} }));
     assert.ok(recoverable.includes('继续讲述')); assert.ok(recoverable.includes('开始新通话'));
     const waiting = renderToStaticMarkup(createElement(PhonePreview, { ...callProps, callFailed: false, status: '正在恢复对话' }));
-    assert.ok(waiting.includes('正在恢复对话')); assert.doesNotMatch(waiting, /重放|补存|转写|\d+ 秒/); assert.ok(waiting.includes('返回'));
+    assert.ok(waiting.includes('正在恢复对话')); assert.doesNotMatch(waiting, /重放|补存|转写|\d+ 秒/); assert.ok(waiting.includes('取消呼叫'));
     for (const label of ['资料夹', '呼叫令狸', '文稿集']) assert.ok(product.includes(label));
     for (const label of ['Prompt &amp; runtime debugger', '对话历史与输入', '配置与上下文', '运行详情与历史']) {
       assert.ok(internal.includes(label), `Internal retains ${label}`);
