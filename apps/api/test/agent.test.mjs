@@ -78,6 +78,8 @@ before(async () => {
         : lastText === 'OPEN_DRAFT' ? { name: 'show_document', arguments: { documentId: 'draft' } }
         : lastText === 'FOCUS_DRAFT' ? { name: 'show_document', arguments: { documentId: 'draft', blockId: 'p1' } }
         : lastText === 'SMALLER_FONT' ? { name: 'set_reading_font_size', arguments: { size: '调小' } }
+        : lastText === 'LOAD_TRAVEL_SKILL' ? { name: 'load_skill', arguments: { name: 'travel-writing' } }
+        : lastText === 'LOAD_MEMOIR_SKILL' ? { name: 'load_skill', arguments: { name: 'memoir-writing' } }
         : lastText === 'EDIT_DRAFT' ? { name: 'edit_document', arguments: { documentId: 'draft', expectedVersion: 1, operations: [{ action: 'replace', targetId: 'p1', block: { id: 'p1', kind: 'paragraph', text: '这是修改后的正文。' } }] } }
         : lastText === 'READ_PANEL' ? { name: 'read_document', arguments: JSON.parse(textOf(runtime)).screen.targetId === 'draft' ? { documentId: 'draft' } : {} } : false,
       text: lastText === 'MARKUP_SPEECH' ? '这是**重点**。查看[官网](https://example.com)。' : payload.tools?.length ? '你好，我是令狸。' : 'COMPACTED_MEMORY_MARKER',
@@ -143,7 +145,7 @@ test('existing endpoint uses Pi, persists history and isolates conversations', a
   assert.equal(result.usage.promptTokens, 12);
   assert.equal(result.usage.promptCacheHitTokens, 2);
   const request = requests.at(-1);
-  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'restore_document', 'read_attachment', 'set_reading_font_size']);
+  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['load_skill', 'list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'restore_document', 'read_attachment', 'set_reading_font_size']);
   assert.deepEqual(request.thinking, { type: 'disabled' });
   assert.ok(JSON.stringify(request.messages).includes('TEST_PERSONA'));
   assert.ok(!JSON.stringify(request.messages).includes('Compound Codex'));
@@ -161,6 +163,24 @@ test('existing endpoint uses Pi, persists history and isolates conversations', a
   assert.equal(trace.at(-1).type, 'run.completed');
   assert.deepEqual(trace.map((entry) => entry.sequence), trace.map((_, index) => index + 1));
 });
+
+for (const [skillName, message] of [['travel-writing', 'LOAD_TRAVEL_SKILL'], ['memoir-writing', 'LOAD_MEMOIR_SKILL']]) {
+  test(`real SDK loads ${skillName} instructions through the tool loop`, async () => {
+    const offset = requests.length;
+    const result = await service.run({ message });
+    const calls = requests.slice(offset);
+    assert.equal(calls.length, 2);
+    const skill = await readFile(new URL(`../skills/${skillName}/SKILL.md`, import.meta.url), 'utf8');
+    assert.ok(JSON.stringify(calls[0].messages).includes(skillName));
+    assert.ok(!calls[0].messages.some(m => textOf(m).includes(skill)));
+    assert.ok(calls[1].messages.some(m => m.role === 'tool' && textOf(m).includes(skill)));
+    assert.ok(result.events.some(e => e.type === 'tool.completed' && e.name === 'load_skill' && !e.isError));
+    const saved = await readFile(join(root, 'conversations', result.conversationId, 'session.jsonl'), 'utf8');
+    assert.ok(saved.includes(skillName));
+    assert.ok(!result.events.some(e => e.type === 'panel.state.updated' && e.panel.document));
+  });
+
+}
 
 test('real SDK tool loop emits panel events and counts all model calls', async () => {
   const result = await service.run({ message: 'SHOW_PANEL' });

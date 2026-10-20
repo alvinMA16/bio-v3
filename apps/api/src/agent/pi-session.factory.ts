@@ -17,6 +17,7 @@ import sharp from 'sharp';
 import type { AgentEventPayload } from '@bio/contracts';
 
 import { PanelWorkspace } from './panel-workspace.js';
+import { createProductSkills } from './skills.js';
 import { AgentStorage } from './agent-storage.js';
 import { DocumentStore, legacyDocumentId } from './document-store.js';
 import type { DocumentRuntime } from './document-runtime.js';
@@ -110,10 +111,12 @@ export class PiSessionFactory {
       compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
       retry: { enabled: true, maxRetries: 2, baseDelayMs: 1000 },
     });
+    const productSkills = createProductSkills();
     const resourceLoader = new DefaultResourceLoader({
       cwd, agentDir: cwd, settingsManager,
       noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
       systemPromptOverride: () => buildSystemPrompt(persona)
+        + productSkills.prompt
         + (searchEnabled ? GEMINI_SEARCH_RULES : '')
         + `\n当前能力：内容工具可用；长期记忆${memoryContext ? '已启用，依据下方概要与只读工具检索' : '未启用，没有跨通话检索工具；可以使用本通可见消息，但不能声称保存或记得上一通内容'}。`
         + (memoryContext ? `\n${MEMORY_RULES}\n${CALL_HISTORY_RULES}\n${memoryContext}` : ''),
@@ -167,8 +170,8 @@ export class PiSessionFactory {
     const { session } = await createAgentSession({
       cwd, agentDir: cwd, modelRuntime, model, thinkingLevel,
       settingsManager, resourceLoader, sessionManager,
-      tools: ['list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'restore_document', 'read_attachment', 'set_reading_font_size', ...memoryTools.map(t => t.name)],
-      customTools: [readingFontTool(this.storage, scope?.userId, emit, context?.readingFontControl === true), ...createPresentationTools(workspace, emit, refreshAttachments, { store: documents, user: scope?.userId, conversationId }, runtime, {
+      tools: ['load_skill', 'list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'restore_document', 'read_attachment', 'set_reading_font_size', ...memoryTools.map(t => t.name)],
+      customTools: [productSkills.tool, readingFontTool(this.storage, scope?.userId, emit, context?.readingFontControl === true), ...createPresentationTools(workspace, emit, refreshAttachments, { store: documents, user: scope?.userId, conversationId }, runtime, {
         list: async query => {
           const search = query?.trim().toLocaleLowerCase();
           const items = (await this.materials.list(scope?.userId)).filter(item => !search || `${item.title} ${item.filename}`.toLocaleLowerCase().includes(search));
