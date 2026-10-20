@@ -44,6 +44,7 @@ export function drawReceiptTexture(receipt: SessionReceipt, width: number, heigh
   edge.addColorStop(.94, '#85858100'); edge.addColorStop(1, '#85858118');
   ctx.fillStyle = edge; ctx.fillRect(0, 0, width, height);
 
+  // Fixed typography and baselines keep the receipt independent of reading preferences.
   const serif = '"Songti SC", "Noto Serif CJK SC", serif';
   const ink = '#494945';
   const left = 18, right = width - 18;
@@ -55,15 +56,15 @@ export function drawReceiptTexture(receipt: SessionReceipt, width: number, heigh
     ctx.strokeStyle = '#92928b88'; ctx.lineWidth = .65; ctx.setLineDash([2, 2.5]);
     ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke(); ctx.setLineDash([]);
   };
-  text('聊天小票', width / 2, height * .13, 26, 'center');
-  text(receipt.date, width / 2, height * .215, 13, 'center', '#75756f', 'monospace');
-  text(receipt.timeRange, width / 2, height * .29, 14, 'center', ink, 'monospace');
-  rule(height * .37);
+  text('聊天小票', width / 2, 38, 26, 'center');
+  text(receipt.date, width / 2, 62, 13, 'center', '#75756f', 'monospace');
+  text(receipt.timeRange, width / 2, 84, 14, 'center', ink, 'monospace');
+  rule(100);
   const metrics = [['聊天时长', receipt.duration], ['你发言', `${receipt.shares} 次`], ['令狸发言', `${receipt.replies} 次`]];
   metrics.forEach(([label, value], index) => {
-    text(label!, left, height * (.49 + index * .155), 15);
-    text(value!, right, height * (.49 + index * .155), 17, 'right', ink, 'monospace');
+    text(label!, left, 128 + index * 36, 15);
+    text(value!, right, 128 + index * 36, 17, 'right', ink, 'monospace');
   });
-  rule(height - 27);
+  rule(220);
   return canvas;
 }
