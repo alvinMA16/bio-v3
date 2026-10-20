@@ -459,34 +459,36 @@ body { min-width: 320px; }
 
 
 /* Felt-lined opening, lit from the same upper-left direction as the miniature set. */
-.receipt-workshop { position: absolute; z-index: 5; top: 50.1%; bottom: 2.3%; left: 6%; right: 6%; display: flex; flex-direction: column; align-items: center; color: #80715a; animation: receipt-workshop-in 350ms ease-out both; }
+.receipt-workshop { position: absolute; z-index: 5; top: 50.1%; bottom: 3%; left: 6%; right: 6%; display: flex; flex-direction: column; align-items: center; color: #80715a; animation: receipt-workshop-in 350ms ease-out both; }
 .receipt-mouth { position: absolute; top: 0; z-index: 0; flex-shrink: 0; width: 97%; height: 6cqw; border-radius: 2.6cqw; background: radial-gradient(ellipse at 40% 0, #fff9e6aa, transparent 65%), #c6b89d; box-shadow: inset 0 .35cqw .7cqw #8d7a5d70, inset 0 -.4cqw .5cqw #fffae8b0, 0 .3cqw .6cqw #fffbee; }
 .receipt-mouth::before { content: ''; position: absolute; inset: .6cqw .9cqw; border: .2cqw dashed #a08f7260; border-radius: 2cqw; }
 .receipt-mouth__well { position: absolute; inset: 1.65cqw 2.7cqw 1.4cqw; border-radius: 1.1cqw; background: #494033; box-shadow: inset 0 .9cqw 1cqw #211a11cc, 0 -.3cqw .35cqw #a6977d; }
 .receipt-mouth__lip { position: absolute; z-index: 3; height: 1.1cqw; left: 4cqw; right: 4cqw; top: 4.5cqw; border-radius: 50%; background: #dfd1b8; box-shadow: 0 -.2cqw .4cqw #71604766, 0 .3cqw .4cqw #fff8e5; }
-.receipt-stage { position: relative; z-index: 1; width: 100%; flex: 1; min-height: 0; margin-top: 2.4cqw; overflow-y: auto; overscroll-behavior: contain; }
+.receipt-stage { position: relative; z-index: 1; width: 100%; flex: 0 1 auto; min-height: 0; margin-top: 2.4cqw; padding-bottom: 10px; overflow: hidden; display: flex; justify-content: center; }
 .receipt-stage::after { content: ''; position: absolute; z-index: 2; top: 0; left: 7%; right: 7%; height: 3.2cqw; background: linear-gradient(#48392380, transparent); pointer-events: none; }
-.receipt-canvas { position: relative; height: 100%; min-height: max(250px, 88cqw); }
-.receipt-canvas canvas { display: block; width: 100%; height: 100%; }
 .receipt-readable { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .receipt-dismiss { flex-shrink: 0; padding: 10px 28px; min-width: 144px; }
 .receipt-workshop--closing { pointer-events: none; animation: receipt-workshop-out 360ms ease-in both; }
-.receipt-fallback { position: absolute; inset: 0 6% 2cqw; overflow: hidden; }
-.receipt-fallback__paper { box-sizing: border-box; height: 100%; position: relative; padding: 6cqw 5cqw 4cqw; background: #f5f5f2; color: #655a48; font: 4cqw/1.6 'Songti SC', serif; box-shadow: 1cqw 2cqw 3cqw #6f59372b; animation: receipt-physical-feed 4200ms both; }
-.receipt-fallback__paper small, .receipt-fallback__paper h2 { display: block; text-align: center; }
-.receipt-fallback__paper h2 { font-size: 5cqw; margin: 2cqw 0; }
-.receipt-fallback__paper p { margin: 2cqw 0; }
-.receipt-fallback__paper hr { border: 0; border-top: .2cqw dashed #ac9a7c; }
-.receipt-fallback__paper dl { margin: 0; }.receipt-fallback__paper dl div { display: flex; justify-content: space-between; }.receipt-fallback__paper dd { margin: 0; }
+.receipt-paper { box-sizing: border-box; width: min(88%, 280px); min-height: 0; height: auto; padding: 18px 20px; color: #4b5047; background: radial-gradient(ellipse at 20% 0, #ffffffa0, transparent 70%), #f5f5f0; box-shadow: 1px 3px 8px #3c38241f; position: relative; display: flex; flex-direction: column; gap: 14px; animation: receipt-physical-feed 4200ms both; }
+.receipt-paper header { text-align: center; flex-shrink: 0; }
+.receipt-paper h2 { margin: 0 0 8px; font: 500 18px/1.3 'Songti SC', serif; }
+.receipt-paper p { margin: 3px 0 0; font: 12px/1.4 ui-monospace, monospace; color: #72776c; }
+.receipt-paper dl { margin: 0; padding: 12px 0; border-block: 1px dashed #a4aa9a80; display: grid; gap: 12px; font: 13px/1.5 system-ui, sans-serif; }
+.receipt-paper dl div { display: flex; justify-content: space-between; gap: 10px; }
+.receipt-paper dt { flex-shrink: 0; }
+.receipt-paper dd { margin: 0; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.receipt-paper::after { content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 8px; background: linear-gradient(135deg, #f5f5f0 25%, transparent 25%) -4px 0, linear-gradient(225deg, #f5f5f0 25%, transparent 25%) -4px 0; background-size: 8px 8px; }
+@media (max-height: 650px) { .receipt-workshop { top: 43%; } .receipt-paper { padding: 14px 16px; gap: 10px; } .receipt-paper dl { gap: 8px; padding: 10px 0; } }
+@media (max-height: 450px) { .receipt-workshop { top: 8%; } }
 @keyframes receipt-physical-feed { 0%, 8.33% { transform: translateY(-100%); } 32.14%, 35.95% { transform: translateY(-73%); } 64.28%, 68.57% { transform: translateY(-34%); } 95.23%, 100% { transform: translateY(0); } }
 @keyframes receipt-workshop-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes receipt-workshop-out { to { opacity: 0; transform: translateY(1.5cqw); } }
-@media (prefers-reduced-motion: reduce) { .receipt-workshop, .receipt-fallback__paper { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .receipt-workshop, .receipt-paper { animation: none; } }
 
 .receipt-preview .phone-preview { width: 320px; max-width: 100%; }
 
-.receipt-actions { box-sizing: content-box; width: 100%; flex-shrink: 0; height: max(48px, 12cqw); padding-bottom: 3cqw; display: flex; align-items: flex-end; justify-content: center; }
-.receipt-fallback__paper::after { content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 2cqw; background: linear-gradient(135deg, #f5f5f2 25%, transparent 25%) -2cqw 0, linear-gradient(225deg, #f5f5f2 25%, transparent 25%) -2cqw 0; background-size: 4cqw 4cqw; }
+.receipt-actions { box-sizing: content-box; width: 100%; flex-shrink: 0; height: 56px; padding-bottom: 0; display: flex; align-items: flex-end; justify-content: center; }
+
 .document-reader { min-width: 0; overflow-wrap: anywhere; }
 .document-reader pre { white-space: pre-wrap; }
 

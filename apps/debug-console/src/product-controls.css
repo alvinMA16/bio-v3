@@ -1,8 +1,8 @@
 /* Shared product action material. Layout belongs to each component. */
 .phone-screen {
   --control-ink: #344e3d;
-  --control-glass: linear-gradient(135deg, #f4faeeb5, #c8dcc75c 58%, #e3efdc85);
-  --control-primary: linear-gradient(135deg, #e8f4dcce, #b8d1b58f 58%, #d4e6cbb0);
+  --control-glass: linear-gradient(135deg, #ffffff52, #dce8dd14 48%, #ffffff38);
+  --control-primary: linear-gradient(135deg, #f2ffe975, #c0d9c32e 48%, #e9f5e852);
   --control-highlight: #ffffffcf;
   --control-shadow: #344d3524;
   --control-ring: #66856b;
@@ -10,7 +10,7 @@
 .phone-screen--conversation, .phone-screen--dialing {
   --control-ink: #edf5ed;
   --control-glass: linear-gradient(145deg, #eefbe52b, #c4dec511 55%, #e4f2dc21);
-  --control-primary: linear-gradient(135deg, #e5f5d970, #aecbb540 58%, #d3e8ce52);
+  --control-primary: linear-gradient(135deg, #f4ffed45, #aecbb51a 48%, #e7f8e432);
   --control-highlight: #ffffff70;
   --control-shadow: #06120b30;
   --control-ring: #c5deca;
@@ -18,14 +18,14 @@
 .phone-screen button.product-control {
   position: relative; isolation: isolate; border: 0; border-radius: 24px;
   min-height: 44px; color: var(--control-ink); background: var(--control-surface, var(--control-glass));
-  box-shadow: inset 0 1px 0 var(--control-highlight), inset 0 -1px 0 #c5dec52b, 0 4px 14px var(--control-shadow);
-  -webkit-backdrop-filter: blur(22px) saturate(135%); backdrop-filter: blur(22px) saturate(135%);
+  box-shadow: inset 0 1px 1px var(--control-highlight), inset 1px 0 1px #ffffff80, inset -1px -1px 1px #7d9a8550, 0 2px 3px #243e2512, 0 7px 18px var(--control-shadow);
+  -webkit-backdrop-filter: blur(10px) saturate(160%); backdrop-filter: blur(10px) saturate(160%);
   font-family: inherit; font-size: 14px; line-height: 1.5; letter-spacing: normal;
   cursor: pointer; transition: filter 150ms ease, transform 150ms ease;
 }
 .phone-screen button.product-control::after {
   content: ''; position: absolute; inset: 1px; border-radius: inherit; pointer-events: none;
-  background: radial-gradient(ellipse at 24% 0, #ffffff24, transparent 65%); z-index: -1;
+  background: linear-gradient(115deg, #ffffff45, transparent 24%, transparent 72%, #ffffff25), radial-gradient(ellipse at 50% 100%, #ffffff30, transparent 62%); z-index: -1;
 }
 .phone-screen button.product-control--primary { --control-surface: var(--control-primary); }
 .phone-screen button.product-control--danger { color: #8b3939; --control-surface: linear-gradient(135deg,#fff1ecb0,#e1bdb65c); }
@@ -42,6 +42,13 @@
 .phone-screen .material-folder .material-filters {
   background: var(--control-glass);
   box-shadow: inset 0 1px 0 var(--control-highlight), 0 4px 14px var(--control-shadow);
-  -webkit-backdrop-filter: blur(22px) saturate(135%); backdrop-filter: blur(22px) saturate(135%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%); backdrop-filter: blur(10px) saturate(160%);
 }
 .phone-screen.phone-screen--call .slide-to-end-label { color: var(--control-ink); }
+
+/* A clear edge lens on the track; the moving thumb remains a distinct glass object. */
+.phone-screen.phone-screen--call .slide-to-end { isolation: isolate; box-shadow: inset 0 1px 1px #ffffffb0, inset 1px 0 1px #ffffff70, inset 0 -1px 1px #69817445, 0 5px 16px var(--control-shadow); }
+.phone-screen.phone-screen--call .slide-to-end::before { content: ''; position: absolute; inset: 1px; border-radius: inherit; pointer-events: none; background: linear-gradient(115deg, #ffffff40, transparent 30%, transparent 70%, #ffffff30); }
+.phone-screen.phone-screen--call .slide-to-end-thumb { background: linear-gradient(140deg, #ffb4b6aa, #dc4b5785 50%, #f7a4a76b); box-shadow: inset 0 1px 1px #ffffffd9, inset 1px 0 1px #ffffff80, inset -1px -1px 1px #9d314a80, 0 3px 7px #76273426; -webkit-backdrop-filter: blur(8px) saturate(180%); backdrop-filter: blur(8px) saturate(180%); }
+.phone-screen.phone-screen--call .slide-to-end--dragging .slide-to-end-thumb { background: linear-gradient(110deg, #ffdadbba, #e3697380 58%, #ffc4c684); box-shadow: inset 0 1px 2px #ffffffed, inset -1px -1px 1px #a4344e70, 0 4px 10px #76273430; }
+@media (prefers-reduced-transparency: reduce) { .phone-screen { --control-glass: #e6eee4; --control-primary: #d8e8d4; } .phone-screen--conversation, .phone-screen--dialing { --control-glass: #35453b; --control-primary: #48604d; } }
