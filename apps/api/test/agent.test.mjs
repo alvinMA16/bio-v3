@@ -47,13 +47,13 @@ beforeEach(async () => { await rm(join(root, 'documents'), { recursive: true, fo
 before(async () => {
   root = await mkdtemp(join(tmpdir(), 'bio-pi-test-'));
   mock = createServer(async (request, response) => {
-    let body = '';
-    for await (const chunk of request) body += chunk;
-    const payload = JSON.parse(body);
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    const payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     requests.push(payload);
 
     const last = payload.messages.at(-1);
-    const lastText = typeof last?.content === 'string' ? last.content : last?.content?.map((part) => part.text ?? '').join('');
+    let lastText = typeof last?.content === 'string' ? last.content : last?.content?.map((part) => part.text ?? '').join('');
     if (lastText === 'HOLD') {
       onHeldRequest?.();
       return;
@@ -64,10 +64,11 @@ before(async () => {
       return;
     }
     const lastCall = payload.messages.at(-2)?.tool_calls?.[0]?.function;
+    if (last?.role === 'tool' && lastCall?.name === 'load_skill' && JSON.parse(lastCall.arguments).name === 'document' && textOf(payload.messages.findLast(message => message.role === 'user')) !== 'LOAD_DOCUMENT_SKILL') lastText = textOf(payload.messages.findLast(message => message.role === 'user'));
     const showAfterEdit = last?.role === 'tool' && lastCall?.name === 'edit_document'
       && textOf(payload.messages.findLast(message => message.role === 'user')) === 'SHOW_PANEL';
     const runtime = snapshots(payload)[0];
-    sendCompletion(response, {
+    const completion = {
       model: payload.model,
       characterChunks: lastText === 'MARKUP_SPEECH',
       tool: showAfterEdit ? { name: 'show_document', arguments: { documentId: 'draft' } }
@@ -79,13 +80,16 @@ before(async () => {
         : lastText === 'NARRATE_DRAFT' ? { name: 'narrate_document', arguments: { documentId: 'draft', scope: 'all' } }
         : lastText === 'FOCUS_DRAFT' ? { name: 'show_document', arguments: { documentId: 'draft', blockId: 'p1' } }
         : lastText === 'DARK_BACKGROUND' ? { name: 'set_document_background_color', arguments: { backgroundColor: '#102030' } }
-        : lastText === 'SMALLER_FONT' ? { name: 'set_reading_font_size', arguments: { size: '调小' } }
+        : lastText === 'SMALLER_FONT' ? { name: 'set_document_font_size', arguments: { size: '调小' } }
+        : lastText === 'LOAD_DOCUMENT_SKILL' ? { name: 'load_skill', arguments: { name: 'document' } }
         : lastText === 'LOAD_TRAVEL_SKILL' ? { name: 'load_skill', arguments: { name: 'travel-writing' } }
         : lastText === 'LOAD_MEMOIR_SKILL' ? { name: 'load_skill', arguments: { name: 'memoir-writing' } }
         : lastText === 'EDIT_DRAFT' ? { name: 'edit_document', arguments: { documentId: 'draft', expectedVersion: 1, operations: [{ action: 'replace', targetId: 'p1', block: { id: 'p1', kind: 'paragraph', text: '这是修改后的正文。' } }] } }
         : lastText === 'READ_PANEL' ? { name: 'read_document', arguments: JSON.parse(textOf(runtime)).screen.targetId === 'draft' ? { documentId: 'draft' } : {} } : false,
       text: lastText === 'MARKUP_SPEECH' ? '这是**重点**。查看[官网](https://example.com)。' : payload.tools?.length ? '你好，我是令狸。' : 'COMPACTED_MEMORY_MARKER',
-    });
+    };
+    if (completion.tool && !payload.tools?.some(t => t.function.name === (completion.tool === true ? 'edit_document' : completion.tool.name))) completion.tool = { name: 'load_skill', arguments: { name: 'document' } };
+    sendCompletion(response, completion);
   });
   mock.listen(0, '127.0.0.1');
   await once(mock, 'listening');
@@ -132,7 +136,7 @@ test('retired receipt summary endpoint does not invoke the model', async () => {
 test('font tool updates the live UI and next session preference endpoint without editing manuscripts', async () => {
   const result = await service.run({ message: 'SMALLER_FONT', context: { readingFontControl: true } });
   assert.ok(result.events.some(e => e.type === 'reading.preference.updated' && e.previousFontSize === '标准' && e.fontSize === '较小'));
-  assert.ok(result.events.some(e => e.type === 'tool.completed' && e.name === 'set_reading_font_size' && !e.isError));
+  assert.ok(result.events.some(e => e.type === 'tool.completed' && e.name === 'set_document_font_size' && !e.isError));
   assert.deepEqual(await (await fetch(`${baseUrl}/api/v1/agent/reading-preferences`)).json(), { fontSize: '较小', backgroundColor: '#FCFCF9' });
   const next = await service.run({ message: '新的对话' });
   assert.ok(next.events.some(e => e.type === 'reading.preference.updated' && e.fontSize === '较小' && !e.previousFontSize));
@@ -147,7 +151,7 @@ test('existing endpoint uses Pi, persists history and isolates conversations', a
   assert.equal(result.usage.promptTokens, 12);
   assert.equal(result.usage.promptCacheHitTokens, 2);
   const request = requests.at(-1);
-  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['load_skill', 'list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'narrate_document', 'restore_document', 'read_attachment', 'set_reading_font_size', 'set_document_background_color']);
+  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['load_skill', 'list_attachments', 'switch_mode', 'read_attachment']);
   assert.deepEqual(request.thinking, { type: 'disabled' });
   assert.ok(JSON.stringify(request.messages).includes('TEST_PERSONA'));
   assert.ok(!JSON.stringify(request.messages).includes('Compound Codex'));
@@ -189,7 +193,7 @@ test('real SDK tool loop emits panel events and counts all model calls', async (
   const panel = result.events.find((event) => event.type === 'panel.state.updated' && event.panel.document);
   assert.equal(panel.panel.document.blocks[0].text, '这是正文。');
   assert.ok(result.events.some((event) => event.type === 'tool.completed' && !event.isError));
-  assert.equal(result.usage.totalTokens, 51);
+  assert.equal(result.usage.totalTokens, 68);
   assert.ok(requests.at(-1).messages.some((message) => message.role === 'tool'));
   assert.ok(storage.readTrace(result.runId).some((entry) => entry.type === 'tool_execution_end'));
   const list = await (await fetch(`${baseUrl}/api/v1/agent/manuscripts`)).json();
@@ -369,7 +373,7 @@ test('runtime snapshot remains before user during tool loop for both providers',
     } });
     await response.text();
     const calls = requests.slice(start);
-    assert.equal(calls.length, 3);
+    assert.equal(calls.length, 4);
     for (const call of calls) {
       assert.equal(snapshots(call).length, 1);
       const index = call.messages.findIndex(message => textOf(message) === 'SHOW_PANEL');
@@ -379,7 +383,7 @@ test('runtime snapshot remains before user during tool loop for both providers',
     assert.ok(calls[1].messages.at(-2).tool_calls.length);
     const before = JSON.parse(textOf(snapshots(calls[0])[0]));
     const switched = JSON.parse(textOf(snapshots(calls[1])[0]));
-    const after = JSON.parse(textOf(snapshots(calls[2])[0]));
+    const after = JSON.parse(textOf(snapshots(calls[3])[0]));
     assert.equal(before.scene, 'conversation');
     assert.equal(after.scene, 'revision');
     assert.equal(switched.scene, 'conversation');
@@ -645,4 +649,55 @@ test('background tool is available in the Pi loop and persists to a new session'
   assert.ok(!result.events.some(e => e.type === 'tool.started' && e.name === 'edit_document'));
   const next = await service.run({ message: '新的对话' });
   assert.ok(next.events.some(e => e.type === 'document.background.updated' && e.backgroundColor === '#102030'));
+});
+
+test('document mode does not auto-load; model loading activates tools once and persists across factory reconstruction', async () => {
+  const conversationId = randomUUID();
+  const context = { scene: 'revision', readingFontControl: true };
+  let session = await factory.create(conversationId, undefined, () => {}, undefined, context);
+  try {
+    assert.ok(!session.getActiveToolNames().includes('edit_document'));
+    await session.prompt('你好');
+    assert.ok(!requests.at(-1).tools.some(t => t.function.name === 'edit_document'));
+    const start = requests.length;
+    await session.prompt('SMALLER_FONT');
+    const calls = requests.slice(start);
+    assert.equal(calls.length, 3);
+    assert.ok(!calls[0].tools.some(t => t.function.name === 'set_document_font_size'));
+    assert.ok(calls[1].tools.some(t => t.function.name === 'set_document_font_size'));
+    assert.deepEqual(JSON.parse(textOf(snapshots(calls[1])[0])).loadedSkills, ['document']);
+    assert.deepEqual(JSON.parse(textOf(snapshots(calls[1])[0])).skillInstructionsMissing, []);
+    assert.deepEqual(calls[1].tools, calls[2].tools);
+    assert.equal(session.messages.filter(m => m.role === 'toolResult' && m.toolName === 'load_skill').length, 1);
+  } finally { session.dispose(); }
+  session = await factory.create(conversationId, undefined, () => {}, undefined, context);
+  try {
+    assert.ok(session.getActiveToolNames().includes('edit_document'));
+    const start = requests.length;
+    await session.prompt('SMALLER_FONT');
+    assert.equal(requests.length - start, 2);
+  } finally { session.dispose(); }
+  const independent = await factory.create(randomUUID(), undefined, () => {}, undefined, context);
+  try { assert.ok(!independent.getActiveToolNames().includes('edit_document')); } finally { independent.dispose(); }
+});
+
+
+test('duplicate skill loads keep tool schemas stable; reconnect restores only the same call scope', async () => {
+  const conversationId = randomUUID();
+  const scope = { userId: 'skill-test-user', callId: 'call-a' };
+  let session = await factory.create(conversationId, undefined, () => {}, undefined, undefined, scope);
+  try {
+    await session.prompt('LOAD_DOCUMENT_SKILL');
+    const tools = requests.at(-1).tools;
+    await session.prompt('LOAD_DOCUMENT_SKILL');
+    const loads = session.messages.filter(m => m.role === 'toolResult' && m.toolName === 'load_skill');
+    assert.equal(loads.length, 2);
+    assert.equal(loads[1].details.status, 'already_loaded');
+    assert.ok(loads[1].content[0].text.length < loads[0].content[0].text.length);
+    assert.deepEqual(requests.at(-1).tools, tools);
+  } finally { session.dispose(); }
+  session = await factory.create(conversationId, undefined, () => {}, undefined, undefined, scope);
+  try { assert.ok(session.getActiveToolNames().includes('edit_document')); } finally { session.dispose(); }
+  session = await factory.create(conversationId, undefined, () => {}, undefined, undefined, { ...scope, callId: 'call-b' });
+  try { assert.ok(!session.getActiveToolNames().includes('edit_document')); } finally { session.dispose(); }
 });

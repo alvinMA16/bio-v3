@@ -64,3 +64,37 @@ test('bundled writing skills are independently discoverable and load only the se
   assert.ok(!prompt.includes('personal-narrative'));
   await assert.rejects(tool.execute('call', { name: 'personal-narrative' }), /技能不存在/);
 });
+
+test('skill activation is idempotent and compacted instructions can be read again without reactivation', async () => {
+  const activations = [];
+  const skills = createProductSkills(undefined, { activate: (...args) => activations.push(args) });
+  assert.deepEqual(skills.state().loadedSkills, []);
+  assert.deepEqual(skills.enabledTools(), []);
+  const first = await skills.tool.execute('1', { name: 'document' });
+  assert.equal(activations.length, 1);
+  assert.ok(skills.enabledTools().includes('set_document_font_size'));
+  assert.deepEqual(skills.state(), { loadedSkills: ['document'], skillInstructionsMissing: [] });
+  const duplicate = await skills.tool.execute('2', { name: 'document' });
+  assert.equal(duplicate.details.status, 'already_loaded');
+  assert.ok(duplicate.content[0].text.length < first.content[0].text.length);
+  assert.equal(activations.length, 1);
+  skills.syncInstructions([{ role: 'toolResult', toolName: 'load_skill', content: first.content, isError: false }]);
+  assert.equal((await skills.tool.execute('3', { name: 'document' })).details.status, 'already_loaded');
+  skills.syncInstructions([{ role: 'user', content: first.content }]);
+  assert.deepEqual(skills.state().skillInstructionsMissing, ['document']);
+  assert.equal((await skills.tool.execute('4', { name: 'document' })).content[0].text, first.content[0].text);
+  assert.equal(activations.length, 1);
+  const restored = createProductSkills(undefined, { loaded: ['document', 'unknown'], activate: () => assert.fail('Already active') });
+  assert.deepEqual(restored.state().loadedSkills, ['document']);
+  assert.ok(restored.enabledTools().includes('edit_document'));
+  assert.equal((await restored.tool.execute('5', { name: 'document' })).content[0].text, first.content[0].text);
+});
+
+test('failed and aborted activation never mark a skill loaded', async () => {
+  const skills = createProductSkills(undefined, { activate: () => { throw Error('activation failed'); } });
+  await assert.rejects(skills.tool.execute('1', { name: 'document' }), /activation failed/);
+  assert.deepEqual(skills.state().loadedSkills, []);
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(skills.tool.execute('2', { name: 'document' }, controller.signal));
+  assert.deepEqual(skills.enabledTools(), []);
+});

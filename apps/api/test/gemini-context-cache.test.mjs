@@ -203,7 +203,7 @@ for (const rejectCached of [false, true]) test(`real Pi/Google SDK cached tool l
       res.end(JSON.stringify({ error: { code: 404, status: 'NOT_FOUND', message: 'Cached content expired' } })); return;
     }
     successful++;
-    const parts = successful === 2 ? [{ functionCall: { name: 'read_document', args: {} } }] : [{ text: '收到。' }];
+    const parts = successful === 2 ? [{ functionCall: { name: 'read_attachment', args: { attachmentId: 'missing' } } }] : [{ text: '收到。' }];
     res.writeHead(200, { 'content-type': 'text/event-stream' });
     res.end(`data: ${JSON.stringify({ candidates: [{ content: { role: 'model', parts }, finishReason: 'STOP' }],
       usageMetadata: { promptTokenCount: 6000, candidatesTokenCount: 2, totalTokenCount: 6002, ...(body.cachedContent ? { cachedContentTokenCount: 5000 } : {}) } })}\n\n`);
@@ -216,18 +216,18 @@ for (const rejectCached of [false, true]) test(`real Pi/Google SDK cached tool l
       observations.push({ type, ...data }); if (type === 'model.cache' && data.action === 'created') ready();
     });
     await session.prompt('第一轮'); await prepared;
-    await session.prompt('请读取文稿');
+    await session.prompt('请读取附件');
     assert.equal(successful, 3);
     assert.equal(generations.length, rejectCached ? 4 : 3);
     assert.equal(generations[1].cachedContent, 'cachedContents/sdk-test');
     assert.equal(generations[1].systemInstruction, undefined);
     assert.equal(generations[1].tools, undefined);
     assert.ok(caches[0].tools.some(tool => tool.googleSearch));
-    assert.ok(caches[0].tools.some(tool => tool.functionDeclarations?.some(fn => fn.name === 'read_document')));
+    assert.ok(caches[0].tools.some(tool => tool.functionDeclarations?.some(fn => fn.name === 'read_attachment')));
     assert.equal(caches[0].toolConfig.includeServerSideToolInvocations, true);
     assert.ok(!JSON.stringify(caches[0].contents).includes('bio_runtime_context'));
     for (const p of generations) assert.ok(p.contents.at(-1).parts[0].text.startsWith('{"type":"bio_runtime_context"'));
-    assert.ok(generations.at(-1).contents.some(c => c.parts.some(p => p.functionResponse?.name === 'read_document')));
+    assert.ok(generations.at(-1).contents.some(c => c.parts.some(p => p.functionResponse?.name === 'read_attachment')));
     if (rejectCached) {
       assert.ok(generations[2].tools);
       assert.deepEqual(generations[2].contents, [...caches[0].contents, ...generations[1].contents]);

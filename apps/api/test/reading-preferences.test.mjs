@@ -13,6 +13,7 @@ test('reading size persists by user across new storage instances, moves one step
   try {
     const config = new ConfigService({ AGENT_DATA_DIR: root }), storage = new AgentStorage(config), events = [];
     const tool = readingFontTool(storage, 'alice', event => events.push(event));
+    assert.equal(tool.name, 'set_document_font_size');
     const adjust = async size => JSON.parse((await tool.execute('font', { size })).content[0].text);
     assert.equal(storage.readingFontSize('alice'), '标准');
     assert.equal((await adjust('调小')).fontSize, '较小');

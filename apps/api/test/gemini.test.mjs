@@ -31,7 +31,8 @@ test(`${modelId} native streaming executes tools with search=${searchEnabled}`, 
     for await (const chunk of req) raw += chunk;
     requests.push({ url: req.url, headers: req.headers, body: JSON.parse(raw) });
     const parts = requests.length === 1
-      ? [{ text: '我先看看你的文稿。' }, { functionCall: { name: 'read_document', args: {} } }]
+      ? [{ text: '我先看看你的文稿。' }, { functionCall: { name: 'load_skill', args: { name: 'document' } } }]
+      : requests.length === 2 ? [{ functionCall: { name: 'read_document', args: {} } }]
       : [{ text: 'Gemini 已读取内容。' }];
     res.writeHead(200, { 'content-type': 'text/event-stream' });
     res.end(`data: ${JSON.stringify({ candidates: [{ content: { role: 'model', parts }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 5, totalTokenCount: 17 } })}\n\n`);
@@ -52,23 +53,24 @@ test(`${modelId} native streaming executes tools with search=${searchEnabled}`, 
     await session.prompt('请读取内容');
     const preamble = session.messages.find(message => message.role === 'assistant');
     assert.ok(preamble.content.some(part => part.type === 'text' && part.text === '我先看看你的文稿。'));
-    assert.ok(preamble.content.some(part => part.type === 'toolCall' && part.name === 'read_document'));
+    assert.ok(preamble.content.some(part => part.type === 'toolCall' && part.name === 'load_skill'));
     assert.ok(streamed.indexOf('speech') < streamed.indexOf('tool'));
-    assert.equal(requests.length, 2);
-    assert.equal(observations.filter(e => e.type === 'model.request').length, 2);
-    assert.equal(observations.filter(e => e.type === 'model.response').length, 2);
+    assert.equal(requests.length, 3);
+    assert.equal(observations.filter(e => e.type === 'model.request').length, 3);
+    assert.equal(observations.filter(e => e.type === 'model.response').length, 3);
     assert.equal(observations.find(e => e.type === 'model.response').data.inputTokens, 12);
     assert.ok(!JSON.stringify(observations).includes('gemini-local-test-key'));
     assert.equal(requests[0].url, `/v1beta/models/${modelId}:streamGenerateContent?alt=sse`);
     assert.equal(requests[0].body.generationConfig.thinkingConfig.thinkingLevel, thinkingLevel);
     assert.equal(requests[0].headers['x-goog-api-key'], 'gemini-local-test-key');
     assert.ok(requests[0].body.systemInstruction);
-    assert.ok(requests[0].body.tools[0].functionDeclarations.some(tool => tool.name === 'read_document'));
+    assert.ok(!requests[0].body.tools[0].functionDeclarations.some(tool => tool.name === 'read_document'));
+    assert.ok(requests[1].body.tools[0].functionDeclarations.some(tool => tool.name === 'read_document'));
     for (const request of requests) {
       assert.equal(request.body.tools.filter(tool => tool.googleSearch).length, searchEnabled ? 1 : 0);
       assert.equal(request.body.toolConfig?.includeServerSideToolInvocations, searchEnabled ? true : undefined);
     }
-    assert.ok(requests[1].body.contents.some(content => content.parts.some(part => part.functionResponse?.name === 'read_document')));
+    assert.ok(requests[2].body.contents.some(content => content.parts.some(part => part.functionResponse?.name === 'read_document')));
     const reply = session.messages.at(-1);
     assert.equal(reply.role, 'assistant');
     assert.ok(reply.content.some(part => part.text === 'Gemini 已读取内容。'));

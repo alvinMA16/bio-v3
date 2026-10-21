@@ -17,7 +17,7 @@ import sharp from 'sharp';
 import type { AgentEventPayload } from '@bio/contracts';
 
 import { PanelWorkspace } from './panel-workspace.js';
-import { createProductSkills } from './skills.js';
+import { createProductSkills, DOCUMENT_TOOLS } from './skills.js';
 import { AgentStorage } from './agent-storage.js';
 import { DocumentStore, legacyDocumentId } from './document-store.js';
 import type { DocumentRuntime } from './document-runtime.js';
@@ -112,31 +112,44 @@ export class PiSessionFactory {
       compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
       retry: { enabled: true, maxRetries: 2, baseDelayMs: 1000 },
     });
-    const productSkills = createProductSkills();
+    const sessionManager = SessionManager.open(join(cwd, 'session.jsonl'), cwd, cwd);
+    const skillScope = scope?.callId ?? 'conversation';
+    const savedSkills = sessionManager.getBranch().filter(entry => entry.type === 'custom' && entry.customType === 'bio_loaded_skills').at(-1);
+    const saved = savedSkills?.type === 'custom' ? savedSkills.data as { scope?: string; loaded?: string[] } : undefined;
+    let activeSession: Awaited<ReturnType<typeof createAgentSession>>['session'] | undefined;
+    const baseTools = ['load_skill', 'list_attachments', 'switch_mode', 'read_attachment', ...memoryTools.map(t => t.name)];
+    const productSkills = createProductSkills(undefined, {
+      loaded: saved?.scope === skillScope ? saved.loaded ?? [] : [],
+      activate: (_name, tools, loaded) => {
+        if (!activeSession) throw new Error('技能运行环境尚未准备完成');
+        activeSession.setActiveToolsByName([...new Set([...activeSession.getActiveToolNames(), ...tools])]);
+        sessionManager.appendCustomEntry('bio_loaded_skills', { scope: skillScope, loaded });
+      },
+    });
     const resourceLoader = new DefaultResourceLoader({
       cwd, agentDir: cwd, settingsManager,
       noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
       systemPromptOverride: () => buildSystemPrompt(persona)
         + productSkills.prompt
         + (searchEnabled ? GEMINI_SEARCH_RULES : '')
-        + `\n当前能力：内容工具可用；长期记忆${memoryContext ? '已启用，依据下方概要与只读工具检索' : '未启用，没有跨通话检索工具；可以使用本通可见消息，但不能声称保存或记得上一通内容'}。`
+        + `\n当前能力：附件工具可用，文稿操作需先加载 document 技能；长期记忆${memoryContext ? '已启用，依据下方概要与只读工具检索' : '未启用，没有跨通话检索工具；可以使用本通可见消息，但不能声称保存或记得上一通内容'}。`
         + (memoryContext ? `\n${MEMORY_RULES}\n${CALL_HISTORY_RULES}\n${memoryContext}` : ''),
       extensionFactories: [...(searchEnabled ? [geminiSearch] : []), materialHistoryContext(nativeAttachments, refreshAttachments), createContextExtension(() => {
         const clientView = runtime?.getView?.();
         if (clientView && JSON.stringify(clientView) !== lastClientView) {
           workspace.acceptDocumentView(clientView); lastClientView = JSON.stringify(clientView);
         }
+        productSkills.syncInstructions(activeSession?.messages ?? sessionManager.buildSessionContext().messages);
         const view = workspace.context(!!runtime?.narrate);
         if (nativeGemini && view.attachment && nativeAttachments.some(item => item.attachmentId === view.attachment!.id)) {
           view.attachment.text = undefined;
           view.attachment.textTruncated = false;
         }
-        return JSON.stringify({ ...JSON.parse(buildRuntimeContext(context, view, this.storage.readingFontSize(scope?.userId))), documentBackgroundColor: this.storage.documentBackground(scope?.userId).backgroundColor }) + (recoveryContext ? `\n${recoveryContext}` : '');
+        return JSON.stringify({ ...JSON.parse(buildRuntimeContext(context, view, this.storage.readingFontSize(scope?.userId))), documentBackgroundColor: this.storage.documentBackground(scope?.userId).backgroundColor, ...productSkills.state() }) + (recoveryContext ? `\n${recoveryContext}` : '');
       }, nativeGemini), ...(nativeGemini ? [geminiAttachmentContext(this.nativeFiles, nativeAttachments, scope?.userId, onUnavailable),
         ...(observe ? [this.observations.extension(cwd, observe)] : [])] : [])],
     });
     await resourceLoader.reload();
-    const sessionManager = SessionManager.open(join(cwd, 'session.jsonl'), cwd, cwd);
     for (const [index, attachment] of materialAttachments.entries()) {
       const materialId = selected[index]!.materialId;
       const recorded = sessionManager.getEntries().some(entry => entry.type === 'custom_message' && entry.customType === 'bio_material_attachment' && (entry.details as { attachmentId?: string } | undefined)?.attachmentId === attachment.id);
@@ -171,7 +184,7 @@ export class PiSessionFactory {
     const { session } = await createAgentSession({
       cwd, agentDir: cwd, modelRuntime, model, thinkingLevel,
       settingsManager, resourceLoader, sessionManager,
-      tools: ['load_skill', 'list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'narrate_document', 'restore_document', 'read_attachment', 'set_reading_font_size', 'set_document_background_color', ...memoryTools.map(t => t.name)],
+      tools: [...baseTools, ...DOCUMENT_TOOLS],
       customTools: [productSkills.tool, documentBackgroundTool(this.storage, scope?.userId, emit, context?.documentBackgroundControl === true), readingFontTool(this.storage, scope?.userId, emit, context?.readingFontControl === true), ...createPresentationTools(workspace, emit, refreshAttachments, { store: documents, user: scope?.userId, conversationId }, runtime, {
         list: async query => {
           const search = query?.trim().toLocaleLowerCase();
@@ -197,6 +210,8 @@ export class PiSessionFactory {
         },
       }), ...memoryTools],
     });
+    activeSession = session;
+    session.setActiveToolsByName([...baseTools, ...productSkills.enabledTools()]);
     return session;
   }
 }
