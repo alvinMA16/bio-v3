@@ -1,3 +1,4 @@
+import { installGlassOptics } from './glass-optics';
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { PhonePreview } from './phone-preview';
@@ -16,3 +17,6 @@ function ReceiptPreview() {
 const root = createRoot(document.getElementById('root')!);
 root.render(<ReceiptPreview />);
 if (import.meta.hot) import.meta.hot.dispose(() => root.unmount());
+
+const disposeGlass = installGlassOptics();
+if (import.meta.hot) import.meta.hot.dispose(disposeGlass);

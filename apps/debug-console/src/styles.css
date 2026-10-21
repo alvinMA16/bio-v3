@@ -542,12 +542,8 @@ body { min-width: 320px; }
 .phone-screen.phone-screen--call:is(.phone-screen--editor, .phone-screen--attachment):not(.phone-screen--dialing) { background: radial-gradient(ellipse at 12% 85%, #f7faf4b3, transparent 55%), linear-gradient(145deg, #e8ede9, #dfe8e2); }
 .phone-screen--call:is(.phone-screen--editor, .phone-screen--attachment) .phone-call-status--glass { margin-bottom: -8px; }
 .phone-screen.phone-screen--call:is(.phone-screen--editor, .phone-screen--attachment) .phone-call-controls { margin: 0 12px 8px; }
-.phone-screen--call:is(.phone-screen--editor, .phone-screen--attachment) .slide-to-end { background: linear-gradient(135deg, #f6faf3b8, #d2e0d5b3); box-shadow: inset 0 1px 0 #ffffffc9, 0 3px 12px #354b3810; backdrop-filter: blur(16px); }
 .phone-call-controls .document-call-state { min-width: 44px; text-align: left; font-size: 14px; color: inherit; }
 .phone-call-controls .document-call-state small { display: block; font-size: 11px; margin-top: 5px; color: inherit; opacity: .55; font-variant-numeric: tabular-nums; }
-.phone-screen--conversation .slide-to-end { background: #ffffff0e; box-shadow: inset 0 1px 0 #ffffff12; }
-.phone-screen--conversation .slide-to-end-label { color: #edf3ed; }
-.phone-screen--conversation .slide-to-end-thumb { background: #ed4149; }
 .phone-screen--conversation .phone-call-status--glass span { color: #f0f3ee; text-shadow: 0 1px 8px #101c22; }
 .phone-dialing { flex: 1; min-height: 0; display: flex; align-items: center; flex-direction: column; padding: 40px 24px max(28px, env(safe-area-inset-bottom)); text-align: center; overflow: hidden; }
 .phone-dial-center { display: flex; flex: 1; min-height: 0; width: 100%; flex-direction: column; align-items: center; justify-content: safe center; overflow-y: auto; padding: 32px 0 48px; }

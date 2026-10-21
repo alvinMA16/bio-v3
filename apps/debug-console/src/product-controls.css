@@ -1,54 +1,60 @@
-/* Shared product action material. Layout belongs to each component. */
-.phone-screen {
-  --control-ink: #344e3d;
-  --control-glass: linear-gradient(135deg, #ffffff52, #dce8dd14 48%, #ffffff38);
-  --control-primary: linear-gradient(135deg, #f2ffe975, #c0d9c32e 48%, #e9f5e852);
-  --control-highlight: #ffffffcf;
-  --control-shadow: #344d3524;
+/* Clear optical glass. Component styles own layout; this file owns material. */
+.phone-screen, .account-card {
+  --control-ink: #294535;
+  --control-glass: rgb(205 230 202 / 5.5%);
+  --control-primary: rgb(192 223 187 / 9%);
+  --control-highlight: #ffffffa8;
+  --control-shadow: #2037291c;
   --control-ring: #66856b;
 }
 .phone-screen--conversation, .phone-screen--dialing {
   --control-ink: #edf5ed;
-  --control-glass: linear-gradient(145deg, #eefbe52b, #c4dec511 55%, #e4f2dc21);
-  --control-primary: linear-gradient(135deg, #f4ffed45, #aecbb51a 48%, #e7f8e432);
-  --control-highlight: #ffffff70;
-  --control-shadow: #06120b30;
+  --control-highlight: #ffffff65;
+  --control-shadow: #06120b35;
   --control-ring: #c5deca;
 }
-.phone-screen button.product-control {
-  position: relative; isolation: isolate; border: 0; border-radius: 24px;
-  min-height: 44px; color: var(--control-ink); background: var(--control-surface, var(--control-glass));
-  box-shadow: inset 0 1px 1px var(--control-highlight), inset 1px 0 1px #ffffff80, inset -1px -1px 1px #7d9a8550, 0 2px 3px #243e2512, 0 7px 18px var(--control-shadow);
-  -webkit-backdrop-filter: blur(10px) saturate(160%); backdrop-filter: blur(10px) saturate(160%);
+.phone-screen button.product-control, .phone-screen .material-folder button.product-control, .account-page .account-card button, .account-card button.account-submit,
+.phone-screen.phone-screen--call .slide-to-end,
+.phone-screen.phone-screen--call .slide-to-end-thumb,
+.phone-screen .material-folder .material-filters,
+.phone-screen .material-folder :is(.material-add, .search-clear),
+.phone-screen .document-highlight-note button {
+  color: var(--control-ink); border: 0;
+  background: var(--control-surface, var(--control-glass));
+  box-shadow: inset 0 1px .5px var(--control-highlight), inset -.5px -1px .5px #68816e38, 0 3px 9px var(--control-shadow);
+  /* Native transparent fallback; URL optics affect only the backdrop, not labels. */
+  -webkit-backdrop-filter: blur(.35px) saturate(105%);
+  backdrop-filter: var(--glass-optics, blur(.35px)) saturate(105%);
+}
+.phone-screen button.product-control, .phone-screen .material-folder button.product-control, .account-page .account-card button, .account-card button.account-submit {
+  position: relative; isolation: isolate; border-radius: 24px; min-height: 44px;
   font-family: inherit; font-size: 14px; line-height: 1.5; letter-spacing: normal;
-  cursor: pointer; transition: filter 150ms ease, transform 150ms ease;
+  cursor: pointer; transition: transform 150ms ease, box-shadow 150ms ease;
 }
-.phone-screen button.product-control::after {
-  content: ''; position: absolute; inset: 1px; border-radius: inherit; pointer-events: none;
-  background: linear-gradient(115deg, #ffffff45, transparent 24%, transparent 72%, #ffffff25), radial-gradient(ellipse at 50% 100%, #ffffff30, transparent 62%); z-index: -1;
+.phone-screen button.product-control::after,
+.phone-screen.phone-screen--call .slide-to-end::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  /* A narrow rim reflection, with no milky highlight across the clear centre. */
+  background: none; box-shadow: inset .5px 0 .5px #ffffff50;
 }
-.phone-screen button.product-control--primary { --control-surface: var(--control-primary); }
-.phone-screen button.product-control--danger { color: #8b3939; --control-surface: linear-gradient(135deg,#fff1ecb0,#e1bdb65c); }
-.phone-screen button.product-control:hover:not(:disabled) { filter: brightness(1.06); }
-.phone-screen button.product-control:active:not(:disabled) { transform: translateY(1px); background: var(--control-surface, var(--control-glass)); }
-.phone-screen button.product-control:focus-visible { outline: 2px solid var(--control-ring); outline-offset: 3px; }
-.phone-screen button.product-control:disabled { opacity: .45; cursor: default; }
+.phone-screen button.product-control--primary, .account-card button.account-submit { --control-surface: var(--control-primary); }
+.phone-screen button.product-control--danger, .phone-screen .material-folder button.product-control--danger { color: #8b3939; --control-surface: rgb(229 133 129 / 10%); }
+.phone-screen button.product-control:hover:not(:disabled), .account-card button:hover:not(:disabled) { box-shadow: inset 0 1px 1px var(--control-highlight), inset -.5px -1px .5px #68816e38, 0 4px 11px var(--control-shadow); }
+.phone-screen button.product-control:active:not(:disabled), .account-card button:active:not(:disabled) { transform: translateY(1px); background: var(--control-surface, var(--control-glass)); }
+.phone-screen button.product-control:focus-visible, .account-card button:focus-visible { outline: 2px solid var(--control-ring); outline-offset: 3px; }
+.phone-screen button.product-control:disabled, .account-card button:disabled { opacity: .45; cursor: default; }
 .phone-screen :is(.phone-folder-nav,.material-preview-header,.material-search-header) button.product-control { min-width: 44px; }
 .phone-screen .material-actions-menu { background: none; border: 0; box-shadow: none; padding: 0; overflow: visible; display: grid; gap: 10px; }
 .phone-screen .material-actions button.product-control + button { border: 0; }
-@media (prefers-reduced-motion: reduce) { .phone-screen button.product-control { transition: none; } }
-/* Composite controls share the material while retaining their selection/drag behavior. */
-.phone-screen.phone-screen--call .slide-to-end,
-.phone-screen .material-folder .material-filters {
-  background: var(--control-glass);
-  box-shadow: inset 0 1px 0 var(--control-highlight), 0 4px 14px var(--control-shadow);
-  -webkit-backdrop-filter: blur(10px) saturate(160%); backdrop-filter: blur(10px) saturate(160%);
-}
 .phone-screen.phone-screen--call .slide-to-end-label { color: var(--control-ink); }
-
-/* A clear edge lens on the track; the moving thumb remains a distinct glass object. */
-.phone-screen.phone-screen--call .slide-to-end { isolation: isolate; box-shadow: inset 0 1px 1px #ffffffb0, inset 1px 0 1px #ffffff70, inset 0 -1px 1px #69817445, 0 5px 16px var(--control-shadow); }
-.phone-screen.phone-screen--call .slide-to-end::before { content: ''; position: absolute; inset: 1px; border-radius: inherit; pointer-events: none; background: linear-gradient(115deg, #ffffff40, transparent 30%, transparent 70%, #ffffff30); }
-.phone-screen.phone-screen--call .slide-to-end-thumb { background: linear-gradient(140deg, #ffb4b6aa, #dc4b5785 50%, #f7a4a76b); box-shadow: inset 0 1px 1px #ffffffd9, inset 1px 0 1px #ffffff80, inset -1px -1px 1px #9d314a80, 0 3px 7px #76273426; -webkit-backdrop-filter: blur(8px) saturate(180%); backdrop-filter: blur(8px) saturate(180%); }
-.phone-screen.phone-screen--call .slide-to-end--dragging .slide-to-end-thumb { background: linear-gradient(110deg, #ffdadbba, #e3697380 58%, #ffc4c684); box-shadow: inset 0 1px 2px #ffffffed, inset -1px -1px 1px #a4344e70, 0 4px 10px #76273430; }
-@media (prefers-reduced-transparency: reduce) { .phone-screen { --control-glass: #e6eee4; --control-primary: #d8e8d4; } .phone-screen--conversation, .phone-screen--dialing { --control-glass: #35453b; --control-primary: #48604d; } }
+.phone-screen.phone-screen--call .slide-to-end-thumb { --control-surface: rgb(226 103 113 / 15%); color: #a33146; }
+.phone-screen.phone-screen--conversation .slide-to-end-thumb { color: #ffe0e5; }
+.phone-screen.phone-screen--call .slide-to-end--dragging .slide-to-end-thumb { box-shadow: inset 0 1px 1px #ffffffb8, inset -.5px -1px 1px #9d5a6850, 0 4px 10px #76273428; }
+.phone-screen .material-folder .material-add { border-radius: 50%; }
+@media (prefers-reduced-motion: reduce) { .phone-screen button.product-control, .phone-screen .material-folder button.product-control, .account-page .account-card button, .account-card button.account-submit { transition: none; } }
+@media (prefers-reduced-transparency: reduce) {
+  .phone-screen, .account-card { --control-glass: #e6eee4; --control-primary: #d8e8d4; }
+  .phone-screen--conversation, .phone-screen--dialing { --control-glass: #35453b; --control-primary: #48604d; }
+  .phone-screen button.product-control--danger, .phone-screen .material-folder button.product-control--danger,
+  .phone-screen.phone-screen--call .slide-to-end-thumb { --control-surface: #f2c7ca; }
+}

@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { AccountBoundary } from './account';
 import './styles.css';
+import { installGlassOptics } from './glass-optics';
 const AdminApp = lazy(() => import('./admin').then(module => ({ default: module.AdminApp })));
 
 const internal = /^\/internal(?:\/|$)/.test(window.location.pathname);
@@ -16,3 +17,6 @@ createRoot(document.getElementById('root')!).render(
     <AccountBoundary showAccountBar={internal || admin} purpose={admin ? 'admin' : 'product'}>{admin ? <Suspense fallback={<p role="status">正在打开管理台…</p>}><AdminApp/></Suspense> : <App internal={internal} />}</AccountBoundary>
   </StrictMode>,
 );
+
+const disposeGlass = installGlassOptics();
+if (import.meta.hot) import.meta.hot.dispose(disposeGlass);

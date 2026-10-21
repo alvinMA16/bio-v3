@@ -1,3 +1,4 @@
+import { installGlassOptics } from './glass-optics';
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { PhonePreview } from './phone-preview';
@@ -20,3 +21,6 @@ function Preview() {
   </main>;
 }
 createRoot(document.getElementById('root')!).render(<Preview />);
+
+const disposeGlass = installGlassOptics();
+if (import.meta.hot) import.meta.hot.dispose(disposeGlass);
