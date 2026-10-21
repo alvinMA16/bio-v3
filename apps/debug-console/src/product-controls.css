@@ -21,7 +21,7 @@
 .phone-screen .document-highlight-note button {
   color: var(--control-ink); border: 0;
   background: var(--control-surface, var(--control-glass));
-  box-shadow: inset 0 1px .5px var(--control-highlight), inset -.5px -1px .5px #68816e38, 0 3px 9px var(--control-shadow);
+  box-shadow: 0 3px 9px var(--control-shadow);
   /* Native transparent fallback; URL optics affect only the backdrop, not labels. */
   -webkit-backdrop-filter: blur(.35px) saturate(105%);
   backdrop-filter: var(--glass-optics, blur(.35px)) saturate(105%);
@@ -31,14 +31,18 @@
   font-family: inherit; font-size: 14px; line-height: 1.5; letter-spacing: normal;
   cursor: pointer; transition: transform 150ms ease, box-shadow 150ms ease;
 }
-.phone-screen button.product-control::after {
+.phone-screen button.product-control::after, .account-card button::after,
+.phone-screen.phone-screen--call .slide-to-end::after,
+.phone-screen.phone-screen--call .slide-to-end-thumb::after,
+.phone-screen .material-folder :is(.material-filters, .material-add, .search-clear)::after,
+.phone-screen .document-highlight-note button::after {
   content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  /* A narrow rim reflection, with no milky highlight across the clear centre. */
-  background: none; box-shadow: inset .5px 0 .5px #ffffff50;
+  /* The capsule normal field shapes the reflection; the centre stays clear. */
+  background: var(--glass-rim, none) center / 100% 100% no-repeat; box-shadow: none;
 }
 .phone-screen button.product-control--primary, .account-card button.account-submit { --control-surface: var(--control-primary); }
 .phone-screen button.product-control--danger, .phone-screen .material-folder button.product-control--danger { color: #8b3939; --control-surface: rgb(229 133 129 / 10%); }
-.phone-screen button.product-control:hover:not(:disabled), .account-card button:hover:not(:disabled) { box-shadow: inset 0 1px 1px var(--control-highlight), inset -.5px -1px .5px #68816e38, 0 4px 11px var(--control-shadow); }
+.phone-screen button.product-control:hover:not(:disabled), .account-card button:hover:not(:disabled) { box-shadow: 0 4px 11px var(--control-shadow); }
 .phone-screen button.product-control:active:not(:disabled), .account-card button:active:not(:disabled) { transform: translateY(1px); background: var(--control-surface, var(--control-glass)); }
 .phone-screen button.product-control:focus-visible, .account-card button:focus-visible { outline: 2px solid var(--control-ring); outline-offset: 3px; }
 .phone-screen button.product-control:disabled, .account-card button:disabled { opacity: .45; cursor: default; }
@@ -52,11 +56,13 @@
 /* Ruby tint retains the live lens; the handset is printed above the glass. */
 .phone-screen.phone-screen--call .slide-to-end-thumb {
   --control-surface: rgb(224 45 61 / 38%); color: #651327;
-  box-shadow: inset 0 1px .5px #ffe9e9c9, inset -.5px -1px .5px #951c394d, 0 3px 9px #6a15223d;
+  box-shadow: 0 3px 9px #6a15223d;
 }
 .phone-screen.phone-screen--conversation .slide-to-end-thumb { color: #fff3f3; }
-.phone-screen.phone-screen--call .slide-to-end--dragging .slide-to-end-thumb { box-shadow: inset 0 1px 1px #ffffffb8, inset -.5px -1px 1px #9d5a6850, 0 4px 10px #76273428; }
-.phone-screen .material-folder .material-add { border-radius: 50%; }
+.phone-screen.phone-screen--call .slide-to-end--dragging .slide-to-end-thumb { box-shadow: 0 4px 10px #76273428; }
+.phone-screen .material-folder :is(.material-add, .search-clear) { position: relative; border-radius: 50%; }
+.phone-screen .material-folder .material-filters { border-radius: 24px; }
+.phone-screen .document-highlight-note button { position: relative; }
 @media (prefers-reduced-motion: reduce) { .phone-screen button.product-control, .phone-screen .material-folder button.product-control, .account-page .account-card button, .account-card button.account-submit { transition: none; } }
 @media (prefers-reduced-transparency: reduce) {
   .phone-screen, .account-card { --control-glass: #e6eee4; --control-primary: #d8e8d4; }

@@ -1,16 +1,23 @@
-/** A size-matched lens field: samples the live backdrop, never the control's label. */
+/** Shared capsule geometry used by live SVG displacement and the Canvas renderer. */
+export function lensSurface(x: number, y: number, width: number, height: number, radius: number) {
+  const dx=x-width/2,dy=y-height/2;
+  const qx=Math.max(Math.abs(dx)-(width/2-radius),0),qy=Math.max(Math.abs(dy)-(height/2-radius),0);
+  const length=Math.hypot(qx,qy);
+  return { dx,dy,depth:radius-length,nx:length?Math.sign(dx)*qx/length:0,ny:length?Math.sign(dy)*qy/length:0 };
+}
 export function lensOffset(x: number, y: number, width: number, height: number, radius: number) {
-  const dx = x - width / 2, dy = y - height / 2;
-  const qx = Math.max(Math.abs(dx) - (width / 2 - radius), 0);
-  const qy = Math.max(Math.abs(dy) - (height / 2 - radius), 0);
-  const length = Math.hypot(qx, qy);
-  const depth = radius - length;
-  if (depth <= 0) return { x: 0, y: 0 };
-  const magnification = 1 + .045 * (1 - Math.exp(-depth / 7));
-  const bend = 7 * Math.exp(-depth / 7) * (1 - Math.exp(-depth / 1.1));
+  const {dx,dy,depth,nx,ny}=lensSurface(x,y,width,height,radius);
+  if(depth<=0)return {x:0,y:0};
+  const magnification=1+.045*(1-Math.exp(-depth/7));
+  const bend=7*Math.exp(-depth/7)*(1-Math.exp(-depth/1.1));
+  return {x:dx/magnification-dx+nx*bend,y:dy/magnification-dy+ny*bend};
+}
+export function lensLighting(depth: number, nx: number, ny: number) {
+  if(depth<=0)return {light:0,shade:0};
+  const rim=Math.exp(-depth/1.25),shoulder=Math.exp(-(((depth-3.3)/2.1)**2));
   return {
-    x: dx / magnification - dx + (length ? Math.sign(dx) * qx / length * bend : 0),
-    y: dy / magnification - dy + (length ? Math.sign(dy) * qy / length * bend : 0),
+    light:rim*Math.max(0,-nx*.5-ny*.85)*.8+shoulder*Math.max(0,-nx*.5-ny*.85)*.1+Math.exp(-(((depth-4)/1.6)**2))*Math.max(0,ny)*.09,
+    shade:rim*Math.max(0,nx*.5+ny*.85)*.23,
   };
 }
 
@@ -43,6 +50,20 @@ export function installGlassOptics(root: HTMLElement = document.body) {
       image.data[i + 2] = 128; image.data[i + 3] = 255;
     }
     context.putImageData(image, 0, 0);
+    // A directional curved reflection, generated from the same surface as the lens.
+    const rim=document.createElement('canvas'),density=Math.min(devicePixelRatio||1,2);
+    rim.width=Math.ceil(width*density);rim.height=Math.ceil(height*density);
+    const rimContext=rim.getContext('2d')!;const pixels=rimContext.createImageData(rim.width,rim.height);
+    for(let y=0;y<rim.height;y++)for(let x=0;x<rim.width;x++){
+      const surface=lensSurface((x+.5)/density,(y+.5)/density,width,height,radius);
+      if(surface.depth<=0)continue;
+      const {light,shade}=lensLighting(surface.depth,surface.nx,surface.ny);
+      const alpha=light+shade*(1-light),i=(y*rim.width+x)*4;
+      const value=alpha?255*light*(1-shade)/alpha:0;
+      pixels.data[i]=pixels.data[i+1]=pixels.data[i+2]=value;
+      pixels.data[i+3]=alpha*Math.min(1,surface.depth*density)*255;
+    }
+    rimContext.putImageData(pixels,0,0);element.style.setProperty('--glass-rim',`url("${rim.toDataURL()}")`);
     const source = document.createElementNS(ns, 'feImage');
     source.setAttribute('href', map.toDataURL()); source.setAttribute('width', String(width)); source.setAttribute('height', String(height)); source.setAttribute('result', 'lens');
     const displacement = document.createElementNS(ns, 'feDisplacementMap');
@@ -54,7 +75,7 @@ export function installGlassOptics(root: HTMLElement = document.body) {
   const scan = () => {
     frame = 0;
     for (const [element, entry] of entries) if (reduced.matches || !root.contains(element) || !element.matches(selector)) {
-      resize.unobserve(element); element.style.removeProperty('--glass-optics'); entry.filter.remove(); entries.delete(element);
+      resize.unobserve(element); element.style.removeProperty('--glass-optics'); element.style.removeProperty('--glass-rim'); entry.filter.remove(); entries.delete(element);
     }
     if (reduced.matches) return;
     for (const element of root.querySelectorAll<HTMLElement>(selector)) {
@@ -70,7 +91,7 @@ export function installGlassOptics(root: HTMLElement = document.body) {
   reduced.addEventListener('change', schedule); scan();
   return () => {
     cancelAnimationFrame(frame); mutations.disconnect(); resize.disconnect(); reduced.removeEventListener('change', schedule);
-    for (const element of entries.keys()) element.style.removeProperty('--glass-optics');
+    for (const element of entries.keys()) { element.style.removeProperty('--glass-optics'); element.style.removeProperty('--glass-rim'); }
     entries.clear(); svg.remove();
   };
 }
