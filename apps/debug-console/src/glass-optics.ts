@@ -14,10 +14,11 @@ export function lensOffset(x: number, y: number, width: number, height: number, 
 }
 export function lensLighting(depth: number, nx: number, ny: number) {
   if(depth<=0)return {light:0,shade:0};
-  const rim=Math.exp(-depth/1.25),shoulder=Math.exp(-(((depth-3.3)/2.1)**2));
+  // One fine directional glint; the refraction supplies the curved depth.
+  const rim=Math.exp(-depth/.72);
   return {
-    light:rim*Math.max(0,-nx*.5-ny*.85)*.8+shoulder*Math.max(0,-nx*.5-ny*.85)*.1+Math.exp(-(((depth-4)/1.6)**2))*Math.max(0,ny)*.09,
-    shade:rim*Math.max(0,nx*.5+ny*.85)*.23,
+    light:rim*Math.max(0,-nx*.5-ny*.85)*.46,
+    shade:rim*Math.max(0,nx*.5+ny*.85)*.14,
   };
 }
 

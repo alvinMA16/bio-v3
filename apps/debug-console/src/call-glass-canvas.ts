@@ -65,7 +65,7 @@ export function mountCallGlass(canvas: HTMLCanvasElement, screen: HTMLElement) {
           for(const p of placements){
             const {element,lens}=p,disabled=element.disabled,tint=element.classList.contains('product-control--primary')?.09:.055;
             const opacity=disabled?.45:1,pressed=element.matches(':active'),hovered=element.matches(':hover');
-            ctx!.save();ctx!.globalAlpha=opacity;ctx!.shadowColor=hovered?'#06171d66':'#06171d55';ctx!.shadowBlur=pressed?5:hovered?14:12;ctx!.shadowOffsetY=pressed?2:5;
+            ctx!.save();ctx!.globalAlpha=opacity;ctx!.shadowColor=hovered?'#06171d55':'#06171d44';ctx!.shadowBlur=pressed?4:hovered?10:8;ctx!.shadowOffsetY=pressed?1:3;
             ctx!.fillStyle='#c8e1cc0c';ctx!.beginPath();ctx!.roundRect(p.x,p.y,p.w,p.h,p.r);ctx!.fill();ctx!.restore();
             for(let k=0;k<lens.field.length/5;k++){
               const f=k*5,i=k*4,a=lens.field[f+4]!;if(!a)continue;
