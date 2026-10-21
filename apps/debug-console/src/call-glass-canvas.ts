@@ -1,7 +1,8 @@
 import { lensOffset, lensSurface, lensLighting } from './glass-optics';
 import { createFeltGrain, paintCallScene } from './call-scene';
 
-const tintRGB=[205,230,202] as const;
+const secondaryTintRGB=[205,230,202] as const;
+const primaryTintRGB=[192,223,187] as const;
 
 type Lens = { layer: HTMLCanvasElement; context: CanvasRenderingContext2D; image: ImageData; field: Float32Array; key: string };
 type Placement = { element: HTMLButtonElement; x: number; y: number; w: number; h: number; r: number; lens: Lens };
@@ -66,7 +67,8 @@ export function mountCallGlass(canvas: HTMLCanvasElement, screen: HTMLElement) {
           if(right<=left||bottom<=top){clearControls();return;}
           const source=bg!.getImageData(left,top,right-left,bottom-top),src=source.data;
           for(const p of placements){
-            const {element,lens}=p,disabled=element.disabled,tint=element.classList.contains('product-control--primary')?.09:.055;
+            const {element,lens}=p,disabled=element.disabled,primary=element.classList.contains('product-control--primary');
+            const tint=primary?.16:.10,tintRGB=primary?primaryTintRGB:secondaryTintRGB;
             const opacity=disabled?.45:1,pressed=element.matches(':active'),hovered=element.matches(':hover');
             ctx!.save();ctx!.globalAlpha=opacity;ctx!.shadowColor=hovered?'#06171d55':'#06171d44';ctx!.shadowBlur=pressed?4:hovered?10:8;ctx!.shadowOffsetY=pressed?1:3;
             ctx!.fillStyle='#c8e1cc0c';ctx!.beginPath();ctx!.roundRect(p.x,p.y,p.w,p.h,p.r);ctx!.fill();ctx!.restore();
