@@ -51,11 +51,11 @@ Web 对 `show_document` 的 blockId / highlights 定位独立于朗读跟随：�
 
 ## 分段朗读与自动跟随
 
-内部保留每段最多 600 字的 documentPages、page/navigation、screen.readingPage 和 totalPages，作为朗读分段与旧客户端兼容协议，不向用户展示“页”。全文朗读从 show_document(page=1, follow=true) 开始，逐段输出并用 navigation=next 推进。当前可见内容朗读依据 visibleContent；不能将内部朗读分段等同于当前屏幕。
+内部保留每段最多 600 字的 documentPages、page/navigation、screen.readingPage 和 totalPages，作为旧客户端兼容的阅读位置，不向用户展示“页”。原文朗读使用 narrate_document 一次提交完整范围，不由模型逐页复述或推进。scope=all 读全文；range 用 startBlockId 和可选 endBlockId（包含起止段，省略终段读至文稿结尾）；blocks 用不重复的 blockIds 按文稿顺序选择多段；block 仅单段；visible 依据实际 visibleContent；resume 从已确认播放的位置续读上次未完成的完整范围。参数混用、无效或逆序边界在播放及保存检查点之前拒绝。
 
 VoiceSession 的 beforeShow 等待此前 TTS 队列及客户端播放回执完成后再推进。等待保留 45 秒无进展超时；用户开口打断、断线或播放失败会取消。
 
-原文朗读通过 narrate_document 将已保存正文按段落切成最多 180 个 Unicode 字符的短片段，直接交给 TTS。每个音频包携带 documentId、version、blockId 和 UTF-16 start/end；实际播放回执更新续读检查点，内部 page 仅保留兼容用途。
+原文朗读通过 narrate_document 将已保存正文按段落切成最多 180 个 Unicode 字符的短片段，直接交给 TTS。所有选中片段一次排入队列，沿用 20 秒/8 秒的音频缓冲窗口在播放期间提前准备后续内容；范围中间不返回模型，全部实际播放完成、打断或失败后才结束工具调用。每个音频包携带 documentId、version、blockId 和 UTF-16 start/end；实际播放回执更新续读检查点，内部 page 仅保留兼容用途。
 
 Web 以音频时钟确认片段开始播放后通知共享 DocumentReader，收到音频或合成完成不触发定位；取消、播放结束、普通回复和断线清除朗读位置，旧轮次回调不能恢复跟随。位置必须匹配当前文稿及版本。当前位置位于阅读区上方 70% 时保持不动，靠近底部或离开视口时平滑移到约 30% 高度。超长段落按短片段起点定位，字号及视口变化后重新测量；减少动态效果时直接定位。自动跟随不使用精确定位 focus 回执，也不引入高亮或新按钮。
 

@@ -73,9 +73,11 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
     }),
     defineTool({
       name: 'narrate_document', label: '朗读文稿',
-      description: '用户要求原样朗读时使用。服务端直接播放已保存原文，无需先 read_document 或 show_document，也不要在回复中复述正文。scope=all 从头读，visible 读当前实际可见范围，block 读指定段落，resume 从最后确认播放的位置继续。documentId 默认当前文稿；expectedVersion 可校验版本。返回实际播放完成状态；失败或打断不声称读完。仅语音通话可用。',
+      description: '用户要求原样朗读时使用。一次调用提交用户要求的完整范围，程序连续播放、提前准备后续音频并同步定位，段落之间无需模型参与；不要逐段调用、复述正文或用 show_document 推进。scope=all 从头读全文；range 用 startBlockId 指定起段，endBlockId 可选且包含终段，省略则读到文稿结尾；blocks 用 blockIds 一次选择多段，按文稿顺序读；block 仅在用户只要单段时用 blockId；visible 只读当前实际可见范围；resume 续读上次未播完的范围。范围已知时无需先 read_document 或 show_document。documentId 默认当前文稿；expectedVersion 可校验版本。仅在整个范围实际播完后返回 completed，打断或失败不声称读完。仅语音通话可用。',
       parameters: Type.Object({ documentId: Type.Optional(id), expectedVersion: Type.Optional(Type.Integer({ minimum: 1 })),
-        scope: Type.Union(['all', 'visible', 'block', 'resume'].map(value => Type.Literal(value))), blockId: Type.Optional(id) }),
+        scope: Type.Union(['all', 'visible', 'block', 'range', 'blocks', 'resume'].map(value => Type.Literal(value))),
+        blockId: Type.Optional(id), startBlockId: Type.Optional(id), endBlockId: Type.Optional(id),
+        blockIds: Type.Optional(Type.Array(id, { minItems: 1, maxItems: 1000, uniqueItems: true })) }),
       execute: async (_id, params, signal) => {
         if (!runtime?.narrate) throw new Error('请在语音通话中使用朗读');
         signal?.throwIfAborted();
@@ -87,6 +89,8 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
         signal?.throwIfAborted();
         if (params.expectedVersion !== undefined && params.expectedVersion !== document.version) throw new Error('文稿版本已变化，请重新确认朗读范围');
         if (params.blockId && params.scope !== 'block') throw new Error('段落只适用于 block 范围');
+        if ((params.startBlockId || params.endBlockId) && params.scope !== 'range') throw new Error('起止段落只适用于 range 范围');
+        if (params.blockIds && params.scope !== 'blocks') throw new Error('段落列表只适用于 blocks 范围');
         let ranges;
         if (params.scope === 'resume') {
           if (!saved || saved.documentId !== documentId || saved.version !== document.version) throw new Error('没有可续读的位置，或文稿版本已变化');
@@ -109,6 +113,21 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
           const block = document.blocks.find(b => b.id === params.blockId);
           if (!block) throw new Error('请指定有效段落');
           ranges = [{ blockId: block.id, start: 0, end: block.text.length }];
+        } else if (params.scope === 'range' || params.scope === 'blocks') {
+          let selected;
+          if (params.scope === 'range') {
+            const start = document.blocks.findIndex(b => b.id === params.startBlockId);
+            const end = params.endBlockId === undefined ? document.blocks.length - 1
+              : document.blocks.findIndex(b => b.id === params.endBlockId);
+            if (start < 0 || end < start) throw new Error('请指定有效且按文稿顺序排列的起止段落');
+            selected = document.blocks.slice(start, end + 1);
+          } else {
+            const ids = new Set(params.blockIds);
+            if (!params.blockIds?.length || params.blockIds.length > 1000 || ids.size !== params.blockIds.length
+              || params.blockIds.some(id => !document.blocks.some(b => b.id === id))) throw new Error('请指定有效且不重复的段落列表');
+            selected = document.blocks.filter(b => ids.has(b.id));
+          }
+          ranges = selected.map(b => ({ blockId: b.id, start: 0, end: b.text.length }));
         }
         const chunks = narrationChunks(document, ranges);
         const checkpoint = { documentId, version: document.version, chunks: chunks.map(({ blockId, start, end }) => ({ blockId, start, end })), next: 0 };
@@ -146,7 +165,7 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
     }),
     defineTool({
       name: 'show_document', label: '展示文稿或移动阅读位置',
-      description: '展示文稿、定位段落或推进朗读，不修改正文。界面是连续滚动正文，没有用户可见页码。page/navigation 为内部朗读分段游标，不等于用户实际看见的内容；实际可见内容以 screen.visibleContent 为准。blockId 精确滚动到段落开头。highlights 用于“在哪里/指出这句话/标出来”：先 read_document 取得最新原文与版本，传 expectedVersion 和 [{blockId, quote, occurrence?}]；quote 必须是需要强调的最小完整原文，不要为方便选整段；匹配后程序按 highlightGranularity 统一调整展示边界。重复原文须指定 occurrence（从1开始）。程序精确匹配并滚动到第一处，同时返回实际范围；不接受猜测的文字。仅看整段时用 blockId，不需要高亮整段。高亮只是临时展示，不修改正文，不产生版本；clearHighlight=true 清除。highlights 不与其他定位参数同传。三种普通定位最多一种。原样朗读使用 narrate_document，不通过此工具逐页复述。用户手动滑动后客户端停止跟随，后续推进不要传 follow=true 强行拉回；只有用户明确要求跟随或重新从头朗读时才恢复。',
+      description: '展示文稿或定位阅读位置，不修改正文。界面是连续滚动正文，没有用户可见页码。page/navigation 为内部朗读分段游标，不等于用户实际看见的内容；实际可见内容以 screen.visibleContent 为准。blockId 精确滚动到段落开头。highlights 用于“在哪里/指出这句话/标出来”：先 read_document 取得最新原文与版本，传 expectedVersion 和 [{blockId, quote, occurrence?}]；quote 必须是需要强调的最小完整原文，不要为方便选整段；匹配后程序按 highlightGranularity 统一调整展示边界。重复原文须指定 occurrence（从1开始）。程序精确匹配并滚动到第一处，同时返回实际范围；不接受猜测的文字。仅看整段时用 blockId，不需要高亮整段。高亮只是临时展示，不修改正文，不产生版本；clearHighlight=true 清除。highlights 不与其他定位参数同传。三种普通定位最多一种。原样朗读使用 narrate_document，不通过此工具逐页复述。朗读中的跟随及手动浏览后的恢复由客户端负责，不通过此工具逐段接管屏幕。',
       parameters: Type.Object({ documentId: Type.Optional(id), page: Type.Optional(Type.Integer({ minimum: 1 })), navigation: Type.Optional(Type.Union([Type.Literal('next'), Type.Literal('previous')])), blockId: Type.Optional(id), follow: Type.Optional(Type.Boolean()),
         expectedVersion: Type.Optional(Type.Integer({ minimum: 1 })),
         highlights: Type.Optional(Type.Array(Type.Object({ blockId: id, quote: Type.String({ minLength: 1, maxLength: 12000 }), occurrence: Type.Optional(Type.Integer({ minimum: 1 })) }), { minItems: 1, maxItems: 30 })),

@@ -13,6 +13,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { FastifyAdapter } from '@nestjs/platform-fastify';
 import { AgentService } from '../dist/agent/agent.service.js';
+import { DocumentStore } from '../dist/agent/document-store.js';
 import { AgentStorage } from '../dist/agent/agent-storage.js';
 import { PiSessionFactory } from '../dist/agent/pi-session.factory.js';
 import { AgentController } from '../dist/agent/agent.controller.js';
@@ -77,6 +78,7 @@ before(async () => {
         : lastText === 'OPEN_MISSING_ATTACHMENT' ? { name: 'switch_mode', arguments: { mode: 'attachment_conversation', targetId: 'missing' } }
         : lastText === 'CLOSE_PANEL' ? { name: 'switch_mode', arguments: { mode: 'conversation' } }
         : lastText === 'OPEN_DRAFT' ? { name: 'show_document', arguments: { documentId: 'draft' } }
+        : lastText === 'NARRATE_RANGE_DRAFT' ? { name: 'narrate_document', arguments: { documentId: 'draft', expectedVersion: 2, scope: 'range', startBlockId: 'p2' } }
         : lastText === 'NARRATE_DRAFT' ? { name: 'narrate_document', arguments: { documentId: 'draft', scope: 'all' } }
         : lastText === 'FOCUS_DRAFT' ? { name: 'show_document', arguments: { documentId: 'draft', blockId: 'p1' } }
         : lastText === 'DARK_BACKGROUND' ? { name: 'set_document_background_color', arguments: { backgroundColor: '#102030' } }
@@ -700,4 +702,41 @@ test('duplicate skill loads keep tool schemas stable; reconnect restores only th
   try { assert.ok(session.getActiveToolNames().includes('edit_document')); } finally { session.dispose(); }
   session = await factory.create(conversationId, undefined, () => {}, undefined, undefined, { ...scope, callId: 'call-b' });
   try { assert.ok(!session.getActiveToolNames().includes('edit_document')); } finally { session.dispose(); }
+});
+
+
+test('real SDK submits a multi-paragraph range once and makes no model request between paragraph acknowledgements', async () => {
+  const initial = await service.run({ message: 'SHOW_PANEL' });
+  const store = new DocumentStore(storage);
+  await store.edit(undefined, initial.conversationId, { documentId: 'draft', expectedVersion: 1, operations: [
+    { action: 'insert', block: { id: 'p2', kind: 'paragraph', text: '第二段，早晨去湖边。' } },
+    { action: 'insert', block: { id: 'p3', kind: 'paragraph', text: '第三段，中午看雪山。' } },
+    { action: 'insert', block: { id: 'p4', kind: 'paragraph', text: '第四段，晚上回家。' } },
+  ] });
+  const before = requests.length;
+  let enter, release;
+  const entered = new Promise(resolve => { enter = resolve; });
+  const held = new Promise(resolve => { release = resolve; });
+  const calls = [];
+  const running = service.run({ message: 'NARRATE_RANGE_DRAFT', conversationId: initial.conversationId }, undefined, undefined, undefined, undefined, {
+    narrate: async (chunks, played) => {
+      calls.push(chunks); enter();
+      await held;
+      for (let i = 0; i < chunks.length; i++) {
+        played(i); await new Promise(resolve => setImmediate(resolve));
+        assert.equal(requests.length - before, 1, 'no model request during the whole narration range');
+      }
+    },
+  });
+  try {
+    await entered;
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].map(c => c.blockId), ['p2', 'p3', 'p4']);
+    assert.ok(calls[0].every(c => c.version === 2));
+  } finally { release(); }
+  const result = await running;
+  assert.equal(requests.length - before, 2, 'model returns only after the full range completes');
+  assert.equal(result.events.filter(e => e.type === 'tool.started' && e.name === 'narrate_document').length, 1);
+  assert.equal(result.events.filter(e => e.type === 'tool.completed' && e.name === 'narrate_document' && !e.isError).length, 1);
+  assert.ok(!textOf(requests.at(-1).messages.findLast(m => m.role === 'tool')).includes('早晨去湖边'));
 });

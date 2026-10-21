@@ -13,11 +13,11 @@ const document = { id: 'story', title: '测试', version: 1, blocks: [
   { id: 'p1', kind: 'paragraph', text: '一个早晨😀。'.repeat(100) },
   { id: 'p2', kind: 'paragraph', text: '第二段，与前段连续播放。'.repeat(30) },
 ] };
-function setup(runtime) {
+function setup(runtime, manuscript = document) {
   const dir = mkdtempSync(join(tmpdir(), 'bio-narration-'));
-  const workspace = new PanelWorkspace(dir); workspace.showDocument(document);
+  const workspace = new PanelWorkspace(dir); workspace.showDocument(manuscript);
   const events = [];
-  const store = { async get(user, id) { assert.equal(user, 'owner'); if (id !== 'story') throw Error('missing'); return structuredClone(document); } };
+  const store = { async get(user, id) { assert.equal(user, 'owner'); if (id !== 'story') throw Error('missing'); return structuredClone(manuscript); } };
   const tools = createPresentationTools(workspace, e => events.push(e), undefined, { store, user: 'owner', conversationId: 'test' }, runtime);
   return { dir, workspace, events, tools, tool: tools.find(t => t.name === 'narrate_document'), clean: () => rmSync(dir, { recursive: true, force: true }) };
 }
@@ -68,6 +68,105 @@ test('visible selection merges overlaps, respects ordering and rejects unknown v
     await assert.rejects(f.tool.execute('foreign', { scope: 'all', documentId: 'foreign' }), /missing/);
     await assert.rejects(f.tool.execute('version', { scope: 'all', expectedVersion: 99 }), /版本/);
   } finally { f.clean(); }
+});
+
+const selectionDocument = { ...document, blocks: [
+  { id: 'p1', kind: 'heading', text: '第一节' },
+  { id: 'p2', kind: 'paragraph', text: '早晨😀。'.repeat(70) },
+  { id: 'p3', kind: 'paragraph', text: '中午，一起去看湖边的风景。' },
+  { id: 'p4', kind: 'paragraph', text: '晚上，我们回家。' },
+] };
+for (const [params, ids] of [
+  [{ scope: 'range', startBlockId: 'p2' }, ['p2', 'p3', 'p4']],
+  [{ scope: 'range', startBlockId: 'p1', endBlockId: 'p3' }, ['p1', 'p2', 'p3']],
+  [{ scope: 'range', startBlockId: 'p2', endBlockId: 'p2' }, ['p2']],
+  [{ scope: 'blocks', blockIds: ['p4', 'p2'] }, ['p2', 'p4']],
+]) test(`one narration call selects the whole ${JSON.stringify(params)} range`, async () => {
+  const calls = [];
+  const f = setup({ narrate: async (chunks, played) => { calls.push(chunks); chunks.forEach((_, i) => played(i)); } }, selectionDocument);
+  try {
+    const result = await f.tool.execute('read', params);
+    assert.equal(calls.length, 1);
+    assert.deepEqual([...new Set(calls[0].map(c => c.blockId))], ids);
+    assert.equal(calls[0].map(c => c.text).join(''), selectionDocument.blocks.filter(b => ids.includes(b.id)).map(b => b.text).join(''));
+    assert.ok(calls[0].every(c => c.documentId === 'story' && c.version === 1));
+    assert.equal(f.workspace.context().narration.completed, true);
+    assert.equal(JSON.parse(result.content[0].text).status, 'completed');
+    assert.ok(!JSON.stringify(result).includes('早晨'));
+  } finally { f.clean(); }
+});
+
+test('invalid or mixed selectors fail before changing the checkpoint, screen or starting audio', async () => {
+  let calls = 0;
+  const f = setup({ narrate: async () => calls++ }, selectionDocument);
+  const before = f.workspace.state();
+  try {
+    for (const params of [
+      { scope: 'range' }, { scope: 'range', endBlockId: 'p3' },
+      { scope: 'range', startBlockId: 'unknown' },
+      { scope: 'range', startBlockId: 'p2', endBlockId: 'unknown' },
+      { scope: 'range', startBlockId: 'p3', endBlockId: 'p2' },
+      { scope: 'blocks' }, { scope: 'blocks', blockIds: [] },
+      { scope: 'blocks', blockIds: ['p2', 'unknown'] },
+      { scope: 'blocks', blockIds: ['p2', 'p2'] },
+      { scope: 'all', startBlockId: 'p2' }, { scope: 'resume', endBlockId: 'p4' },
+      { scope: 'range', startBlockId: 'p1', blockId: 'p1' },
+      { scope: 'block', blockId: 'p2', blockIds: ['p2'] },
+      { scope: 'range', startBlockId: 'p2', blockIds: ['p2'] },
+      { scope: 'blocks', blockIds: ['p2'], expectedVersion: 99 },
+    ]) {
+      await assert.rejects(f.tool.execute('invalid', params), undefined, JSON.stringify(params));
+      assert.deepEqual(f.workspace.state(), before);
+      assert.equal(f.workspace.narration(), undefined);
+    }
+    assert.equal(calls, 0); assert.equal(f.events.length, 0);
+  } finally { f.clean(); }
+});
+
+test('interrupted batch resumes its whole remaining selection, including later paragraphs but never unselected text', async () => {
+  const calls = []; let interrupt = true;
+  const f = setup({ narrate: async (chunks, played) => {
+    calls.push(chunks); played(0);
+    if (interrupt) throw Error('interrupted');
+    chunks.forEach((_, i) => played(i));
+  } }, selectionDocument);
+  try {
+    await assert.rejects(f.tool.execute('batch', { scope: 'blocks', blockIds: ['p2', 'p4'] }), /interrupted/);
+    assert.equal(new PanelWorkspace(f.dir).narration().next, 1);
+    interrupt = false;
+    await f.tool.execute('resume', { scope: 'resume' });
+    assert.deepEqual(calls[1], calls[0].slice(1));
+    assert.ok(calls[1].some(c => c.blockId === 'p4'));
+    assert.ok(calls[1].every(c => c.blockId !== 'p3'));
+  } finally { f.clean(); }
+});
+
+test('one full-range tool call preloads the next paragraph and stays pending until the entire range is played', async () => {
+  const events = [], spoken = []; let calls = 0, toolCalls = 0, finished = false;
+  const f = setup(undefined, selectionDocument);
+  const session = new VoiceSession({}, { async synthesize(text, signal, audio) { spoken.push(text); await audio(new Uint8Array(32000)); } },
+    async (_input, emit, signal, _trigger, runtime) => {
+      calls++;
+      const tool = createPresentationTools(f.workspace, emit, undefined, {
+        user: 'owner', conversationId: 'test', store: { async get() { return structuredClone(selectionDocument); } },
+      }, runtime).find(t => t.name === 'narrate_document');
+      toolCalls++; await tool.execute('read', { scope: 'range', startBlockId: 'p2' }, signal);
+      finished = true; return { conversationId: 'test', message: { content: '' } };
+    }, event => events.push(event));
+  try {
+    await session.listen('read', {}, true, true); await flush();
+    const chunks = narrationChunks(selectionDocument, selectionDocument.blocks.slice(1).map(b => ({ blockId: b.id, start: 0, end: b.text.length })));
+    assert.equal(spoken.join(''), chunks.map(c => c.text).join(''), 'all paragraphs prepared before the first playback ACK');
+    assert.equal(finished, false);
+    for (let index = 0; index < chunks.length; index++) {
+      session.playback('read', (index + 1) * 16000);
+      assert.equal(calls, 1); assert.equal(toolCalls, 1);
+      if (index < chunks.length - 1) assert.equal(finished, false);
+    }
+    await session.settled(); assert.equal(finished, true);
+    assert.equal(f.workspace.context().narration.completed, true);
+    assert.deepEqual(events.filter(e => e.type === 'audio').map(e => e.narration), chunks.map(({ text, ...range }) => range));
+  } finally { session.close(); f.clean(); }
 });
 
 test('ordinary show does not wait for previous audio; narration unavailable outside a voice runtime', async () => {
