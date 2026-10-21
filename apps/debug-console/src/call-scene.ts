@@ -20,14 +20,65 @@ const leaves: readonly (readonly [number, number, number, number])[] = [
   [336,461,152,1.1],[241,480,0,1.25],[223,452,-25,1.05],[189,426,100,1.2],
   [159,436,15,1.3],[135,419,35,1.1],[182,408,100,1.15],[208,430,155,1.1],
 ];
-function branch(ctx: CanvasRenderingContext2D, angle: number) {
-  const {limbs,leaf,broadLeaf}=getPaths();
-  ctx.save();ctx.translate(430,920);ctx.rotate(angle);ctx.translate(-430,-920);
-  ctx.strokeStyle = ctx.fillStyle = '#122326';ctx.lineCap='round';ctx.lineJoin='round';
-  limbs.forEach((limb,i)=>{ctx.lineWidth=[8,3.5,1.8][i]!;ctx.stroke(limb);});
-  leaves.forEach(([x,y,r,s],i)=>{ctx.save();ctx.translate(x,y);ctx.rotate(r*Math.PI/180);ctx.scale(s,s);ctx.fill(i%3?leaf:broadLeaf);ctx.restore();});
+// The wall faces the viewer. The window is in front of it, off screen to the
+// right. Parallel sunlight travels left and slightly down until it meets the wall.
+const daylight = { x: -.96, y: .24, depth: 500 } as const;
+
+function branch(ctx: CanvasRenderingContext2D) {
+  ctx.strokeStyle = '#122326';
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  getPaths().limbs.forEach((limb, i) => { ctx.lineWidth = [8, 3.5, 1.8][i]!; ctx.stroke(limb); });
+}
+
+function leafTexture(shape: Path2D) {
+  const raw = makeLayer(80, 80), rawCtx = raw.getContext('2d')!;
+  rawCtx.translate(40, 40); rawCtx.fill(shape);
+  const soft = makeLayer(80, 80), softCtx = soft.getContext('2d')!;
+  softCtx.filter = 'blur(2.4px)'; softCtx.drawImage(raw, 0, 0);
+  return soft;
+}
+
+const noise = (seed: number) => {
+  const n = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
+  return n - Math.floor(n);
+};
+
+/** Damped spring response to a finite gust; quiet between irregular arrivals. */
+function windResponse(seconds: number, damping: number, frequency: number) {
+  const response = (t: number) => t <= 0 ? 0 : 1 - Math.exp(-damping * t)
+    * (Math.cos(frequency * t) + damping / frequency * Math.sin(frequency * t));
+  const block = Math.floor(seconds / 14);
+  let wind = 0;
+  for (let i = block - 1; i <= block; i++) {
+    const arrival = i * 14 + 2 + noise(i * 3) * 4;
+    const duration = 1.4 + noise(i * 3 + 1) * 1.6;
+    const strength = .65 + noise(i * 3 + 2) * .35;
+    const t = seconds - arrival;
+    wind += strength * (response(t) - response(t - duration)
+      + .22 * (response(t - .7) - response(t - 1.15)));
+  }
+  return wind;
+}
+
+function paintTree(ctx: CanvasRenderingContext2D, tree: HTMLCanvasElement, foliage: readonly HTMLCanvasElement[], seconds: number, mirrored: boolean) {
+  const time = seconds - (mirrored ? .42 : 0);
+  const wind = windResponse(time, 2.8, 4.8);
+  const leafWind = windResponse(time - .16, 3.8, 10);
+  ctx.save();
+  // Mirroring the far branch must not reverse the world-space wind direction.
+  ctx.translate(430, 920); ctx.rotate(wind * (mirrored ? .032 : -.038)); ctx.translate(-430, -920);
+  ctx.drawImage(tree, 0, 0);
+  leaves.forEach(([x, y, rotation, scale], i) => {
+    const flutter = leafWind * (.15 + noise(i) * .09)
+      + Math.sin(time * 13 + i * .74) * Math.abs(leafWind) * .035;
+    ctx.save(); ctx.translate(x, y);
+    ctx.rotate(rotation * Math.PI / 180 + flutter * (mirrored ? -1 : 1));
+    ctx.scale(scale, scale); ctx.drawImage(foliage[i % 3 ? 0 : 1]!, -40, -40);
+    ctx.restore();
+  });
   ctx.restore();
 }
+
 function paintStaticRoom(ctx: CanvasRenderingContext2D, width: number, height: number, grain: CanvasPattern | null) {
   ctx.save();
   ctx.scale(width / 390, height / 844);
@@ -59,12 +110,11 @@ function windowProjection(ctx: CanvasRenderingContext2D) {
 function paintWindowLight(ctx: CanvasRenderingContext2D, width: number, height: number) {
   ctx.save();
   ctx.scale(width / 390, height / 844);
+  const sun = ctx.createLinearGradient(500, 100, 500 + daylight.x * 720, 100 + daylight.y * 720);
+  sun.addColorStop(0, '#ffe6b950');
+  sun.addColorStop(.55, '#f5e2b83d');
+  sun.addColorStop(1, '#e8dfbb30');
   windowProjection(ctx);
-  const sun = ctx.createLinearGradient(80, 0, 180, 940);
-  sun.addColorStop(0, '#ffe6b961');
-  sun.addColorStop(.35, '#f5e2b841');
-  sun.addColorStop(.72, '#e8dfbb34');
-  sun.addColorStop(1, '#e8dfbb10');
   ctx.fillStyle = sun;
   ctx.fill(getPaths().arch);
   ctx.globalCompositeOperation = 'destination-out';
@@ -81,25 +131,28 @@ function paintWindowLight(ctx: CanvasRenderingContext2D, width: number, height: 
   ctx.restore();
 }
 
-/** A broad, feathered shaft makes the air luminous, separate from light on the wall. */
-function createLightShaft(width: number, height: number) {
-  const canvas = makeLayer(width / 2, height / 2), ctx = canvas.getContext('2d')!;
-  const pixels = ctx.createImageData(canvas.width, canvas.height);
-  for (let y = 0; y < canvas.height; y++) for (let x = 0; x < canvas.width; x++) {
-    const px = x * 390 / canvas.width, py = y * 844 / canvas.height;
-    const centre = 345 - (py + 90) * .38;
-    const spread = 27 + (py + 90) * .075;
-    const across = (px - centre) / spread;
-    const falloff = Math.exp(-Math.pow((py - 165) / 640, 2));
-    // Uneven scattering within one continuous shaft, without hard stripes.
-    const beam = Math.exp(-across * across * 1.6) * .2
-      + Math.exp(-Math.pow((across - .48) * 3, 2)) * .035;
-    const i = (y * canvas.width + x) * 4;
-    pixels.data[i] = 255; pixels.data[i + 1] = 233; pixels.data[i + 2] = 191;
-    pixels.data[i + 3] = 255 * beam * falloff;
+/** Integrate the lit window cross-section back towards the actual window.
+ * Every slice follows the same parallel rays and ends at the wall projection.
+ * Leaf occlusion is included, so air light changes only when the foliage moves.
+ */
+function paintAirLight(layer: HTMLCanvasElement, sunlight: HTMLCanvasElement) {
+  const ctx = layer.getContext('2d')!;
+  ctx.clearRect(0, 0, layer.width, layer.height);
+  const steps = 64;
+  for (let i = steps; i > 0; i--) {
+    const depth = i / steps;
+    ctx.globalAlpha = (.9 / steps) * (.5 + depth * .5);
+    ctx.drawImage(sunlight,
+      -daylight.x * daylight.depth * depth * layer.width / 390,
+      -daylight.y * daylight.depth * depth * layer.height / 844,
+      layer.width, layer.height);
   }
-  ctx.putImageData(pixels, 0, 0);
-  return canvas;
+  ctx.globalAlpha = 1;
+  // Keep the scattering colour independent of low-alpha 8-bit blending.
+  // The accumulated window/foliage coverage supplies opacity, never dark ink.
+  ctx.globalCompositeOperation = 'source-in';
+  ctx.fillStyle = '#ffe9bf'; ctx.fillRect(0, 0, layer.width, layer.height);
+  ctx.globalCompositeOperation = 'source-over';
 }
 
 function makeLayer(width: number, height: number) {
@@ -118,7 +171,7 @@ export function createFeltGrain() {
 // Cache soft textures at CSS resolution; each frame only composites and transforms them.
 const sceneCache = new WeakMap<HTMLCanvasElement, {
   key: string; base: HTMLCanvasElement; light: HTMLCanvasElement;
-  bounce: HTMLCanvasElement; shaft: HTMLCanvasElement; tree: HTMLCanvasElement;
+  bounce: HTMLCanvasElement; air: HTMLCanvasElement; tree: HTMLCanvasElement; foliage: readonly HTMLCanvasElement[];
   movingLight: HTMLCanvasElement;
 }>();
 export function paintCallScene(ctx: CanvasRenderingContext2D, width: number, height: number, seconds: number, grain: CanvasPattern | null) {
@@ -135,10 +188,12 @@ export function paintCallScene(ctx: CanvasRenderingContext2D, width: number, hei
     bounceCtx.filter = 'blur(7px)'; bounceCtx.globalAlpha = .32;
     bounceCtx.drawImage(aperture, 0, 0, bounce.width, bounce.height);
     const raw = makeLayer(500, 960);
-    branch(raw.getContext('2d')!, 0);
+    branch(raw.getContext('2d')!);
     const tree = makeLayer(500, 960), treeCtx = tree.getContext('2d')!;
     treeCtx.filter = 'blur(2.8px)'; treeCtx.drawImage(raw, 0, 0);
-    scene = { key, base, light, bounce, tree, shaft: createLightShaft(width, height), movingLight: makeLayer(width, height) };
+    scene = { key, base, light, bounce, tree,
+      foliage: [leafTexture(getPaths().leaf), leafTexture(getPaths().broadLeaf)],
+      air: makeLayer(width / 2, height / 2), movingLight: makeLayer(width, height) };
     sceneCache.set(ctx.canvas, scene);
   }
 
@@ -155,9 +210,7 @@ export function paintCallScene(ctx: CanvasRenderingContext2D, width: number, hei
     sunlight.save(); sunlight.globalAlpha = near ? .56 : .4;
     if (near) sunlight.translate(-60, -295);
     else { sunlight.translate(335, 310); sunlight.scale(-.9, .8); }
-    const angle = near ? Math.sin(seconds * .31) * .019 : Math.sin(seconds * .23 + 1.4) * .024;
-    sunlight.translate(430, 920); sunlight.rotate(angle); sunlight.translate(-430, -920);
-    sunlight.drawImage(scene.tree, 0, 0);
+    paintTree(sunlight, scene.tree, scene.foliage, seconds, !near);
     sunlight.restore();
   }
   const flight = (seconds + 8) % 57;
@@ -172,10 +225,7 @@ export function paintCallScene(ctx: CanvasRenderingContext2D, width: number, hei
 
   ctx.drawImage(scene.base, 0, 0, width, height);
   ctx.drawImage(scene.bounce, 0, 0, width, height);
-  ctx.save();
-  ctx.globalAlpha = .96 + Math.sin(seconds * .13) * .04;
   ctx.drawImage(scene.movingLight, 0, 0, width, height);
-  ctx.globalAlpha = .88 + Math.sin(seconds * .17 + .8) * .12;
-  ctx.drawImage(scene.shaft, Math.sin(seconds * .11) * width / 130, 0, width, height);
-  ctx.restore();
+  paintAirLight(scene.air, scene.movingLight);
+  ctx.drawImage(scene.air, 0, 0, width, height);
 }
