@@ -1,0 +1,25 @@
+/* Decorative siblings of the call UI: never a backdrop root around its controls. */
+.call-window-light { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; user-select: none; }
+.call-window-light::before {
+  content: ''; position: absolute; inset: 0;
+  background: url('/api/v1/ui-assets/felt-oat.webp') center / 280px;
+  opacity: .055;
+}
+.call-window-light__panes {
+  position: absolute; inset: -16% -30%;
+  background: linear-gradient(124deg,
+    transparent 16%, #c5d5b91c 17%, #c5d5b91c 29%, transparent 30%,
+    transparent 44%, #c5d5b92e 45%, #c5d5b92e 57%, #06131538 58%,
+    #06131538 60%, #c5d5b91f 61%, #c5d5b91f 75%, transparent 76%);
+  /* Keep the portrait/status quiet; light remains legible behind bottom actions. */
+  mask-image: linear-gradient(to bottom, #0005, #0002 32%, #0003 48%, #000 73%);
+  animation: call-window-drift 28s ease-in-out infinite alternate;
+}
+.phone-screen--dialing .phone-dialing { position: relative; z-index: 1; }
+@keyframes call-window-drift {
+  from { transform: translate3d(-24px, -12px, 0); }
+  to { transform: translate3d(24px, 12px, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .call-window-light__panes { animation: none; transform: translate3d(0, 0, 0); }
+}

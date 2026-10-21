@@ -24,3 +24,7 @@ Keep character art and current status together. Put actions in a separate group 
 ## Review before release
 
 Review the entire affected flow, including normal, waiting, paused, retry, expired recovery, disabled, and failure states. Include receipt dismissal, folder navigation, preview actions, deletion confirmation, and paging when changing the shared controls. Check light and dark scenes, narrow phones and desktop frames, long labels, and keyboard focus. Keep information and actions distinct and prevent content from displacing controls.
+
+## Call waiting atmosphere
+
+Dialing, paused, recovery and failed-call screens share a faint felt texture and slowly drifting window light (28 seconds per direction). Keep light subtle around the portrait and status, with visible boundaries behind the bottom glass actions. These are non-interactive sibling layers outside layout flow, never filter-bearing ancestors of controls. Reduced-motion preferences retain a static light pattern.
