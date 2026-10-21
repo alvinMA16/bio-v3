@@ -18,6 +18,7 @@ Keep character art and current status together. Put actions in a separate group 
 - Use shared hover, pressed, focus-visible, disabled, and reduced-motion behavior. Avoid opaque background substitutions on press.
 - Adapt text contrast and glass tint to light and dark surroundings through shared variables.
 - Icon navigation is a visible compact glass control with an accessible name. Destructive actions retain distinct semantics and confirmation.
+- The circular hang-up thumb uses transparent ruby-red glass (38% tint) with a dark burgundy handset on light scenes and an ivory handset on dark scenes. Keep the track in the neutral glass family.
 - Segmented selection and slide-to-end controls share the material but retain their selected/drag affordances. Felt object entries and file covers remain directly manipulable artwork, rather than being wrapped in unrelated pills.
 
 ## Review before release

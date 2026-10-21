@@ -14,7 +14,7 @@
   --control-ring: #c5deca;
 }
 .phone-screen button.product-control, .phone-screen .material-folder button.product-control, .account-page .account-card button, .account-card button.account-submit,
-.phone-screen.phone-screen--call .slide-to-end,
+.phone-screen.phone-screen--call .slide-to-end::before,
 .phone-screen.phone-screen--call .slide-to-end-thumb,
 .phone-screen .material-folder .material-filters,
 .phone-screen .material-folder :is(.material-add, .search-clear),
@@ -31,8 +31,7 @@
   font-family: inherit; font-size: 14px; line-height: 1.5; letter-spacing: normal;
   cursor: pointer; transition: transform 150ms ease, box-shadow 150ms ease;
 }
-.phone-screen button.product-control::after,
-.phone-screen.phone-screen--call .slide-to-end::before {
+.phone-screen button.product-control::after {
   content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
   /* A narrow rim reflection, with no milky highlight across the clear centre. */
   background: none; box-shadow: inset .5px 0 .5px #ffffff50;
@@ -46,15 +45,22 @@
 .phone-screen :is(.phone-folder-nav,.material-preview-header,.material-search-header) button.product-control { min-width: 44px; }
 .phone-screen .material-actions-menu { background: none; border: 0; box-shadow: none; padding: 0; overflow: visible; display: grid; gap: 10px; }
 .phone-screen .material-actions button.product-control + button { border: 0; }
+/* A sibling lens layer keeps the track from clipping the thumb's backdrop. */
+.phone-screen.phone-screen--call .slide-to-end { background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.phone-screen.phone-screen--call .slide-to-end::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
 .phone-screen.phone-screen--call .slide-to-end-label { color: var(--control-ink); }
-.phone-screen.phone-screen--call .slide-to-end-thumb { --control-surface: rgb(226 103 113 / 15%); color: #a33146; }
-.phone-screen.phone-screen--conversation .slide-to-end-thumb { color: #ffe0e5; }
+/* Ruby tint retains the live lens; the handset is printed above the glass. */
+.phone-screen.phone-screen--call .slide-to-end-thumb {
+  --control-surface: rgb(224 45 61 / 38%); color: #651327;
+  box-shadow: inset 0 1px .5px #ffe9e9c9, inset -.5px -1px .5px #951c394d, 0 3px 9px #6a15223d;
+}
+.phone-screen.phone-screen--conversation .slide-to-end-thumb { color: #fff3f3; }
 .phone-screen.phone-screen--call .slide-to-end--dragging .slide-to-end-thumb { box-shadow: inset 0 1px 1px #ffffffb8, inset -.5px -1px 1px #9d5a6850, 0 4px 10px #76273428; }
 .phone-screen .material-folder .material-add { border-radius: 50%; }
 @media (prefers-reduced-motion: reduce) { .phone-screen button.product-control, .phone-screen .material-folder button.product-control, .account-page .account-card button, .account-card button.account-submit { transition: none; } }
 @media (prefers-reduced-transparency: reduce) {
   .phone-screen, .account-card { --control-glass: #e6eee4; --control-primary: #d8e8d4; }
   .phone-screen--conversation, .phone-screen--dialing { --control-glass: #35453b; --control-primary: #48604d; }
-  .phone-screen button.product-control--danger, .phone-screen .material-folder button.product-control--danger,
-  .phone-screen.phone-screen--call .slide-to-end-thumb { --control-surface: #f2c7ca; }
+  .phone-screen button.product-control--danger, .phone-screen .material-folder button.product-control--danger { --control-surface: #f2c7ca; }
+  .phone-screen.phone-screen--call .slide-to-end-thumb { --control-surface: #b82f43; color: #fff3f3; }
 }
