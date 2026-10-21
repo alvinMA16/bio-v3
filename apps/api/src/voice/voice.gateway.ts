@@ -138,7 +138,8 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
           if (closing && message?.type !== 'hangup' && message?.type !== 'disconnect') return;
           if (!message || typeof message.turnId !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(message.turnId)) throw new Error('Invalid turn');
           if (message.type === 'listen') {
-            if ((message.resume !== undefined && typeof message.resume !== 'boolean')
+            if ((message.recoveryAcknowledgement !== undefined && typeof message.recoveryAcknowledgement !== 'boolean')
+              || (message.resume !== undefined && typeof message.resume !== 'boolean')
               || (message.playbackFeedback !== undefined && typeof message.playbackFeedback !== 'boolean')
               || (message.orderedCapture !== undefined && typeof message.orderedCapture !== 'boolean')
               || (message.durableCapture !== undefined && typeof message.durableCapture !== 'boolean')
@@ -152,13 +153,15 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
               validatedRequest = true;
               const { message: _text, ...input } = dto;
               let resumed = false;
+              let recoveryRemainingMs: number | undefined;
               if (user && !callId) {
                 const id = message.callId ?? randomUUID();
                 if (message.resume) {
                   try {
                     // Authenticated takeover of this user's own call; drain old writes before restoring it.
                     await this.calls.get(JSON.stringify([user, id]))?.stop();
-                    const restored = await this.memory!.resumeCall(user, id, connection);
+                    const restored = await this.memory!.resumeCall(user, id, connection, message.recoveryAcknowledgement === true);
+                    recoveryRemainingMs = restored.recoveryRemainingMs;
                     conversationId = restored.conversationId; callId = restored.callId; resumed = restored.resumed;
                   } catch (error) {
                     if (!(error instanceof ConflictException)) throw error;
@@ -184,7 +187,7 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
                   return finalize();
                 } });
                 ws.send(JSON.stringify({ type: 'connected', turnId: message.turnId, elapsedMs: 0,
-                  callId: callId ?? message.callId ?? randomUUID(), conversationId, resumed }));
+                  callId: callId ?? message.callId ?? randomUUID(), conversationId, resumed, ...(recoveryRemainingMs !== undefined ? { recoveryRemainingMs } : {}) }));
               }
               session.cancel(undefined, 'superseded');
               await session.settled(); await durable?.settled();
@@ -201,6 +204,10 @@ export class VoiceGateway implements OnApplicationBootstrap, OnApplicationShutdo
                 && await this.agent.hasPausedTask?.(conversationId, user, callId);
               void session.listen(message.turnId, input, opening, message.playbackFeedback === true, !!durable && message.orderedCapture === true, !!resumeTask).catch(() => ws.close(1011, 'Voice session failed'));
             } finally { validating = false; }
+          } else if (message.type === 'call.ready') {
+            if (user && callId && !await this.memory!.confirmCallReady(user, callId, connection)) {
+              session.close('recovery_expired'); ws.close(1000, 'Call ended');
+            }
           } else if (message.type === 'diagnostic') {
             if (!['storage_unavailable', 'upload_stalled', 'recovery_timeout', 'receive_failed', 'startup_failed'].includes(message.code)
               || (message.pendingFrames !== undefined && (!Number.isSafeInteger(message.pendingFrames) || message.pendingFrames < 0 || message.pendingFrames > 10000))) throw new Error('Invalid diagnostic');

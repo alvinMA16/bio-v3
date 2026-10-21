@@ -313,7 +313,7 @@ export class BrowserVoice {
   private reconnect(ws: WebSocket): void {
     if (this.closed || this.socket !== ws) return;
     clearTimeout(this.connectionTimer);
-    this.remember(this.confirmed);
+    this.remember(this.callReady);
     this.confirmed = false; this.resume = true;
     this.send({ type: 'disconnect', turnId: this.turnId || 'disconnect', reason: 'client_error' });
     this.socket = undefined; ws.close();
@@ -349,7 +349,7 @@ export class BrowserVoice {
     const request = this.callbacks.request();
     if (this.conversationId) request.conversationId = this.conversationId;
     this.callbacks.start(this.turnId, request);
-    this.send({ type: 'listen', turnId: this.turnId, callId: this.callId, resume: this.resume, playbackFeedback: true, durableCapture: !!this.captureBuffer, orderedCapture: true, ...(this.captureBuffer?.id ? { captureId: this.captureBuffer.id } : {}), request });
+    this.send({ type: 'listen', recoveryAcknowledgement: true, turnId: this.turnId, callId: this.callId, resume: this.resume, playbackFeedback: true, durableCapture: !!this.captureBuffer, orderedCapture: true, ...(this.captureBuffer?.id ? { captureId: this.captureBuffer.id } : {}), request });
   }
   updateAttachmentView(view: { materialId: string; page: number }): void {
     if (!this.closed && this.turnId) this.send({ type: 'attachment.view', turnId: this.turnId, view });
@@ -415,7 +415,10 @@ export class BrowserVoice {
     if (event.type === 'connected') {
       this.resumedCall = event.resumed;
       this.callId = event.callId; this.conversationId = event.conversationId;
-      this.confirmed = true; this.resume = false; this.remember();
+      this.confirmed = true; this.resume = false;
+      if (event.recoveryRemainingMs !== undefined) this.recoveryUntil = Date.now() + Math.max(0, event.recoveryRemainingMs);
+      else if (!event.resumed) this.recoveryUntil = undefined;
+      this.remember();
       this.callbacks.status?.(event.resumed || this.captureBuffer?.id ? '正在恢复对话' : '正在呼叫');
     }
     if (event.type === 'error' && event.code === 'CALL_BUSY') { if (this.socket) this.reconnect(this.socket); return; }
@@ -566,7 +569,7 @@ export class BrowserVoice {
   private mediaReady(): void {
     clearTimeout(this.readinessTimer); this.reconnects = 0; this.recoveryUntil = undefined; this.remember();
     this.stopRingback();
-    if (!this.callReady) { this.callReady = true; this.callbacks.connected?.(); }
+    if (!this.callReady) { this.send({ type: 'call.ready', turnId: this.turnId }); this.callReady = true; this.callbacks.connected?.(); }
   }
   private uploadDrained(): void {
     if (this.closed || !this.acceptingAudio || !this.durableCapture || this.captureBuffer?.pendingCount) return;
@@ -587,8 +590,11 @@ export class BrowserVoice {
   close(hangup = true, reason: 'page_hidden' | 'client_error' = 'client_error'): void {
     if (this.closed) return;
     clearTimeout(this.reconnectTimer); clearTimeout(this.connectionTimer); clearTimeout(this.readinessTimer); this.upload?.stop();
-    const recoveryUntil = hangup ? undefined : this.remember();
-    if (hangup) this.forget();
+    const recoveryUntil = hangup ? undefined : this.remember(this.callReady);
+    if (hangup) {
+      this.forget();
+      try { this.captureBuffer?.park(); } catch { /* Resource cleanup must still complete if storage is unavailable. */ }
+    }
     if (hangup) this.send({ type: 'hangup', turnId: this.turnId || 'hangup' });
     else this.send({ type: 'disconnect', turnId: this.turnId || 'disconnect', reason });
     document.removeEventListener('visibilitychange', this.onVisibility);

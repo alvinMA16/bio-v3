@@ -121,7 +121,7 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
       ORDER BY c.started_at DESC,c.id DESC LIMIT 9 OFFSET $4`, [user, date ?? null, patterns?.length ? patterns : null, offset])).rows;
     return { items: rows.slice(0, 8).map(row => this.publicCall(row)), nextOffset: rows.length > 8 ? offset + 8 : null };
   }
-  async beginCall(user: string, id: string, connection: string): Promise<string> {
+  async beginCall(user: string, id: string, connection: string, preserveRecovery = false): Promise<string> {
     if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id)) throw new ConflictException('Invalid call ID');
     await this.ensureUser(user);
     const c = await this.pool!.connect();
@@ -133,7 +133,7 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
         || (old.status === 'disconnected' && new Date(old.end_after).getTime() <= Date.now())
         || (old.status === 'active' && old.connection_id !== connection))) throw new ConflictException('Call unavailable');
       if (old) {
-        await c.query("UPDATE bio_memory_calls SET status='active', connection_id=$2, end_after=NULL,touched_at=now() WHERE id=$1", [id, connection]);
+        await c.query("UPDATE bio_memory_calls SET status='active', connection_id=$2, end_after=CASE WHEN $3 THEN end_after ELSE NULL END,touched_at=now() WHERE id=$1", [id, connection, preserveRecovery]);
         await c.query('COMMIT'); return old.conversation_id;
       }
       const conversation = randomUUID();
@@ -146,14 +146,23 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
       await c.query('COMMIT'); return conversation;
     } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); }
   }
-  async resumeCall(user: string, id: string, connection: string) {
+  async resumeCall(user: string, id: string, connection: string, preserveRecovery = false) {
     await this.expireCalls();
     const previous = (await this.pool!.query('SELECT status FROM bio_memory_calls WHERE id=$1 AND user_id=$2', [id, user])).rows[0];
     // A connection can disappear after sending listen but before receiving its acknowledgement.
     // beginCall still rejects a colliding ID owned by somebody else.
     if (!previous) return { callId: id, conversationId: await this.beginCall(user, id, connection), resumed: false };
     const callId = previous.status === 'ended' ? randomUUID() : id;
-    return { callId, conversationId: await this.beginCall(user, callId, connection), resumed: callId === id };
+    const conversationId = await this.beginCall(user, callId, connection, preserveRecovery);
+    const row = preserveRecovery ? (await this.pool!.query('SELECT GREATEST(0,extract(epoch FROM end_after-now())*1000) AS remaining FROM bio_memory_calls WHERE id=$1 AND end_after IS NOT NULL', [callId])).rows[0] : undefined;
+    return { callId, conversationId, resumed: callId === id, ...(row ? { recoveryRemainingMs: Number(row.remaining) } : {}) };
+  }
+
+  /** A transport handshake alone must not renew the recovery window. */
+  async confirmCallReady(user: string, id: string, connection: string): Promise<boolean> {
+    const result = await this.pool!.query(`UPDATE bio_memory_calls SET end_after=NULL,touched_at=now()
+      WHERE user_id=$1 AND id=$2 AND connection_id=$3 AND status='active' AND (end_after IS NULL OR end_after>now())`, [user, id, connection]);
+    return !!result.rowCount;
   }
 
   captureStore(user: string, call: string, connection: string, requested?: string) {
@@ -194,7 +203,7 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
   }
   async disconnectCall(user: string, id: string, connection: string, ended: boolean): Promise<void> {
     const grace = ended ? 0 : VOICE_RECOVERY_WINDOW_MS / 1000;
-    await this.pool!.query(`UPDATE bio_memory_calls SET status='disconnected',end_after=now()+$4*interval '1 second'
+    await this.pool!.query(`UPDATE bio_memory_calls SET status='disconnected',end_after=CASE WHEN $4=0 THEN now() ELSE COALESCE(end_after,now()+$4*interval '1 second') END
       WHERE user_id=$1 AND id=$2 AND connection_id=$3 AND status='active'`, [user, id, connection, grace]);
     await this.expireCalls();
   }
@@ -202,7 +211,7 @@ export class MemoryService implements OnModuleInit, OnModuleDestroy {
     // A crashed API also eventually closes its abandoned calls. Live connections send heartbeats.
     await this.pool!.query(`WITH ended AS (
       UPDATE bio_memory_calls SET status='ended',ended_at=now()
-      WHERE (status='disconnected' AND end_after<=now()) OR (status='active' AND touched_at<now()-$1*interval '1 second')
+      WHERE (status IN ('disconnected','active') AND end_after<=now()) OR (status='active' AND touched_at<now()-$1*interval '1 second')
       RETURNING id,user_id)
       INSERT INTO bio_memory_jobs(call_id,user_id) SELECT id,user_id FROM ended ON CONFLICT DO NOTHING`, [VOICE_RECOVERY_WINDOW_MS / 1000]);
   }
