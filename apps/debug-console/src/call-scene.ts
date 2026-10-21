@@ -1,3 +1,5 @@
+import { breezeAt, scenePhase, SCENE_LOOP_SECONDS } from './call-scene-motion';
+
 /** One scene source for both the room and the glass that refracts it. */
 function createPaths() {
 const arch = new Path2D('M0 940V155A155 155 0 0 1 310 155V940Z');
@@ -20,9 +22,10 @@ const leaves: readonly (readonly [number, number, number, number])[] = [
   [336,461,152,1.1],[241,480,0,1.25],[223,452,-25,1.05],[189,426,100,1.2],
   [159,436,15,1.3],[135,419,35,1.1],[182,408,100,1.15],[208,430,155,1.1],
 ];
-// The wall faces the viewer. The window is in front of it, off screen to the
-// right. Parallel sunlight travels left and slightly down until it meets the wall.
-const daylight = { x: -.96, y: .24, depth: 500 } as const;
+// View the floor from above. Sunlight enters from the lower left and travels
+// away across it; the arched end recedes and narrows in the same direction.
+const daylight = { x: .35, y: -.94, depth: 1000 } as const;
+const windowSize = { width: 330, height: 960, padding: 10 };
 
 function branch(ctx: CanvasRenderingContext2D) {
   ctx.strokeStyle = '#122326';
@@ -43,34 +46,18 @@ const noise = (seed: number) => {
   return n - Math.floor(n);
 };
 
-/** Damped spring response to a finite gust; quiet between irregular arrivals. */
-function windResponse(seconds: number, damping: number, frequency: number) {
-  const response = (t: number) => t <= 0 ? 0 : 1 - Math.exp(-damping * t)
-    * (Math.cos(frequency * t) + damping / frequency * Math.sin(frequency * t));
-  const block = Math.floor(seconds / 14);
-  let wind = 0;
-  for (let i = block - 1; i <= block; i++) {
-    const arrival = i * 14 + 2 + noise(i * 3) * 4;
-    const duration = 1.4 + noise(i * 3 + 1) * 1.6;
-    const strength = .65 + noise(i * 3 + 2) * .35;
-    const t = seconds - arrival;
-    wind += strength * (response(t) - response(t - duration)
-      + .22 * (response(t - .7) - response(t - 1.15)));
-  }
-  return wind;
-}
-
 function paintTree(ctx: CanvasRenderingContext2D, tree: HTMLCanvasElement, foliage: readonly HTMLCanvasElement[], seconds: number, mirrored: boolean) {
   const time = seconds - (mirrored ? .42 : 0);
-  const wind = windResponse(time, 2.8, 4.8);
-  const leafWind = windResponse(time - .16, 3.8, 10);
+  const wind = breezeAt(time);
+  const angle = scenePhase(time) / SCENE_LOOP_SECONDS * Math.PI * 2;
   ctx.save();
   // Mirroring the far branch must not reverse the world-space wind direction.
-  ctx.translate(430, 920); ctx.rotate(wind * (mirrored ? .032 : -.038)); ctx.translate(-430, -920);
+  ctx.translate(430, 920); ctx.rotate(wind.branch * (mirrored ? .03 : -.032)); ctx.translate(-430, -920);
   ctx.drawImage(tree, 0, 0);
   leaves.forEach(([x, y, rotation, scale], i) => {
-    const flutter = leafWind * (.15 + noise(i) * .09)
-      + Math.sin(time * 13 + i * .74) * Math.abs(leafWind) * .035;
+    const flutter = wind.leaf * (.13 + noise(i) * .07)
+      + (.018 + Math.abs(wind.leaf) * .025) * Math.sin(angle * 29 + i * .74)
+      + .009 * Math.sin(angle * 43 + i * 1.13);
     ctx.save(); ctx.translate(x, y);
     ctx.rotate(rotation * Math.PI / 180 + flutter * (mirrored ? -1 : 1));
     ctx.scale(scale, scale); ctx.drawImage(foliage[i % 3 ? 0 : 1]!, -40, -40);
@@ -82,13 +69,13 @@ function paintTree(ctx: CanvasRenderingContext2D, tree: HTMLCanvasElement, folia
 function paintStaticRoom(ctx: CanvasRenderingContext2D, width: number, height: number, grain: CanvasPattern | null) {
   ctx.save();
   ctx.scale(width / 390, height / 844);
-  const wall = ctx.createLinearGradient(0, 0, 390, 844);
-  wall.addColorStop(0, '#3b4845');
-  wall.addColorStop(.48, '#293b3c');
-  wall.addColorStop(1, '#203136');
-  ctx.fillStyle = wall;
+  const floor = ctx.createLinearGradient(-100, 900, 420, 0);
+  floor.addColorStop(0, '#3b4845');
+  floor.addColorStop(.48, '#293b3c');
+  floor.addColorStop(1, '#203136');
+  ctx.fillStyle = floor;
   ctx.fillRect(0, 0, 390, 844);
-  const ambient = ctx.createRadialGradient(300, 60, 10, 220, 260, 640);
+  const ambient = ctx.createRadialGradient(-50, 830, 10, 100, 650, 800);
   ambient.addColorStop(0, '#efdab22b');
   ambient.addColorStop(.5, '#d6d4ac0e');
   ambient.addColorStop(1, '#d6d4ac00');
@@ -102,37 +89,61 @@ function paintStaticRoom(ctx: CanvasRenderingContext2D, width: number, height: n
   ctx.restore();
 }
 
-function windowProjection(ctx: CanvasRenderingContext2D) {
-  ctx.transform(1, .07, -.19, 1.03, 111, 36);
+/** Project the window onto a receding floor plane, using one homography. */
+function floorSample(x: number, y: number) {
+  const a = 250 / 310, b = -270 / 940, d = 80 / 310, e = 501 / 940, h = -.3 / 940;
+  const v = (a * (y - 10) - d * (x - 130)) / (a * (e - y * h) - d * (b - x * h));
+  const u = (x - 130 - (b - x * h) * v) / a;
+  return { x: u + windowSize.padding, y: v + windowSize.padding };
 }
 
-/** The frame removes direct sunlight. It never paints dark pigment onto the wall. */
-function paintWindowLight(ctx: CanvasRenderingContext2D, width: number, height: number) {
-  ctx.save();
-  ctx.scale(width / 390, height / 844);
-  const sun = ctx.createLinearGradient(500, 100, 500 + daylight.x * 720, 100 + daylight.y * 720);
-  sun.addColorStop(0, '#ffe6b950');
-  sun.addColorStop(.55, '#f5e2b83d');
-  sun.addColorStop(1, '#e8dfbb30');
-  windowProjection(ctx);
-  ctx.fillStyle = sun;
-  ctx.fill(getPaths().arch);
+/** Occluders remove light from this aperture mask, never from the ground itself. */
+function paintWindowLight(ctx: CanvasRenderingContext2D) {
+  ctx.save(); ctx.translate(windowSize.padding, windowSize.padding);
+  ctx.fillStyle = '#fff'; ctx.fill(getPaths().arch);
   ctx.globalCompositeOperation = 'destination-out';
-  ctx.strokeStyle = '#ffffffed';
-  ctx.lineWidth = 6.5;
-  ctx.beginPath();
+  ctx.strokeStyle = '#ffffffed'; ctx.lineWidth = 6.5; ctx.beginPath();
   ctx.moveTo(0, 155); ctx.lineTo(310, 155);
   for (const x of [103, 207]) { ctx.moveTo(x, 155); ctx.lineTo(x, 950); }
   for (const y of [330, 510, 690]) { ctx.moveTo(0, y); ctx.lineTo(310, y); }
   for (const a of [Math.PI * 1.25, Math.PI * 1.5, Math.PI * 1.75]) {
     ctx.moveTo(155, 155); ctx.lineTo(155 + 155 * Math.cos(a), 155 + 155 * Math.sin(a));
   }
-  ctx.stroke();
-  ctx.restore();
+  ctx.stroke(); ctx.restore();
+}
+
+type Projection = { canvas: HTMLCanvasElement; context: CanvasRenderingContext2D; pixels: ImageData; field: Float32Array };
+function makeProjection(width: number, height: number): Projection {
+  const canvas = makeLayer(width, height), context = canvas.getContext('2d')!;
+  const pixels = context.createImageData(canvas.width, canvas.height), field = new Float32Array(canvas.width * canvas.height * 4);
+  for (let y = 0; y < canvas.height; y++) for (let x = 0; x < canvas.width; x++) {
+    const px = (x + .5) * 390 / width, py = (y + .5) * 844 / height;
+    const uv = floorSample(px, py), k = (y * canvas.width + x) * 4;
+    field[k] = -1;
+    if (uv.x < 0 || uv.y < 0 || uv.x >= windowSize.width - 1 || uv.y >= windowSize.height - 1) continue;
+    const ix = Math.floor(uv.x), iy = Math.floor(uv.y);
+    field[k] = (iy * windowSize.width + ix) * 4 + 3;
+    field[k + 1] = uv.x - ix; field[k + 2] = uv.y - iy;
+    const travel = Math.max(0, Math.min(1, ((px + 250) * daylight.x + (py - 1040) * daylight.y) / 1200));
+    field[k + 3] = .3 - .09 * travel;
+    pixels.data[k] = 245; pixels.data[k + 1] = 226; pixels.data[k + 2] = 185;
+  }
+  return { canvas, context, pixels, field };
+}
+function projectLight(projection: Projection, source: CanvasRenderingContext2D) {
+  const alpha = source.getImageData(0, 0, windowSize.width, windowSize.height).data;
+  const { field, pixels } = projection, stride = windowSize.width * 4;
+  for (let k = 0; k < field.length; k += 4) {
+    const i = field[k]!; if (i < 0) continue;
+    const fx = field[k + 1]!, fy = field[k + 2]!;
+    pixels.data[k + 3] = ((alpha[i]! * (1 - fx) + alpha[i + 4]! * fx) * (1 - fy)
+      + (alpha[i + stride]! * (1 - fx) + alpha[i + stride + 4]! * fx) * fy) * field[k + 3]!;
+  }
+  projection.context.putImageData(pixels, 0, 0);
 }
 
 /** Integrate the lit window cross-section back towards the actual window.
- * Every slice follows the same parallel rays and ends at the wall projection.
+ * Every slice follows the same parallel rays and ends at the floor projection.
  * Leaf occlusion is included, so air light changes only when the foliage moves.
  */
 function paintAirLight(layer: HTMLCanvasElement, sunlight: HTMLCanvasElement) {
@@ -170,7 +181,7 @@ export function createFeltGrain() {
 
 // Cache soft textures at CSS resolution; each frame only composites and transforms them.
 const sceneCache = new WeakMap<HTMLCanvasElement, {
-  key: string; base: HTMLCanvasElement; light: HTMLCanvasElement;
+  key: string; base: HTMLCanvasElement; light: HTMLCanvasElement; projection: Projection;
   bounce: HTMLCanvasElement; air: HTMLCanvasElement; tree: HTMLCanvasElement; foliage: readonly HTMLCanvasElement[];
   movingLight: HTMLCanvasElement;
 }>();
@@ -180,31 +191,32 @@ export function paintCallScene(ctx: CanvasRenderingContext2D, width: number, hei
   if (!scene || scene.key !== key) {
     const base = makeLayer(width, height);
     paintStaticRoom(base.getContext('2d')!, width, height, grain);
-    const aperture = makeLayer(width, height);
-    paintWindowLight(aperture.getContext('2d')!, width, height);
-    const light = makeLayer(width, height), lightCtx = light.getContext('2d')!;
+    const aperture = makeLayer(windowSize.width, windowSize.height);
+    paintWindowLight(aperture.getContext('2d')!);
+    const light = makeLayer(windowSize.width, windowSize.height), lightCtx = light.getContext('2d', { willReadFrequently: true })!;
     lightCtx.filter = 'blur(1.6px)'; lightCtx.drawImage(aperture, 0, 0);
+    const projection = makeProjection(width, height);
+    projectLight(projection, lightCtx);
     const bounce = makeLayer(width / 4, height / 4), bounceCtx = bounce.getContext('2d')!;
     bounceCtx.filter = 'blur(7px)'; bounceCtx.globalAlpha = .32;
-    bounceCtx.drawImage(aperture, 0, 0, bounce.width, bounce.height);
+    bounceCtx.drawImage(projection.canvas, 0, 0, bounce.width, bounce.height);
     const raw = makeLayer(500, 960);
     branch(raw.getContext('2d')!);
     const tree = makeLayer(500, 960), treeCtx = tree.getContext('2d')!;
     treeCtx.filter = 'blur(2.8px)'; treeCtx.drawImage(raw, 0, 0);
-    scene = { key, base, light, bounce, tree,
+    scene = { key, base, light, bounce, tree, projection,
       foliage: [leafTexture(getPaths().leaf), leafTexture(getPaths().broadLeaf)],
-      air: makeLayer(width / 2, height / 2), movingLight: makeLayer(width, height) };
+      air: makeLayer(width / 2, height / 2), movingLight: makeLayer(windowSize.width, windowSize.height) };
     sceneCache.set(ctx.canvas, scene);
   }
 
-  // All occluders subtract from this transparent light layer, so the wall remains
-  // the minimum ambient exposure even where frame, leaves and bird overlap.
-  const sunlight = scene.movingLight.getContext('2d')!;
+  // All occluders subtract from this transparent light layer, so the ground remains
+  // at its minimum ambient exposure even where frame, leaves and bird overlap.
+  const sunlight = scene.movingLight.getContext('2d', { willReadFrequently: true })!;
   sunlight.clearRect(0, 0, scene.movingLight.width, scene.movingLight.height);
   sunlight.drawImage(scene.light, 0, 0);
   sunlight.save();
-  sunlight.scale(width / 390, height / 844);
-  windowProjection(sunlight);
+  sunlight.translate(windowSize.padding, windowSize.padding);
   sunlight.globalCompositeOperation = 'destination-out';
   for (const near of [true, false]) {
     sunlight.save(); sunlight.globalAlpha = near ? .56 : .4;
@@ -213,10 +225,10 @@ export function paintCallScene(ctx: CanvasRenderingContext2D, width: number, hei
     paintTree(sunlight, scene.tree, scene.foliage, seconds, !near);
     sunlight.restore();
   }
-  const flight = (seconds + 8) % 57;
-  if (flight > 53 && flight < 56) {
-    const p = (flight - 53) / 3;
-    sunlight.save(); sunlight.globalAlpha = Math.sin(p * Math.PI) * .3;
+  const flight = scenePhase(seconds);
+  if (flight > 43 && flight < 47) {
+    const p = (flight - 43) / 4;
+    sunlight.save(); sunlight.globalAlpha = Math.sin(p * Math.PI) ** 2 * .3;
     sunlight.translate(360 - p * 430, 240 + p * 100); sunlight.rotate(-.25);
     sunlight.fill(new Path2D('M-22 3Q-12-14 0 0Q10-12 23-8Q10-5 2 5L-2 6Q-11-3-22 3Z'));
     sunlight.restore();
@@ -225,7 +237,8 @@ export function paintCallScene(ctx: CanvasRenderingContext2D, width: number, hei
 
   ctx.drawImage(scene.base, 0, 0, width, height);
   ctx.drawImage(scene.bounce, 0, 0, width, height);
-  ctx.drawImage(scene.movingLight, 0, 0, width, height);
-  paintAirLight(scene.air, scene.movingLight);
+  projectLight(scene.projection, sunlight);
+  ctx.drawImage(scene.projection.canvas, 0, 0, width, height);
+  paintAirLight(scene.air, scene.projection.canvas);
   ctx.drawImage(scene.air, 0, 0, width, height);
 }
