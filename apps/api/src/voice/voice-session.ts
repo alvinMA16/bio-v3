@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { AgentEvent, ChatCompletionRequest, ChatCompletionResponse, VoicePlaybackSnapshot, VoiceRequest, VoiceServerMessage, VoiceState } from '@bio/contracts';
 import type { AsrProvider, AsrStream, TtsProvider } from './providers.js';
 import { SpokenSegments } from './spoken-segments.js';
@@ -9,12 +10,12 @@ type Runner = (input: ChatCompletionRequest, emit: (event: AgentEvent) => void, 
 type Payload = VoiceServerMessage extends infer M ? M extends VoiceServerMessage ? Omit<M, 'turnId' | 'elapsedMs'> : never : never;
 interface Turn {
   id: string; request: VoiceRequest; abort: AbortController; started: number;
-  orderedCapture: boolean; finishRequested?: boolean;
+  playbackFeedback: boolean; orderedCapture: boolean; finishRequested?: boolean;
   captureThrough?: number; recognitionFinal?: boolean;
   asr?: AsrStream; endpoint?: ReturnType<typeof setTimeout>; deadline?: ReturnType<typeof setTimeout>;
   task: Promise<void>; state: VoiceState; audioBytes: number;
   speech: AbortController; window: PlaybackWindow; progress: VoicePlaybackSnapshot;
-  segments: Array<{ end: number; segmentId: number; messageId: string; text: string }>;
+  segments: Array<{ end: number; segmentId: number; messageId: string; text: string; onPlayed?: () => void }>;
   viewListeners: Set<() => void>;
   viewObservers: Set<(event: { view: DocumentView; accepted: boolean }) => void>;
 }
@@ -37,7 +38,7 @@ export class VoiceSession {
     await this.lastTask.catch(() => undefined);
     if (this.closed || generation !== this.generation) return;
     if (this.playbackTurn && (!this.playbackTurn.progress.generated || this.playbackTurn.window.played < this.playbackTurn.window.sent)) this.report(this.playbackTurn, true);
-    const turn: Turn = { id, request, orderedCapture, abort: new AbortController(), started: performance.now(),
+    const turn: Turn = { id, request, orderedCapture, playbackFeedback, abort: new AbortController(), started: performance.now(),
       task: Promise.resolve(), state: 'connecting', audioBytes: 0,
       speech: new AbortController(), window: new PlaybackWindow(playbackFeedback), segments: [], viewListeners: new Set(), viewObservers: new Set(),
       progress: { turnId: id, generated: false, sentSamples: 0, playedSamples: 0, interrupted: false } };
@@ -124,9 +125,10 @@ export class VoiceSession {
     if (!turn || turn.id !== id) return;
     turn.window.acknowledge(samples);
     const completed = turn.segments.filter(part => part.end <= turn.window.played);
+    if (!turn.abort.signal.aborted && !turn.speech.signal.aborted) for (const part of completed) part.onPlayed?.();
     const last = completed.at(-1);
     if (last) {
-      const { end: _end, ...played } = last; turn.progress.lastPlayed = played;
+      const { end: _end, onPlayed: _callback, ...played } = last; turn.progress.lastPlayed = played;
       turn.segments = turn.segments.filter(part => part.end > turn.window.played);
     }
     this.report(turn);
@@ -186,6 +188,42 @@ export class VoiceSession {
       let segmentId = 0;
       let queuedCharacters = 0;
       let speechCharacterLimit = 20_000;
+      const enqueue = (part: string, speechId: string, onPlayed?: () => void) => {
+        queuedCharacters += part.length;
+        if (queuedCharacters > speechCharacterLimit) {
+          // A speech budget must never abort the independently persisted Agent response.
+          ttsError = new Error('Speech text queue limit'); turn.speech.abort(); return;
+        }
+        const index = ++segmentId;
+        ttsQueue = ttsQueue.then(async () => {
+          if (!this.isCurrent(turn) || ttsError || turn.speech.signal.aborted) return;
+          await turn.window.ready(turn.speech.signal);
+          // Retry only if this segment has emitted no audio; never replay a partial sentence.
+          const before = turn.window.sent;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              await this.tts.synthesize(part, turn.speech.signal, async pcm => {
+                if (!this.isCurrent(turn) || turn.speech.signal.aborted) return;
+                for (let offset = 0; offset < pcm.length; offset += 32000) {
+                  await turn.window.ready(turn.speech.signal);
+                  if (!this.isCurrent(turn)) return;
+                  const chunk = pcm.subarray(offset, offset + 32000);
+                  turn.window.sent += chunk.length / 2;
+                  this.emit(turn, { type: 'audio', segmentId: index, messageId: speechId,
+                    text: part, data: Buffer.from(chunk).toString('base64'), sampleRate: 16000, endSample: turn.window.sent });
+                }
+              });
+              break;
+            } catch (error) {
+              if (attempt || turn.window.sent > before || turn.speech.signal.aborted) throw error;
+            }
+          }
+          if (this.isCurrent(turn)) {
+            turn.segments.push({ end: turn.window.sent, segmentId: index, messageId: speechId, text: part, ...(onPlayed ? { onPlayed } : {}) });
+            this.emit(turn, { type: 'segment.end', segmentId: index }); this.playback(turn.id, turn.window.played);
+          }
+        }).catch(error => { ttsError = error; });
+      };
       const result = await this.run({ ...turn.request, message: text }, event => {
         if (!this.isCurrent(turn)) return;
         if (event.runId) turn.progress.runId = event.runId;
@@ -194,43 +232,27 @@ export class VoiceSession {
         this.emit(turn, { type: 'agent', event });
         if (event.type !== 'speech.delta' && event.type !== 'speech.completed') return;
         const parts = segments.push(event.messageId, event.type === 'speech.delta' ? event.delta : event.text, event.type === 'speech.completed');
-        for (const part of parts) {
-          queuedCharacters += part.length;
-          if (queuedCharacters > speechCharacterLimit) {
-            // A speech budget must never abort the independently persisted Agent response.
-            ttsError = new Error('Speech text queue limit'); turn.speech.abort(); return;
-          }
-          const index = ++segmentId;
-          ttsQueue = ttsQueue.then(async () => {
-            if (!this.isCurrent(turn) || ttsError || turn.speech.signal.aborted) return;
-            await turn.window.ready(turn.speech.signal);
-            // Retry only if this segment has emitted no audio; never replay a partial sentence.
-            const before = turn.window.sent;
-            for (let attempt = 0; attempt < 2; attempt++) {
-              try {
-                await this.tts.synthesize(part, turn.speech.signal, async pcm => {
-                  if (!this.isCurrent(turn) || turn.speech.signal.aborted) return;
-                  for (let offset = 0; offset < pcm.length; offset += 32000) {
-                    await turn.window.ready(turn.speech.signal);
-                    if (!this.isCurrent(turn)) return;
-                    const chunk = pcm.subarray(offset, offset + 32000);
-                    turn.window.sent += chunk.length / 2;
-                    this.emit(turn, { type: 'audio', segmentId: index, messageId: event.messageId,
-                      text: part, data: Buffer.from(chunk).toString('base64'), sampleRate: 16000, endSample: turn.window.sent });
-                  }
-                });
-                break;
-              } catch (error) {
-                if (attempt || turn.window.sent > before || turn.speech.signal.aborted) throw error;
-              }
-            }
-            if (this.isCurrent(turn)) {
-              turn.segments.push({ end: turn.window.sent, segmentId: index, messageId: event.messageId, text: part });
-              this.emit(turn, { type: 'segment.end', segmentId: index }); this.playback(turn.id, turn.window.played);
-            }
-          }).catch(error => { ttsError = error; });
-        }
+        for (const part of parts) enqueue(part, event.messageId);
       }, turn.abort.signal, opening ? 'call_opening' : resumeTask ? 'call_resume' : undefined, {
+        narrate: async (chunks, onPlayed, signal) => {
+          if (!turn.playbackFeedback) throw new Error('朗读需要播放进度确认，请更新客户端');
+          const combined = signal ? AbortSignal.any([turn.speech.signal, signal]) : turn.speech.signal;
+          combined.throwIfAborted();
+          const stop = () => turn.speech.abort();
+          combined.addEventListener('abort', stop, { once: true });
+          try {
+            speechCharacterLimit = 50_000;
+            const narrationId = `narration_${randomUUID()}`;
+            // Queue original text directly; never emit it as model speech/history.
+            // The existing 20s/8s credit window prepares subsequent chunks before
+            // playback exhausts the current audio, with bounded PCM buffering.
+            chunks.forEach((chunk, index) => enqueue(chunk.text, narrationId, () => onPlayed(index)));
+            await ttsQueue;
+            if (ttsError) throw ttsError;
+            combined.throwIfAborted();
+            await turn.window.drained(combined);
+          } finally { combined.removeEventListener('abort', stop); }
+        },
         getView: () => turn.request.context?.documentView,
         observeViews: listener => { turn.viewObservers.add(listener); return () => { turn.viewObservers.delete(listener); }; },
         waitForNavigation: (target, signal) => new Promise((resolve, reject) => {

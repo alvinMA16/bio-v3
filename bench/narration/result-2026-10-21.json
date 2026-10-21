@@ -1,0 +1,150 @@
+{
+  "method": "Local real-tool loop; live Gemini generation through credential-preserving relay; immediate simulated TTS/playback; no production Agent, memory, explicit cache or ASR",
+  "baseline": "c167faa1f9cc5a12ef66ef13eb1d3d1c149f757b",
+  "documentCharacters": 1395,
+  "historicObserved": [],
+  "arms": [
+    {
+      "arm": "old",
+      "calls": [
+        {
+          "durationMs": 4623,
+          "usage": {
+            "promptTokenCount": 7401,
+            "candidatesTokenCount": 41,
+            "totalTokenCount": 7442,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 7401
+              }
+            ],
+            "serviceTier": "standard"
+          },
+          "finishReason": "STOP"
+        },
+        {
+          "durationMs": 5867,
+          "usage": {
+            "promptTokenCount": 8148,
+            "candidatesTokenCount": 452,
+            "totalTokenCount": 8600,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 8148
+              }
+            ],
+            "serviceTier": "standard"
+          },
+          "finishReason": "STOP"
+        },
+        {
+          "durationMs": 6354,
+          "usage": {
+            "promptTokenCount": 9304,
+            "candidatesTokenCount": 453,
+            "totalTokenCount": 9757,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 9304
+              }
+            ],
+            "serviceTier": "standard"
+          },
+          "finishReason": "STOP"
+        },
+        {
+          "durationMs": 5081,
+          "usage": {
+            "promptTokenCount": 9505,
+            "candidatesTokenCount": 181,
+            "totalTokenCount": 9686,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 9505
+              }
+            ],
+            "serviceTier": "standard"
+          },
+          "finishReason": "STOP"
+        }
+      ],
+      "modelTextCharacters": 1444,
+      "directCharacters": 0,
+      "toolCalls": [
+        {
+          "name": "show_document",
+          "page": 1
+        },
+        {
+          "name": "show_document",
+          "navigation": "next"
+        },
+        {
+          "name": "show_document",
+          "navigation": "next"
+        }
+      ],
+      "completed": true,
+      "totals": {
+        "input": 34358,
+        "output": 1127,
+        "cached": 0
+      }
+    },
+    {
+      "arm": "new",
+      "calls": [
+        {
+          "durationMs": 3935,
+          "usage": {
+            "promptTokenCount": 5523,
+            "candidatesTokenCount": 39,
+            "totalTokenCount": 5562,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 5523
+              }
+            ],
+            "serviceTier": "standard"
+          },
+          "finishReason": "STOP"
+        },
+        {
+          "durationMs": 4471,
+          "usage": {
+            "promptTokenCount": 5619,
+            "candidatesTokenCount": 15,
+            "totalTokenCount": 5634,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 5619
+              }
+            ],
+            "serviceTier": "standard"
+          },
+          "finishReason": "STOP"
+        }
+      ],
+      "modelTextCharacters": 39,
+      "directCharacters": 1395,
+      "toolCalls": [
+        {
+          "name": "narrate_document",
+          "scope": "all"
+        }
+      ],
+      "completed": true,
+      "totals": {
+        "input": 11142,
+        "output": 54,
+        "cached": 0
+      }
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { narrationChunks } from './document-narration.js';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { documentPages, type AgentEventPayload, type PanelState, type PanelAttachment } from '@bio/contracts';
@@ -71,6 +72,64 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
       },
     }),
     defineTool({
+      name: 'narrate_document', label: '朗读文稿',
+      description: '用户要求原样朗读时使用。服务端直接播放已保存原文，无需先 read_document 或 show_document，也不要在回复中复述正文。scope=all 从头读，visible 读当前实际可见范围，block 读指定段落，resume 从最后确认播放的位置继续。documentId 默认当前文稿；expectedVersion 可校验版本。返回实际播放完成状态；失败或打断不声称读完。仅语音通话可用。',
+      parameters: Type.Object({ documentId: Type.Optional(id), expectedVersion: Type.Optional(Type.Integer({ minimum: 1 })),
+        scope: Type.Union(['all', 'visible', 'block', 'resume'].map(value => Type.Literal(value))), blockId: Type.Optional(id) }),
+      execute: async (_id, params, signal) => {
+        if (!runtime?.narrate) throw new Error('请在语音通话中使用朗读');
+        signal?.throwIfAborted();
+        const { store, user } = binding();
+        const saved = workspace.narration();
+        const documentId = params.documentId ?? (params.scope === 'resume' ? saved?.documentId : workspace.state().document?.id);
+        if (!documentId) throw new Error('请指定文稿');
+        const document = await store.get(user, documentId);
+        signal?.throwIfAborted();
+        if (params.expectedVersion !== undefined && params.expectedVersion !== document.version) throw new Error('文稿版本已变化，请重新确认朗读范围');
+        if (params.blockId && params.scope !== 'block') throw new Error('段落只适用于 block 范围');
+        let ranges;
+        if (params.scope === 'resume') {
+          if (!saved || saved.documentId !== documentId || saved.version !== document.version) throw new Error('没有可续读的位置，或文稿版本已变化');
+          ranges = saved.chunks.slice(saved.next);
+        } else if (params.scope === 'visible') {
+          const view = runtime.getView?.();
+          if (!view || view.documentId !== documentId || view.version !== document.version || !view.visibleRanges?.length) throw new Error('无法确认当前可见内容，请指定朗读范围');
+          // Merge overlapping viewport fragments and preserve manuscript order.
+          ranges = document.blocks.flatMap(block => {
+            const merged: Array<{ blockId: string; start: number; end: number }> = [];
+            for (const range of view.visibleRanges!.filter(r => r.blockId === block.id).sort((a, b) => a.start - b.start)) {
+              const previous = merged.at(-1);
+              if (previous && range.start <= previous.end) previous.end = Math.max(previous.end, range.end);
+              else merged.push({ ...range });
+            }
+            return merged;
+          });
+          if (!workspace.acceptDocumentView(view, document)) throw new Error('当前可见范围已失效');
+        } else if (params.scope === 'block') {
+          const block = document.blocks.find(b => b.id === params.blockId);
+          if (!block) throw new Error('请指定有效段落');
+          ranges = [{ blockId: block.id, start: 0, end: block.text.length }];
+        }
+        const chunks = narrationChunks(document, ranges);
+        const checkpoint = { documentId, version: document.version, chunks: chunks.map(({ text: _text, ...range }) => range), next: 0 };
+        workspace.saveNarration(checkpoint);
+        const pages = documentPages(document);
+        const show = (index: number, follow = false) => {
+          const chunk = chunks[index];
+          if (!chunk) return;
+          const page = pages.find(p => p.fragments.some(f => f.blockId === chunk.blockId && f.start <= chunk.start && f.end > chunk.start))?.page ?? 1;
+          if (follow || workspace.state().document?.id !== documentId || workspace.state().documentView?.page !== page)
+            emit({ type: 'panel.state.updated', panel: workspace.showDocument(document, page, follow) });
+        };
+        show(0, params.scope === 'all');
+        await runtime.narrate(chunks, index => {
+          checkpoint.next = index + 1; workspace.saveNarration(checkpoint);
+          show(index + 1);
+        }, signal);
+        return result({ status: 'completed', documentId, version: document.version, scope: params.scope });
+      },
+    }),
+    defineTool({
       name: 'edit_document', label: '修改文稿原文',
       description: '创建或修改持久化文稿正文，与翻页/展示无关。仅在用户要求创作或修改时执行；问“怎么改”先讨论。新建 expectedVersion=0 并给 title；已有文稿使用当前版本。operations 原子执行：insert 不填 afterId 时追加，replace 保留段落 ID，delete 删除段落。不自动打开新稿，随后用 show_document；已显示该稿时刷新正文并保持阅读位置，程序根据实际差异生成高亮，并对齐到最小完整阅读单位，返回实际展示范围。不必再将整个修改段落高亮；若用户想看修改位置，可用 show_document 精确定位。版本冲突先 read_document 重新读取并检查意图，不强行覆盖。写入前统一规范化非代码块的排版语法，保留块结构、链接地址和代码原文；后续定位以 read_document 返回的实际正文为准。每次提交保存完整历史版本。',
       parameters: Type.Object({ documentId: Type.Optional(id), expectedVersion: Type.Integer({ minimum: 0 }), title: Type.Optional(Type.String({ minLength: 1, maxLength: 300 })), summary: Type.Optional(Type.String({ maxLength: 300 })),
@@ -87,7 +146,7 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
     }),
     defineTool({
       name: 'show_document', label: '展示文稿或移动阅读位置',
-      description: '展示文稿、定位段落或推进朗读，不修改正文。界面是连续滚动正文，没有用户可见页码。page/navigation 为内部朗读分段游标，不等于用户实际看见的内容；实际可见内容以 screen.visibleContent 为准。blockId 精确滚动到段落开头。highlights 用于“在哪里/指出这句话/标出来”：先 read_document 取得最新原文与版本，传 expectedVersion 和 [{blockId, quote, occurrence?}]；quote 必须是需要强调的最小完整原文，不要为方便选整段；匹配后程序按 highlightGranularity 统一调整展示边界。重复原文须指定 occurrence（从1开始）。程序精确匹配并滚动到第一处，同时返回实际范围；不接受猜测的文字。仅看整段时用 blockId，不需要高亮整段。高亮只是临时展示，不修改正文，不产生版本；clearHighlight=true 清除。highlights 不与其他定位参数同传。三种普通定位最多一种。全文朗读先 page=1、follow=true 恢复跟随，输出 screen.readingPage 原文，再 navigation=next 继续；工具等待前文实际播放完。用户手动滑动后客户端停止跟随，后续推进不要传 follow=true 强行拉回；只有用户明确要求跟随或重新从头朗读时才恢复。',
+      description: '展示文稿、定位段落或推进朗读，不修改正文。界面是连续滚动正文，没有用户可见页码。page/navigation 为内部朗读分段游标，不等于用户实际看见的内容；实际可见内容以 screen.visibleContent 为准。blockId 精确滚动到段落开头。highlights 用于“在哪里/指出这句话/标出来”：先 read_document 取得最新原文与版本，传 expectedVersion 和 [{blockId, quote, occurrence?}]；quote 必须是需要强调的最小完整原文，不要为方便选整段；匹配后程序按 highlightGranularity 统一调整展示边界。重复原文须指定 occurrence（从1开始）。程序精确匹配并滚动到第一处，同时返回实际范围；不接受猜测的文字。仅看整段时用 blockId，不需要高亮整段。高亮只是临时展示，不修改正文，不产生版本；clearHighlight=true 清除。highlights 不与其他定位参数同传。三种普通定位最多一种。原样朗读使用 narrate_document，不通过此工具逐页复述。用户手动滑动后客户端停止跟随，后续推进不要传 follow=true 强行拉回；只有用户明确要求跟随或重新从头朗读时才恢复。',
       parameters: Type.Object({ documentId: Type.Optional(id), page: Type.Optional(Type.Integer({ minimum: 1 })), navigation: Type.Optional(Type.Union([Type.Literal('next'), Type.Literal('previous')])), blockId: Type.Optional(id), follow: Type.Optional(Type.Boolean()),
         expectedVersion: Type.Optional(Type.Integer({ minimum: 1 })),
         highlights: Type.Optional(Type.Array(Type.Object({ blockId: id, quote: Type.String({ minLength: 1, maxLength: 12000 }), occurrence: Type.Optional(Type.Integer({ minimum: 1 })) }), { minItems: 1, maxItems: 30 })),
@@ -95,7 +154,8 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
       execute: async (_id, params, signal) => {
         if (params.highlights && (params.page || params.navigation || params.blockId || params.clearHighlight)) throw new Error('highlights 不能与其他定位或清除操作同时使用');
         if ([params.page, params.navigation, params.blockId].filter(value => value !== undefined).length > 1) throw new Error('只能指定一种定位方式');
-        await runtime?.beforeShow?.(signal); signal?.throwIfAborted();
+        if (params.page || params.navigation) await runtime?.beforeShow?.(signal);
+        signal?.throwIfAborted();
         const { store, user } = binding();
         const documentId = params.documentId ?? workspace.state().document?.id;
         if (!documentId) throw new Error('请指定文稿');

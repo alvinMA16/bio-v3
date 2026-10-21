@@ -114,6 +114,11 @@ export class AgentService {
       if (signal?.aborted) throw new Error('Run cancelled');
       session = await this.factory.create(conversationId, input.systemPrompt, emit, input.provider, input.context, scope, runtime && {
         ...runtime,
+        ...(runtime.narrate ? { narrate: async (chunks, onPlayed, toolSignal) => {
+          clearTimeout(timer);
+          try { await runtime.narrate!(chunks, onPlayed, toolSignal); }
+          finally { timer = armTimer(); }
+        } } : {}),
         beforeShow: async toolSignal => {
           // Human playback time is not model execution time; playback has its own stall timeout.
           clearTimeout(timer);

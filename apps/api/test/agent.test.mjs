@@ -76,6 +76,7 @@ before(async () => {
         : lastText === 'OPEN_MISSING_ATTACHMENT' ? { name: 'switch_mode', arguments: { mode: 'attachment_conversation', targetId: 'missing' } }
         : lastText === 'CLOSE_PANEL' ? { name: 'switch_mode', arguments: { mode: 'conversation' } }
         : lastText === 'OPEN_DRAFT' ? { name: 'show_document', arguments: { documentId: 'draft' } }
+        : lastText === 'NARRATE_DRAFT' ? { name: 'narrate_document', arguments: { documentId: 'draft', scope: 'all' } }
         : lastText === 'FOCUS_DRAFT' ? { name: 'show_document', arguments: { documentId: 'draft', blockId: 'p1' } }
         : lastText === 'SMALLER_FONT' ? { name: 'set_reading_font_size', arguments: { size: '调小' } }
         : lastText === 'LOAD_TRAVEL_SKILL' ? { name: 'load_skill', arguments: { name: 'travel-writing' } }
@@ -145,7 +146,7 @@ test('existing endpoint uses Pi, persists history and isolates conversations', a
   assert.equal(result.usage.promptTokens, 12);
   assert.equal(result.usage.promptCacheHitTokens, 2);
   const request = requests.at(-1);
-  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['load_skill', 'list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'restore_document', 'read_attachment', 'set_reading_font_size']);
+  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['load_skill', 'list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'narrate_document', 'restore_document', 'read_attachment', 'set_reading_font_size']);
   assert.deepEqual(request.thinking, { type: 'disabled' });
   assert.ok(JSON.stringify(request.messages).includes('TEST_PERSONA'));
   assert.ok(!JSON.stringify(request.messages).includes('Compound Codex'));
@@ -616,4 +617,21 @@ test('explicit interruption and hangup never leave an automatically resumable ta
     await held; controller.abort(reason); await rejected;
     assert.equal(storage.task(conversationId).paused, false);
   }
+});
+
+
+test('real SDK invokes narration once and receives compact completion instead of manuscript text', async () => {
+  const initial = await service.run({ message: 'SHOW_PANEL' });
+  const before = requests.length;
+  let narrated = '';
+  const result = await service.run({ message: 'NARRATE_DRAFT', conversationId: initial.conversationId }, undefined, undefined, undefined, undefined, {
+    narrate: async (chunks, played) => { narrated = chunks.map(c => c.text).join(''); chunks.forEach((_, i) => played(i)); },
+  });
+  assert.equal(narrated, '这是正文。');
+  assert.equal(requests.length - before, 2);
+  assert.equal(result.events.filter(e => e.type === 'tool.completed' && e.name === 'narrate_document' && !e.isError).length, 1);
+  const toolResult = requests.at(-1).messages.findLast(m => m.role === 'tool');
+  assert.ok(textOf(toolResult).includes('completed'));
+  assert.ok(!textOf(toolResult).includes(narrated));
+  assert.ok(!result.events.some(e => e.type === 'speech.completed' && e.text.includes(narrated)));
 });

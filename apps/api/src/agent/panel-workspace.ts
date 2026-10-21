@@ -1,3 +1,4 @@
+import type { NarrationCheckpoint } from './document-narration.js';
 import type { AgentScene, PanelAttachment, PanelBlock, PanelDocument, PanelState } from '@bio/contracts';
 import { documentPages, type DocumentView, type DocumentHighlight, type DocumentRange } from '@bio/contracts';
 import { changedText, type HighlightGranularity } from './document-highlight.js';
@@ -6,6 +7,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 interface WorkspaceFile {
+  narration?: NarrationCheckpoint;
   panel: PanelState;
   attachments: PanelAttachment[];
   documents: PanelDocument[];
@@ -162,6 +164,12 @@ export class PanelWorkspace {
     this.commit(next); return this.state();
   }
 
+  narration(): NarrationCheckpoint | undefined { return structuredClone(this.value.narration); }
+
+  saveNarration(value: NarrationCheckpoint): void {
+    const next = structuredClone(this.value); next.narration = structuredClone(value); this.commit(next);
+  }
+
   scene(): AgentScene {
     return this.value.panel.mode === 'attachment' ? 'attachment_conversation'
       : this.value.panel.mode === 'editor' ? 'revision' : 'conversation';
@@ -173,13 +181,13 @@ export class PanelWorkspace {
   }
 
   /** Bounded model context. Full content is available through read_document. */
-  context() {
+  context(compactDocument = false) {
     const panel = this.state();
     let remaining = 6000;
     const document = panel.document && {
       id: panel.document.id, title: panel.document.title, version: panel.document.version,
       blocks: panel.document.blocks.map(block => {
-        const text = block.text.slice(0, remaining);
+        const text = compactDocument ? '' : block.text.slice(0, remaining);
         remaining -= text.length;
         return { ...block, text, truncated: text.length < block.text.length };
       }),
@@ -194,6 +202,7 @@ export class PanelWorkspace {
       return { ...range, kind: block.kind, text, truncated: text.length < range.end - range.start };
     });
     return {
+      narration: this.value.narration && { documentId: this.value.narration.documentId, version: this.value.narration.version, completed: this.value.narration.next >= this.value.narration.chunks.length, next: this.value.narration.chunks[this.value.narration.next], lastPlayed: this.value.narration.chunks[this.value.narration.next - 1] },
       scene: this.scene(),
       revision: panel.revision, mode: panel.mode, document,
       screen: {
@@ -220,7 +229,7 @@ export class PanelWorkspace {
         title: panel.attachment?.title ?? panel.document?.title ?? null,
         documentVersion: panel.document?.version ?? null,
         highlight: panel.documentView?.highlight ?? null,
-        readingPage: panel.document ? documentPages(panel.document)[(panel.documentView?.page ?? 1) - 1] : null,
+        readingPage: !compactDocument && panel.document ? documentPages(panel.document)[(panel.documentView?.page ?? 1) - 1] : null,
         totalPages: panel.document ? documentPages(panel.document).length : null,
       },
       attachment: panel.attachment && { ...panel.attachment, text: panel.attachment.text?.slice(0, 6000), textTruncated: (panel.attachment.text?.length ?? 0) > 6000 },

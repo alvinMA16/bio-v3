@@ -125,7 +125,7 @@ export class PiSessionFactory {
         if (clientView && JSON.stringify(clientView) !== lastClientView) {
           workspace.acceptDocumentView(clientView); lastClientView = JSON.stringify(clientView);
         }
-        const view = workspace.context();
+        const view = workspace.context(!!runtime?.narrate);
         if (nativeGemini && view.attachment && nativeAttachments.some(item => item.attachmentId === view.attachment!.id)) {
           view.attachment.text = undefined;
           view.attachment.textTruncated = false;
@@ -170,7 +170,7 @@ export class PiSessionFactory {
     const { session } = await createAgentSession({
       cwd, agentDir: cwd, modelRuntime, model, thinkingLevel,
       settingsManager, resourceLoader, sessionManager,
-      tools: ['load_skill', 'list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'restore_document', 'read_attachment', 'set_reading_font_size', ...memoryTools.map(t => t.name)],
+      tools: ['load_skill', 'list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'narrate_document', 'restore_document', 'read_attachment', 'set_reading_font_size', ...memoryTools.map(t => t.name)],
       customTools: [productSkills.tool, readingFontTool(this.storage, scope?.userId, emit, context?.readingFontControl === true), ...createPresentationTools(workspace, emit, refreshAttachments, { store: documents, user: scope?.userId, conversationId }, runtime, {
         list: async query => {
           const search = query?.trim().toLocaleLowerCase();
