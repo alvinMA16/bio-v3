@@ -91,6 +91,7 @@ export class DocumentViewDto {
 }
 export class ContextSnapshotDto implements AgentContextSnapshot {
   @IsOptional() @IsBoolean() readingFontControl?: boolean;
+  @IsOptional() @IsBoolean() documentBackgroundControl?: boolean;
   @IsOptional() @ValidateNested() @Type(() => DocumentViewDto)
   documentView?: DocumentViewDto;
   @IsOptional() @ValidateNested() @Type(() => AttachmentViewDto)

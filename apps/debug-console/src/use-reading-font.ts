@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_READING_FONT_SIZE, isReadingFontSize, type ReadingFontSize } from '@bio/contracts';
+import { DEFAULT_DOCUMENT_BACKGROUND, isDocumentBackgroundColor, DEFAULT_READING_FONT_SIZE, isReadingFontSize, type ReadingFontSize } from '@bio/contracts';
 import { accountCacheKey } from './account-cache';
 export interface ReadingFontFeedback { id: number; previous: ReadingFontSize; current: ReadingFontSize }
 
@@ -9,6 +9,13 @@ export function useReadingFont() {
     try { const cached = localStorage.getItem(key); return isReadingFontSize(cached) ? cached : DEFAULT_READING_FONT_SIZE; }
     catch { return DEFAULT_READING_FONT_SIZE; }
   });
+  const [backgroundColor, setBackgroundColor] = useState(DEFAULT_DOCUMENT_BACKGROUND);
+  const backgroundRevision = useRef(0);
+  const applyDocumentBackground = (color: string) => {
+    if (!isDocumentBackgroundColor(color)) return;
+    backgroundRevision.current++;
+    setBackgroundColor(color);
+  };
   const revision = useRef(0);
   const [feedback, setFeedback] = useState<ReadingFontFeedback>();
   const apply = (size: ReadingFontSize, previous?: ReadingFontSize) => {
@@ -19,10 +26,10 @@ export function useReadingFont() {
     try { localStorage.setItem(key, size); } catch { /* Server persistence remains authoritative. */ }
   };
   useEffect(() => {
-    const controller = new AbortController(), started = revision.current;
+    const controller = new AbortController(), started = revision.current, backgroundStarted = backgroundRevision.current;
     void fetch('/api/v1/agent/reading-preferences', { signal: controller.signal, cache: 'no-store' })
       .then(async response => { if (!response.ok) throw new Error('Preference unavailable'); return response.json(); })
-      .then(value => { if (!controller.signal.aborted && revision.current === started && isReadingFontSize(value.fontSize)) apply(value.fontSize); })
+      .then(value => { if (!controller.signal.aborted && backgroundRevision.current === backgroundStarted) applyDocumentBackground(value.backgroundColor); if (!controller.signal.aborted && revision.current === started && isReadingFontSize(value.fontSize)) apply(value.fontSize); })
       .catch(() => { /* Retain this account's cached size while offline. */ });
     return () => controller.abort();
   }, [key]);
@@ -31,5 +38,5 @@ export function useReadingFont() {
     const timer = window.setTimeout(() => setFeedback(undefined), 3000);
     return () => window.clearTimeout(timer);
   }, [feedback]);
-  return { fontSize, feedback, applyReadingFont: apply };
+  return { backgroundColor, applyDocumentBackground, fontSize, feedback, applyReadingFont: apply };
 }

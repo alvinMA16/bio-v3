@@ -75,3 +75,11 @@ Web 普通对话使用深色背景，上方拱形视频窗展示毛毡书房和�
 Agent 使用 `set_reading_font_size`，不编辑文稿正文。设置在 Agent 持久化目录的 reading-preferences 中按账号哈希隔离、原子写入，跨会话、刷新和服务重启保留；匿名开发预览单独保存。GET `/api/v1/agent/reading-preferences` 复用现有账号身份解析。Web 本地缓存也按账号隔离，用于初次显示，服务端为准；较早的读取响应不能覆盖已收到的最新调整事件。
 
 调整通过 reading.preference.updated 实时下发，正文在 220ms 内平滑改变，底部短暂显示“字号已从标准调为较小”等命名提示，3 秒自动消失，连续操作替换提示。恢复已有设置不弹提示。减少动态效果模式取消动画、保留文字反馈。新客户端声明 readingFontControl 能力，旧页面调用时返回刷新提示，不保存或虚报调整成功。
+
+## 稿件背景颜色
+
+`set_document_background_color` 接受任意不透明 sRGB `backgroundColor: #RRGGBB`，或 `action: reset/undo`（二者互斥）。模型解释自然语言颜色；精确色值直接使用，相对调整参考运行时 `documentBackgroundColor`。不修改正文、版本或原始附件。设置按账号保存在 reading-preferences/document-background.json，保留上一次颜色以支持一步撤销；与字号独立保存。默认 #FCFCF9。
+
+Web 声明 `documentBackgroundControl` 能力，旧客户端调用时拒绝且不写入。`document.background.updated` 实时下发；新会话及 reading-preferences HTTP 响应恢复颜色。公共入口、内部入口与文稿集预览复用 CSS 变量。只改变稿件阅读面，不改变周围通话控件、附件或书桌。
+
+程序按 WCAG sRGB 线性化相对亮度计算纯黑、纯白对比度，选择较高者；正文、标题和引用统一适配。荧光笔保留颜色并用不透明白底黑字保证局部可读性。工具返回 saved/rendered=false，不将下发冒充客户端渲染确认。颜色测试覆盖 RGB 网格、全部灰阶、非法参数、账号隔离、持久化、撤销/默认、取消和旧客户端；Agent 集成测试验证工具注册及事件。

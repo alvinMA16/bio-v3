@@ -78,6 +78,7 @@ before(async () => {
         : lastText === 'OPEN_DRAFT' ? { name: 'show_document', arguments: { documentId: 'draft' } }
         : lastText === 'NARRATE_DRAFT' ? { name: 'narrate_document', arguments: { documentId: 'draft', scope: 'all' } }
         : lastText === 'FOCUS_DRAFT' ? { name: 'show_document', arguments: { documentId: 'draft', blockId: 'p1' } }
+        : lastText === 'DARK_BACKGROUND' ? { name: 'set_document_background_color', arguments: { backgroundColor: '#102030' } }
         : lastText === 'SMALLER_FONT' ? { name: 'set_reading_font_size', arguments: { size: '调小' } }
         : lastText === 'LOAD_TRAVEL_SKILL' ? { name: 'load_skill', arguments: { name: 'travel-writing' } }
         : lastText === 'LOAD_MEMOIR_SKILL' ? { name: 'load_skill', arguments: { name: 'memoir-writing' } }
@@ -132,7 +133,7 @@ test('font tool updates the live UI and next session preference endpoint without
   const result = await service.run({ message: 'SMALLER_FONT', context: { readingFontControl: true } });
   assert.ok(result.events.some(e => e.type === 'reading.preference.updated' && e.previousFontSize === '标准' && e.fontSize === '较小'));
   assert.ok(result.events.some(e => e.type === 'tool.completed' && e.name === 'set_reading_font_size' && !e.isError));
-  assert.deepEqual(await (await fetch(`${baseUrl}/api/v1/agent/reading-preferences`)).json(), { fontSize: '较小' });
+  assert.deepEqual(await (await fetch(`${baseUrl}/api/v1/agent/reading-preferences`)).json(), { fontSize: '较小', backgroundColor: '#FCFCF9' });
   const next = await service.run({ message: '新的对话' });
   assert.ok(next.events.some(e => e.type === 'reading.preference.updated' && e.fontSize === '较小' && !e.previousFontSize));
   assert.ok(!result.events.some(e => e.type === 'tool.started' && e.name === 'edit_document'));
@@ -146,7 +147,7 @@ test('existing endpoint uses Pi, persists history and isolates conversations', a
   assert.equal(result.usage.promptTokens, 12);
   assert.equal(result.usage.promptCacheHitTokens, 2);
   const request = requests.at(-1);
-  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['load_skill', 'list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'narrate_document', 'restore_document', 'read_attachment', 'set_reading_font_size']);
+  assert.deepEqual(request.tools.map((tool) => tool.function.name), ['load_skill', 'list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'narrate_document', 'restore_document', 'read_attachment', 'set_reading_font_size', 'set_document_background_color']);
   assert.deepEqual(request.thinking, { type: 'disabled' });
   assert.ok(JSON.stringify(request.messages).includes('TEST_PERSONA'));
   assert.ok(!JSON.stringify(request.messages).includes('Compound Codex'));
@@ -634,4 +635,14 @@ test('real SDK invokes narration once and receives compact completion instead of
   assert.ok(textOf(toolResult).includes('completed'));
   assert.ok(!textOf(toolResult).includes(narrated));
   assert.ok(!result.events.some(e => e.type === 'speech.completed' && e.text.includes(narrated)));
+});
+
+
+test('background tool is available in the Pi loop and persists to a new session', async () => {
+  const result = await service.run({ message: 'DARK_BACKGROUND', context: { documentBackgroundControl: true } });
+  assert.ok(result.events.some(e => e.type === 'document.background.updated' && e.backgroundColor === '#102030'));
+  assert.ok(result.events.some(e => e.type === 'tool.completed' && e.name === 'set_document_background_color' && !e.isError));
+  assert.ok(!result.events.some(e => e.type === 'tool.started' && e.name === 'edit_document'));
+  const next = await service.run({ message: '新的对话' });
+  assert.ok(next.events.some(e => e.type === 'document.background.updated' && e.backgroundColor === '#102030'));
 });

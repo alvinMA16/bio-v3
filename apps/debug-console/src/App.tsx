@@ -1,3 +1,4 @@
+import { documentTextColor } from '@bio/contracts';
 import { MemoryInspector } from './memory-inspector';
 import { ModelObservations } from './model-observations';
 import { DocumentReader } from './document-reader';
@@ -90,7 +91,7 @@ function formatCost(value: number): string {
 }
 
 export function App({ internal = false }: { internal?: boolean }) {
-  const { fontSize, feedback: readingFontFeedback, applyReadingFont } = useReadingFont();
+  const { backgroundColor, applyDocumentBackground, fontSize, feedback: readingFontFeedback, applyReadingFont } = useReadingFont();
   const [productView, setProductView] = useState<ProductView>('agent');
   const [apiStatus, setApiStatus] = useState<ApiStatus>('checking');
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
@@ -188,7 +189,7 @@ export function App({ internal = false }: { internal?: boolean }) {
     return {
       message: text,
       context: {
-        readingFontControl: true,
+        readingFontControl: true, documentBackgroundControl: true,
         materialIds,
         ...(attachmentView.current ? { attachmentView: attachmentView.current } : {}),
         ...(shownPanel?.mode === 'editor' && documentView.current ? { documentView: documentView.current } : {}),
@@ -247,6 +248,7 @@ export function App({ internal = false }: { internal?: boolean }) {
       record.request.message = event.text; timings.asrFinal = event.elapsedMs; setPendingMessage(event.text);
     }
     if (event.type === 'agent') {
+      if (event.event.type === 'document.background.updated') applyDocumentBackground(event.event.backgroundColor);
       if (event.event.type === 'reading.preference.updated') applyReadingFont(event.event.fontSize, event.event.previousFontSize);
       record.conversationId = event.event.conversationId;
       setConversationId(event.event.conversationId);
@@ -320,7 +322,7 @@ export function App({ internal = false }: { internal?: boolean }) {
       prepare: () => prepareCallUi(initialMaterialId),
       recovering: () => setCallStartedAt(null),
       connected: () => { setCallStartedAt(value => value ?? Date.now()); if (receiptCall.current) receiptCall.current.startedAt = Date.now(); },
-      request: () => { window.dispatchEvent(new Event('bio:document-view-request')); return { ...voiceContext.current, context: { ...voiceContext.current.context, readingFontControl: true } }; },
+      request: () => { window.dispatchEvent(new Event('bio:document-view-request')); return { ...voiceContext.current, context: { ...voiceContext.current.context, readingFontControl: true, documentBackgroundControl: true } }; },
       start: (id, request) => {
         startedRef.current = performance.now(); followThread.current = true;
         const currentLive = { ...emptyLiveRun(), ...(voiceTurn.current?.record.panel ? { panel: voiceTurn.current.record.panel } : shownPanel ? { panel: shownPanel } : {}) };
@@ -404,6 +406,7 @@ export function App({ internal = false }: { internal?: boolean }) {
         const item = JSON.parse(line) as { kind: string; event?: AgentEvent; result?: ChatCompletionResponse; message?: string };
         if (item.kind === 'error') throw new Error(item.message ?? '运行失败');
         if (item.event) {
+          if (item.event.type === 'document.background.updated') applyDocumentBackground(item.event.backgroundColor);
           if (item.event.type === 'reading.preference.updated') applyReadingFont(item.event.fontSize, item.event.previousFontSize);
           runConversationId = item.event.conversationId;
           setConversationId(item.event.conversationId);
@@ -531,13 +534,13 @@ export function App({ internal = false }: { internal?: boolean }) {
 
   if (!internal) return (
     <main className="product-shell" aria-label="令狸" data-reading-font={fontSize}
-      style={{ '--reading-scale': READING_FONT_SCALE[fontSize] } as CSSProperties}>
+      style={{ '--reading-scale': READING_FONT_SCALE[fontSize], '--document-background': backgroundColor, '--document-foreground': documentTextColor(backgroundColor) } as CSSProperties}>
       {phoneSurface}
     </main>
   );
 
   return (
-    <div className="app-shell" data-reading-font={fontSize} style={{ '--reading-scale': READING_FONT_SCALE[fontSize] } as CSSProperties}>
+    <div className="app-shell" data-reading-font={fontSize} style={{ '--reading-scale': READING_FONT_SCALE[fontSize], '--document-background': backgroundColor, '--document-foreground': documentTextColor(backgroundColor) } as CSSProperties}>
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark">B</span>

@@ -80,6 +80,7 @@ export interface MaterialUploadResult extends Material {
 export interface AgentContextSnapshot {
   /** Client implements live reading-font events and feedback. */
   readingFontControl?: boolean;
+  documentBackgroundControl?: boolean;
   documentView?: DocumentView;
   attachmentView?: { materialId: string; page: number };
   materialIds?: string[];
@@ -135,6 +136,7 @@ export interface MarkdownPanel {
 
 /** Product events. Pi's internal event types stay on the server. */
 export type AgentEventPayload =
+  | { type: 'document.background.updated'; backgroundColor: string }
   | { type: 'reading.preference.updated'; fontSize: ReadingFontSize; previousFontSize?: ReadingFontSize }
   | { type: 'run.started' }
   | { type: 'speech.delta'; messageId: string; delta: string }

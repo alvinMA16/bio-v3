@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { ConfigService } from '@nestjs/config';
 import type { AgentTraceEntry } from '@bio/contracts';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, renameSync } from 'node:fs';
-import { DEFAULT_READING_FONT_SIZE, isReadingFontSize, type ReadingFontSize } from '@bio/contracts';
+import { DEFAULT_DOCUMENT_BACKGROUND, isDocumentBackgroundColor, DEFAULT_READING_FONT_SIZE, isReadingFontSize, type ReadingFontSize } from '@bio/contracts';
 import { createHash } from 'node:crypto';
 import { appendFile } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
@@ -42,6 +42,24 @@ export class AgentStorage {
     const path = this.readingPreferencePath(user);
     // One API process; synchronous read/adjust/write cannot interleave across calls.
     writeFileSync(`${path}.tmp`, JSON.stringify({ fontSize }), { mode: 0o600 });
+    renameSync(`${path}.tmp`, path);
+  }
+
+  documentBackground(user?: string): { backgroundColor: string; previousBackgroundColor?: string } {
+    const path = this.readingPreferencePath(user).replace('font-size.json', 'document-background.json');
+    if (!existsSync(path)) return { backgroundColor: DEFAULT_DOCUMENT_BACKGROUND };
+    const value = JSON.parse(readFileSync(path, 'utf8'));
+    return { backgroundColor: isDocumentBackgroundColor(value.backgroundColor) ? value.backgroundColor : DEFAULT_DOCUMENT_BACKGROUND,
+      ...(isDocumentBackgroundColor(value.previousBackgroundColor) ? { previousBackgroundColor: value.previousBackgroundColor } : {}) };
+  }
+
+  saveDocumentBackground(backgroundColor: string, user?: string): void {
+    if (!isDocumentBackgroundColor(backgroundColor)) throw new BadRequestException('Invalid background color');
+    const previous = this.documentBackground(user);
+    backgroundColor = backgroundColor.toUpperCase();
+    if (previous.backgroundColor === backgroundColor) return;
+    const path = this.readingPreferencePath(user).replace('font-size.json', 'document-background.json');
+    writeFileSync(`${path}.tmp`, JSON.stringify({ backgroundColor, previousBackgroundColor: previous.backgroundColor }), { mode: 0o600 });
     renameSync(`${path}.tmp`, path);
   }
 

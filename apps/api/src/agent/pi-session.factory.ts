@@ -22,7 +22,7 @@ import { AgentStorage } from './agent-storage.js';
 import { DocumentStore, legacyDocumentId } from './document-store.js';
 import type { DocumentRuntime } from './document-runtime.js';
 import { createPresentationTools } from './presentation-tools.js';
-import { readingFontTool } from './reading-preferences.js';
+import { documentBackgroundTool, readingFontTool } from './reading-preferences.js';
 import { createModelRuntime } from '../models/model-provider.js';
 import { geminiSearch, GEMINI_SEARCH_RULES } from '../models/gemini-search.js';
 import { buildRuntimeContext, buildSystemPrompt, createContextExtension, DEFAULT_PERSONA } from './agent-context.js';
@@ -39,6 +39,7 @@ export class PiSessionFactory {
 
   async create(conversationId: string, systemPrompt: string | undefined, emit: (event: AgentEventPayload) => void, provider?: ModelProvider, context?: AgentContextSnapshot, scope?: MemoryScope, runtime?: DocumentRuntime, observe?: (type: string, data: unknown) => void) {
     const cwd = this.storage.conversationDirectory(conversationId, scope?.userId);
+    emit({ type: 'document.background.updated', backgroundColor: this.storage.documentBackground(scope?.userId).backgroundColor });
     emit({ type: 'reading.preference.updated', fontSize: this.storage.readingFontSize(scope?.userId) });
     const previous = new PanelWorkspace(cwd);
     const existingAttachments = new Set(previous.context().availableAttachments.map(item => item.id));
@@ -130,7 +131,7 @@ export class PiSessionFactory {
           view.attachment.text = undefined;
           view.attachment.textTruncated = false;
         }
-        return buildRuntimeContext(context, view, this.storage.readingFontSize(scope?.userId)) + (recoveryContext ? `\n${recoveryContext}` : '');
+        return JSON.stringify({ ...JSON.parse(buildRuntimeContext(context, view, this.storage.readingFontSize(scope?.userId))), documentBackgroundColor: this.storage.documentBackground(scope?.userId).backgroundColor }) + (recoveryContext ? `\n${recoveryContext}` : '');
       }, nativeGemini), ...(nativeGemini ? [geminiAttachmentContext(this.nativeFiles, nativeAttachments, scope?.userId, onUnavailable),
         ...(observe ? [this.observations.extension(cwd, observe)] : [])] : [])],
     });
@@ -170,8 +171,8 @@ export class PiSessionFactory {
     const { session } = await createAgentSession({
       cwd, agentDir: cwd, modelRuntime, model, thinkingLevel,
       settingsManager, resourceLoader, sessionManager,
-      tools: ['load_skill', 'list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'narrate_document', 'restore_document', 'read_attachment', 'set_reading_font_size', ...memoryTools.map(t => t.name)],
-      customTools: [productSkills.tool, readingFontTool(this.storage, scope?.userId, emit, context?.readingFontControl === true), ...createPresentationTools(workspace, emit, refreshAttachments, { store: documents, user: scope?.userId, conversationId }, runtime, {
+      tools: ['load_skill', 'list_attachments', 'switch_mode', 'read_document', 'edit_document', 'show_document', 'narrate_document', 'restore_document', 'read_attachment', 'set_reading_font_size', 'set_document_background_color', ...memoryTools.map(t => t.name)],
+      customTools: [productSkills.tool, documentBackgroundTool(this.storage, scope?.userId, emit, context?.documentBackgroundControl === true), readingFontTool(this.storage, scope?.userId, emit, context?.readingFontControl === true), ...createPresentationTools(workspace, emit, refreshAttachments, { store: documents, user: scope?.userId, conversationId }, runtime, {
         list: async query => {
           const search = query?.trim().toLocaleLowerCase();
           const items = (await this.materials.list(scope?.userId)).filter(item => !search || `${item.title} ${item.filename}`.toLocaleLowerCase().includes(search));

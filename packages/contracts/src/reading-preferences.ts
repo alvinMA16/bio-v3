@@ -11,3 +11,18 @@ export function adjustReadingFontSize(current: ReadingFontSize, size: ReadingFon
   if (size === '调小' || size === '调大') return READING_FONT_SIZES[Math.max(0, Math.min(4, READING_FONT_SIZES.indexOf(current) + (size === '调小' ? -1 : 1)))]!;
   return size;
 }
+
+/** Only opaque sRGB colors are accepted at the tool/storage boundary. */
+export function isDocumentBackgroundColor(value: unknown): value is string {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
+}
+export const DEFAULT_DOCUMENT_BACKGROUND = '#FCFCF9';
+export function documentTextColor(background: string): '#000000' | '#FFFFFF' {
+  if (!isDocumentBackgroundColor(background)) throw new Error('Invalid background color');
+  const linear = [1, 3, 5].map(offset => {
+    const channel = parseInt(background.slice(offset, offset + 2), 16) / 255;
+    return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
+  });
+  const luminance = .2126 * linear[0]! + .7152 * linear[1]! + .0722 * linear[2]!;
+  return (luminance + .05) / .05 >= 1.05 / (luminance + .05) ? '#000000' : '#FFFFFF';
+}

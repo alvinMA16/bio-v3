@@ -672,3 +672,21 @@ html[data-surface="product"] body { min-width: 0; }
   .phone-scene-progress > span { transition: none; }
   .phone-scene-curtain { transition: none; }
 }
+
+/* Shared manuscript surface, for public/internal readers and folder previews. */
+.phone-screen--editor .phone-content-panel.phone-content-panel--document,
+.phone-screen--editor .phone-content-panel .phone-panel-scroll,
+.manuscript-paper {
+  background: var(--document-background, #fcfcf9);
+  color: var(--document-foreground, #000);
+}
+.phone-screen--editor .phone-content-panel--document::after {
+  background: linear-gradient(transparent, var(--document-background, #fcfcf9));
+}
+.document-reader,
+.document-reader .document-heading small,
+.manuscript-paper .document-reader blockquote {
+  color: var(--document-foreground, #000);
+}
+/* Marker paint has translucent edges: an opaque light base keeps marked text readable. */
+.document-reader .document-highlight { color: #000; background-color: #fff; }

@@ -15,7 +15,7 @@ export class AgentController {
   @Get('reading-preferences')
   async readingPreferences(@Req() request: FastifyRequest) {
     const user = await this.memory?.resolveIdentity(request.headers.authorization);
-    return { fontSize: this.storage.readingFontSize(user) };
+    return { fontSize: this.storage.readingFontSize(user), backgroundColor: this.storage.documentBackground(user).backgroundColor };
   }
 
   @Get('manuscripts')

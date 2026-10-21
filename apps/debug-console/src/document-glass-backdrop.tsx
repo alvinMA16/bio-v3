@@ -48,6 +48,8 @@ export function DocumentGlassBackdrop({ source }: { source: RefObject<HTMLDivEle
     const refresh = () => { dirty = true; schedule(); };
     const mutations = new MutationObserver(refresh);
     mutations.observe(scroller, { subtree: true, childList: true, characterData: true, attributes: true });
+    const surface = scroller.closest('.product-shell, .app-shell');
+    if (surface) mutations.observe(surface, { attributes: true, attributeFilter: ['style'] });
     const resize = new ResizeObserver(refresh);
     resize.observe(scroller);
     scroller.addEventListener('scroll', schedule, { passive: true });
