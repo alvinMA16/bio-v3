@@ -1,4 +1,4 @@
-import './call-window-light.css';
+import { CallWindowLight } from './call-window-light';
 import { SceneLoadingCurtain } from './scene-loading-curtain';
 import { DialAvatar } from './dial-avatar';
 import { prepareDeskScene, subscribeSceneProgress, warmCallUi, type SceneManifest } from './prepare-call-ui';
@@ -137,7 +137,7 @@ export function PhonePreview({ readingFontFeedback, attachment, onAttachmentPage
       <SceneLoadingCurtain prepared={scenePrepared} revealed={sceneReady} progress={sceneProgress} error={assetError}
         onReveal={() => setSceneReady(true)} onRetry={() => { setScenePrepared(false); setSceneAttempt(value => value + 1); }} />
       {callOpen && !dialing && mode === 'editor' && <DocumentGlassBackdrop source={documentScroller} />}
-      {dialing && <div className="call-window-light" aria-hidden="true"><div className="call-window-light__panes" /></div>}
+      {dialing && <CallWindowLight />}
       {readingFontFeedback && <ReadingFontToast key={readingFontFeedback.id} feedback={readingFontFeedback} />}
       {!callOpen ? <>
         <div className="phone-scene-viewport">

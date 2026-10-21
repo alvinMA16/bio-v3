@@ -27,4 +27,4 @@ Review the entire affected flow, including normal, waiting, paused, retry, expir
 
 ## Call waiting atmosphere
 
-Dialing, paused, recovery and failed-call screens share a faint felt texture and slowly drifting window light (28 seconds per direction). Keep light subtle around the portrait and status, with visible boundaries behind the bottom glass actions. These are non-interactive sibling layers outside layout flow, never filter-bearing ancestors of controls. Reduced-motion preferences retain a static light pattern.
+Dialing, paused, recovery and failed-call screens share a faint felt texture and a perspective projection of a four-pane window. Keep the window fixed; irregular branches and leaves sway inside its light at different slow rhythms, with an occasional faint bird shadow. Use recognizable natural silhouettes rather than abstract moving stripes. Keep the portrait/status quiet and light boundaries visible behind bottom glass actions. These are non-interactive sibling layers outside layout flow, never filter-bearing ancestors of controls. Reduced-motion preferences stop the branches and omit the bird.

@@ -1,25 +1,29 @@
-/* Decorative siblings of the call UI: never a backdrop root around its controls. */
+/* Decorative siblings of the call UI, never filter-bearing ancestors of controls. */
 .call-window-light { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; user-select: none; }
-.call-window-light::before {
-  content: ''; position: absolute; inset: 0;
-  background: url('/api/v1/ui-assets/felt-oat.webp') center / 280px;
-  opacity: .055;
-}
-.call-window-light__panes {
-  position: absolute; inset: -16% -30%;
-  background: linear-gradient(124deg,
-    transparent 16%, #c5d5b91c 17%, #c5d5b91c 29%, transparent 30%,
-    transparent 44%, #c5d5b92e 45%, #c5d5b92e 57%, #06131538 58%,
-    #06131538 60%, #c5d5b91f 61%, #c5d5b91f 75%, transparent 76%);
-  /* Keep the portrait/status quiet; light remains legible behind bottom actions. */
-  mask-image: linear-gradient(to bottom, #0005, #0002 32%, #0003 48%, #000 73%);
-  animation: call-window-drift 28s ease-in-out infinite alternate;
-}
+.call-window-light::before { content: ''; position: absolute; inset: 0; background: url('/api/v1/ui-assets/felt-oat.webp') center / 280px; opacity: .055; }
+.call-window-light__scene { display: block; width: 100%; height: 100%; }
+.call-window-light__sun { fill: #dcd5b2; fill-opacity: .16; }
+.call-window-light__branch { fill: #101e20; stroke: #101e20; stroke-linecap: round; stroke-linejoin: round; }
+.call-window-light__branch > path { fill: none; }
+.call-window-light__branch use { stroke: none; }
+.call-window-light__branch--near { opacity: .55; transform-origin: 433px 889px; animation: call-branch-near 11s ease-in-out infinite alternate; }
+.call-window-light__branch--far { opacity: .32; transform-origin: -30px 774px; animation: call-branch-far 15s ease-in-out -5s infinite alternate; }
+.call-window-light__bird { fill: #101e20; opacity: 0; animation: call-bird-shadow 54s linear -12s infinite; }
 .phone-screen--dialing .phone-dialing { position: relative; z-index: 1; }
-@keyframes call-window-drift {
-  from { transform: translate3d(-24px, -12px, 0); }
-  to { transform: translate3d(24px, 12px, 0); }
+@keyframes call-branch-near {
+  0% { transform: rotate(-1.6deg); }
+  55% { transform: rotate(.5deg); }
+  100% { transform: rotate(1.4deg); }
+}
+@keyframes call-branch-far { from { transform: rotate(1.2deg); } to { transform: rotate(-2deg); } }
+/* A rare passing shadow, not a looping foreground character. */
+@keyframes call-bird-shadow {
+  0%, 90% { opacity: 0; transform: translate(440px, 470px) rotate(-16deg) scale(.8); }
+  90.5% { opacity: .27; }
+  94% { opacity: .27; }
+  95%, 100% { opacity: 0; transform: translate(-70px, 650px) rotate(-16deg) scale(.8); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .call-window-light__panes { animation: none; transform: translate3d(0, 0, 0); }
+  .call-window-light__branch { animation: none; transform: none; }
+  .call-window-light__bird { animation: none; opacity: 0; }
 }
