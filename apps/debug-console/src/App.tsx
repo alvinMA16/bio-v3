@@ -297,18 +297,27 @@ export function App({ internal = false }: { internal?: boolean }) {
   }
   const hasSavedCapture = !!(pendingCapture()?.id || pendingCapture()?.hasParked);
   function requestVoice(): void {
-    if (!callOpen && hasSavedCapture) {
+    let deadline = recoveryUntil;
+    if (!callOpen) {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(accountCacheKey('bio-voice-resume')) ?? 'null');
+        if (typeof saved?.callId === 'string' && Number.isFinite(saved.expiresAt)) deadline = saved.expiresAt;
+      } catch { /* Recording recovery remains independent of call metadata. */ }
+    }
+    if (!callOpen && (hasSavedCapture || deadline !== null)) {
+      setRecoveryUntil(deadline);
       setCallOpen(true); setCallStartedAt(null); setVoiceEnabled(false);
-      setVoiceStatus('上次的对话尚未结束');
+      setVoiceStatus('');
       return;
     }
-    startVoice(hasSavedCapture ? 'continue' : 'new');
+    startVoice(hasSavedCapture || deadline !== null && deadline > Date.now() ? 'continue' : 'new');
   }
   function startVoice(mode: 'continue' | 'new' = 'continue'): void {
     if (busy) return;
     voiceFailure.current = false;
     if (mode === 'new') receiptCall.current = null;
     if (recoveryUntil !== null && recoveryUntil <= Date.now()) receiptCall.current = null;
+    const resumeExistingCall = recoveryUntil !== null && recoveryUntil > Date.now();
     setRecoveryUntil(null);
     if (!receiptCall.current) receiptCall.current = { startedAt: Date.now(), messages: new Map() };
     delete receiptCall.current.endedAt;
@@ -348,12 +357,13 @@ export function App({ internal = false }: { internal?: boolean }) {
       },
       error: error => { setVoiceStatus(error); saveVoiceTurn(error); },
       ended: recoveryUntil => { voiceFailure.current = true; setRecoveryUntil(recoveryUntil ?? null); if (receiptCall.current) receiptCall.current.endedAt = Date.now(); saveVoiceTurn('语音会话已结束'); setCallStartedAt(null); setVoiceEnabled(false); setMicEnabled(false); setAudioPlaying(false); setSpokenSubtitle(''); voiceRef.current = null; },
-    }, accountCacheKey('bio-voice-resume'), mode === 'new' ? 'new' : !pendingCapture()?.id && pendingCapture()?.hasParked ? 'saved' : 'continue');
+    }, accountCacheKey('bio-voice-resume'), mode === 'new' ? 'new' : !resumeExistingCall && !pendingCapture()?.id && pendingCapture()?.hasParked ? 'saved' : 'continue');
     voiceRef.current = client; void client.start();
   }
 
   function endCall(): void {
     voiceRef.current?.close();
+    try { pendingCapture()?.park(); } catch { /* Keep retained audio if storage is unavailable. */ }
     try { sessionStorage.removeItem(accountCacheKey('bio-voice-resume')); } catch { /* Storage is optional. */ }
     setRecoveryUntil(null);
     setCallOpen(false);

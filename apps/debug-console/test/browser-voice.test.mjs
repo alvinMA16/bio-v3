@@ -664,3 +664,37 @@ test('resumed task stops ringing before model speech and remains interruptible',
   emit({type:'state',state:'agent'});
   assert.equal(f.connected(),1,'stale state must not reconnect the call');
 });
+
+test('hiding after a long reply starts a fresh window instead of reusing the old cache deadline', async t => {
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen();
+  const turnId = f.starts[0];
+  const emit = event => ws.onmessage({ data: JSON.stringify({ turnId, ...event }) });
+  emit({ type: 'connected', callId: 'long-call', conversationId: 'conv', resumed: false });
+  emit({ type: 'state', state: 'listening' });
+  assert.ok(f.messages.map(JSON.parse).some(m => m.type === 'call.ready'));
+  f.client.recoveryUntil = Date.now() - 1;
+  const before = Date.now(); f.document.hidden = true; f.document.dispatchEvent(new Event('visibilitychange'));
+  assert.ok(f.recoveries[0] >= before + 300000);
+});
+
+test('server remaining time calibrates recovery and handshake-only failures never renew it', async t => {
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen();
+  const before = Date.now();
+  ws.onmessage({ data: JSON.stringify({ turnId: f.starts[0], type: 'connected', callId: 'retry-call', conversationId: 'conv', resumed: true, recoveryRemainingMs: 12000 }) });
+  const deadline = JSON.parse(f.cache.get('bio-voice-resume')).expiresAt;
+  assert.ok(deadline >= before + 12000 && deadline <= Date.now() + 12000);
+  ws.onerror(); t.mock.timers.tick(1000); const retry = f.sockets[1]; retry.onopen();
+  retry.onmessage({ data: JSON.stringify({ turnId: f.starts.at(-1), type: 'connected', callId: 'retry-call', conversationId: 'conv', resumed: true, recoveryRemainingMs: 9000 }) });
+  f.client.close(false);
+  assert.ok(f.recoveries[0] <= Date.now() + 9000);
+  assert.ok(!f.messages.map(JSON.parse).some(m => m.type === 'call.ready'));
+});
+
+test('explicit hangup parks unfinished audio so a later call cannot silently resume it', async t => {
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); f.sockets[0].onopen();
+  f.client.captureBuffer.ready('unfinished', 0); f.client.captureBuffer.append('AAAA');
+  f.client.close();
+  assert.equal(f.client.captureBuffer.id, undefined); assert.equal(f.client.captureBuffer.hasParked, true);
+  assert.equal(f.cache.has('bio-voice-resume'), false);
+  assert.equal(f.cache.get('bio-voice-resume:audio:unfinished:1'), 'AAAA');
+});

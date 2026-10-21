@@ -40,6 +40,12 @@ test('public and internal entries render identical product content without publi
     assert.ok(expired.includes('开始新通话')); assert.ok(!expired.includes('继续刚才的对话'));
     const recoverable = renderToStaticMarkup(createElement(PhonePreview, { ...callProps, hasSavedCapture: true, onStartNew() {} }));
     assert.ok(recoverable.includes('继续讲述')); assert.ok(recoverable.includes('开始新通话'));
+    assert.ok(recoverable.includes('有未完成的讲述')); assert.ok(!recoverable.includes('通话已暂停'));
+    const expiredCapture = renderToStaticMarkup(createElement(PhonePreview, { ...callProps, hasSavedCapture: true, callRecovery: 'expired', onStartNew() {} }));
+    assert.ok(expiredCapture.includes('上次通话已结束')); assert.ok(expiredCapture.includes('新通话继续讲述'));
+    assert.ok(!expiredCapture.includes('通话已暂停')); assert.ok(!expiredCapture.includes('继续刚才的对话'));
+    const pausedCapture = renderToStaticMarkup(createElement(PhonePreview, { ...callProps, hasSavedCapture: true, callRecovery: 'available' }));
+    assert.ok(pausedCapture.includes('通话已暂停')); assert.ok(pausedCapture.includes('继续刚才的对话'));
     const waiting = renderToStaticMarkup(createElement(PhonePreview, { ...callProps, callFailed: false, status: '正在恢复对话' }));
     assert.ok(waiting.includes('正在恢复对话')); assert.doesNotMatch(waiting, /重放|补存|转写|\d+ 秒/); assert.ok(waiting.includes('取消呼叫'));
     for (const label of ['资料夹', '呼叫令狸', '文稿集']) assert.ok(product.includes(label));

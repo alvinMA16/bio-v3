@@ -7,7 +7,8 @@ export type VoiceClientMessage =
   | { type: 'diagnostic'; turnId: string; code: 'storage_unavailable' | 'upload_stalled' | 'recovery_timeout' | 'receive_failed' | 'startup_failed'; pendingFrames?: number }
   | { type: 'capture.sync'; turnId: string; through: number }
   | { type: 'capture.audio'; turnId: string; sequence: number; data: string }
-  | { type: 'listen'; durableCapture?: boolean; orderedCapture?: boolean; captureId?: string; turnId: string; callId?: string; resume?: boolean; playbackFeedback?: boolean; request: VoiceRequest }
+  | { type: 'call.ready'; turnId: string }
+  | { type: 'listen'; recoveryAcknowledgement?: boolean; durableCapture?: boolean; orderedCapture?: boolean; captureId?: string; turnId: string; callId?: string; resume?: boolean; playbackFeedback?: boolean; request: VoiceRequest }
   | { type: 'playback'; turnId: string; playedSamples: number }
   | { type: 'playback.stop'; turnId: string; code: string }
   | { type: 'attachment.view'; turnId: string; view: { materialId: string; page: number } }
@@ -17,7 +18,7 @@ export type VoiceClientMessage =
   | { type: 'disconnect'; turnId: string; reason: 'page_hidden' | 'client_error' };
 export type VoiceState = 'connecting' | 'listening' | 'finalizing' | 'agent' | 'synthesizing';
 export type VoiceServerMessage = { turnId: string; elapsedMs: number } & (
-  | { type: 'connected'; callId: string; conversationId: string; resumed: boolean }
+  | { type: 'connected'; callId: string; conversationId: string; resumed: boolean; recoveryRemainingMs?: number }
   | { type: 'state'; state: VoiceState }
   | { type: 'capture.finish' }
   | { type: 'capture.recovering'; remainingMs: number; totalMs: number }

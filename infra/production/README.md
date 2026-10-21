@@ -31,7 +31,14 @@ pauses capture; wake lock cannot override those actions.
 Disconnected calls have a fixed five-minute recovery window shared by the browser,
 mini-program cache and server. A successful reconnection allows a fresh five-minute
 window on the next interruption; failed retries do not extend the browser deadline.
+The web client estimates a fresh deadline on interruption and calibrates it from
+server remaining time during recovery. Updated clients acknowledge media readiness;
+until then the server preserves the original deadline across failed handshakes.
+Legacy clients retain handshake-based confirmation for compatibility.
 After expiry a new call starts; stored messages and manuscripts remain durable.
+The UI distinguishes a paused call from retained recording: expired calls show
+“上次通话已结束” and “新通话继续讲述” when a recording remains. Explicit hangup
+parks retained audio, requiring a separate recording-recovery choice next time.
 Explicit hangup skips the grace period. `MEMORY_RECONNECT_SECONDS` is superseded by
 the shared contract so environment overrides cannot shorten the server window.
 New clients journal unfinished capture audio and checkpoint recognition in PostgreSQL.

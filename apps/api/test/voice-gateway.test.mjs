@@ -11,13 +11,16 @@ import { randomUUID } from 'node:crypto';
 test('authenticated reconnect drains the previous live connection before restoring the same call', { timeout: 10000 }, async t => {
   const server = createServer(), conversation = randomUUID(), order = [];
   let ownerConnection, opening = true, runCount = 0;
+  let ready; const readiness = new Promise(resolve => { ready = resolve; });
   let started; const running = new Promise(resolve => { started = resolve; });
   const memory = {
     async resolveIdentity() { return 'owner'; },
     async beginCall(_user, _call, connection) { ownerConnection = connection; return conversation; },
-    async resumeCall(_user, callId, connection) {
+    async confirmCallReady(_user, callId, connection) { assert.equal(callId, 'same-call'); assert.equal(connection, ownerConnection); ready(); return true; },
+    async resumeCall(_user, callId, connection, preserveRecovery) {
+      assert.equal(preserveRecovery, true);
       assert.ok(order.includes('archived')); assert.ok(order.includes('disconnected'));
-      ownerConnection = connection; return { callId, conversationId: conversation, resumed: true };
+      ownerConnection = connection; return { callId, conversationId: conversation, resumed: true, recoveryRemainingMs: 17000 };
     },
     async claimCallOpening() { const claimed = opening; opening = false; return claimed; },
     async savePlayback() {},
@@ -44,10 +47,12 @@ test('authenticated reconnect drains the previous live connection before restori
     const event = JSON.parse(raw); events.push(event);
     if (event.type === 'state' && event.state === 'listening') resolve();
   }));
-  second.send(JSON.stringify({ type: 'listen', resume: true, playbackFeedback: true, callId: 'same-call', turnId: 'second', request: {} }));
+  second.send(JSON.stringify({ type: 'listen', recoveryAcknowledgement: true, resume: true, playbackFeedback: true, callId: 'same-call', turnId: 'second', request: {} }));
   await listening;
   assert.equal(events.find(e => e.type === 'connected').conversationId, conversation);
   assert.equal(events.find(e => e.type === 'connected').resumed, true);
+  assert.equal(events.find(e => e.type === 'connected').recoveryRemainingMs, 17000);
+  second.send(JSON.stringify({ type: 'call.ready', turnId: 'second' })); await readiness;
   assert.equal(runCount, 1, 'resuming must not regenerate a greeting or replay the old user turn');
   second.close(); await once(second, 'close');
 });

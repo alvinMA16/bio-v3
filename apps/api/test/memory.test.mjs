@@ -355,6 +355,32 @@ test('PostgreSQL memory lifecycle, transactions, isolation and real Pi tools', {
       // Keep subsequent worker tests independent of these synthetic calls.
       await memory.pool.query("UPDATE bio_memory_jobs SET status='done' WHERE call_id=ANY($1::text[])", [[id, next.callId]]);
     });
+    await t.test('recovery handshake preserves deadline until media readiness, including failed retries and expiry', async () => {
+      const id = `ready-window-${prefix}`;
+      await memory.beginCall(user, id, 'one');
+      await memory.disconnectCall(user, id, 'one', false);
+      await memory.pool.query("UPDATE bio_memory_calls SET end_after=now()+interval '30 seconds' WHERE id=$1", [id]);
+      const deadline = async () => (await memory.pool.query('SELECT end_after FROM bio_memory_calls WHERE id=$1', [id])).rows[0].end_after?.getTime();
+      const original = await deadline();
+      const restored = await memory.resumeCall(user, id, 'two', true);
+      assert.ok(restored.recoveryRemainingMs > 0 && restored.recoveryRemainingMs <= 30000);
+      await memory.disconnectCall(user, id, 'two', false);
+      assert.equal(await deadline(), original);
+      await memory.resumeCall(user, id, 'three', true);
+      assert.equal(await memory.confirmCallReady(user, id, 'two'), false);
+      assert.equal(await memory.confirmCallReady(other, id, 'three'), false);
+      assert.equal(await memory.confirmCallReady(user, id, 'three'), true);
+      assert.equal(await deadline(), undefined);
+      await memory.disconnectCall(user, id, 'three', false);
+      assert.ok(await deadline() > original + 260000);
+      await memory.resumeCall(user, id, 'four', true);
+      await memory.pool.query("UPDATE bio_memory_calls SET end_after=now()-interval '1 second' WHERE id=$1", [id]);
+      assert.equal(await memory.confirmCallReady(user, id, 'four'), false);
+      const next = await memory.resumeCall(user, id, 'five', true);
+      assert.notEqual(next.callId, id); assert.equal(next.resumed, false);
+      await memory.disconnectCall(user, next.callId, 'five', true);
+      await memory.pool.query("UPDATE bio_memory_jobs SET status='done' WHERE call_id=ANY($1::text[])", [[id, next.callId]]);
+    });
     await t.test('failed organization preserves overview and enters bounded retry state', async () => {
       const failedCall = `failed-${prefix}`; const conv = await memory.beginCall(user, failedCall, 'failed');
       await memory.archive({ userId: user, callId: failedCall }, conv, randomUUID(), randomUUID(), 'user', '新内容');
