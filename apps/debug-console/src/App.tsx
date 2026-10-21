@@ -1085,10 +1085,6 @@ function WorkspacePanel({ panel, onDocumentView }: {
     {panel.mode === 'editor' && !panel.document && <p>还没有文档内容。</p>}
     {panel.mode === 'editor' && panel.document && <>
       <DocumentReader document={panel.document} view={panel.documentView} onView={onDocumentView} />
-      {panel.lastChange && <details><summary>查看本次修改</summary>
-        {panel.lastChange.before.map(block => <p className="panel-removed" key={`before-${block.id}`}>修改前：{block.text}</p>)}
-        {panel.lastChange.after.map(block => <p className="panel-added" key={`after-${block.id}`}>修改后：{block.text}</p>)}
-      </details>}
     </>}
   </article>;
 }

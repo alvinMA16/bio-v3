@@ -203,8 +203,6 @@ h1 { margin: 5px 0 0; font-family: Georgia, "Times New Roman", serif; font-size:
 .panel-block { text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px 0; }
 .panel-block pre { overflow-x: auto; }
 .panel-block button { font: inherit; cursor: pointer; padding: 4px 8px; }
-.panel-removed { color: #985454; white-space: pre-wrap; }
-.panel-added { color: #276b50; white-space: pre-wrap; }
 .running-state .work-panel { width: 100%; text-align: left; }
 
 .context-settings { min-width: 0; margin: 0; padding: 16px; border: 1px solid #d9dccf; border-radius: 16px; }
@@ -288,7 +286,7 @@ body { min-width: 320px; }
 .phone-content-panel .panel-block button { font-size: 10px; border: 0; border-radius: 5px; background: #e5e2d6; color: #6e745b; padding: 3px 7px; }
 .phone-content-panel small,.phone-content-panel summary { font-size: 10px; line-height: 1.6; }
 .phone-content-panel details { margin: 8px 0; }
-.phone-content-panel .answer-content,.phone-content-panel .panel-added,.phone-content-panel .panel-removed { font-size: 12px; line-height: 1.7; }
+.phone-content-panel .answer-content { font-size: 12px; line-height: 1.7; }
 .phone-content-panel ul { margin: 4px 0; padding-left: 18px; }
 .phone-content-panel blockquote { margin: 4px 0; padding-left: 10px; border-left: 2px solid #bbb3a3; }
 .phone-content-panel .panel-attachment-image { max-height: 180px; width: 100%; object-fit: contain; border-radius: 5px; }
