@@ -1,12 +1,12 @@
 /** A periodic breeze, with softly arriving gusts and a settled spring response. */
-export const SCENE_LOOP_SECONDS = 72;
+export const SCENE_LOOP_SECONDS = 6;
 const rate = 120;
 const count = SCENE_LOOP_SECONDS * rate;
 const tau = Math.PI * 2;
 const gusts = [
-  { start: 5, rise: 3.2, hold: .6, fall: 2.8, strength: .52 },
-  { start: 28, rise: 4.1, hold: .8, fall: 3.1, strength: .65 },
-  { start: 54, rise: 3.6, hold: .4, fall: 2.6, strength: .56 },
+  // Enter during a gentle rise: short-lived call states need visible motion
+  // immediately, with time left for the branches to settle before repeating.
+  { start: -.45, rise: 1.3, hold: .25, fall: 1.7, strength: .42 },
 ] as const;
 export const scenePhase = (seconds: number) => ((seconds % SCENE_LOOP_SECONDS) + SCENE_LOOP_SECONDS) % SCENE_LOOP_SECONDS;
 const ease = (x: number) => x * x * x * (x * (x * 6 - 15) + 10);
@@ -14,7 +14,7 @@ const ease = (x: number) => x * x * x * (x * (x * 6 - 15) + 10);
 function pressure(seconds: number) {
   const phase = scenePhase(seconds), angle = phase / SCENE_LOOP_SECONDS * tau;
   // All frequencies complete whole cycles, including the low background breeze.
-  let value = .085 * Math.sin(angle * 6 + .4) + .04 * Math.sin(angle * 11 + 1.1) + .018 * Math.sin(angle * 17 + 2);
+  let value = .055 * Math.sin(angle + .4) + .02 * Math.sin(angle * 2 + 1.1) + .008 * Math.sin(angle * 3 + 2);
   for (const { start, rise, hold, fall, strength } of gusts) {
     const t = scenePhase(phase - start);
     if (t < rise) value += strength * ease(t / rise);

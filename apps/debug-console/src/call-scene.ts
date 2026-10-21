@@ -56,8 +56,8 @@ function paintTree(ctx: CanvasRenderingContext2D, tree: HTMLCanvasElement, folia
   ctx.drawImage(tree, 0, 0);
   leaves.forEach(([x, y, rotation, scale], i) => {
     const flutter = wind.leaf * (.13 + noise(i) * .07)
-      + (.018 + Math.abs(wind.leaf) * .025) * Math.sin(angle * 29 + i * .74)
-      + .009 * Math.sin(angle * 43 + i * 1.13);
+      + (.018 + Math.abs(wind.leaf) * .025) * Math.sin(angle * 2 + i * .74)
+      + .009 * Math.sin(angle * 3 + i * 1.13);
     ctx.save(); ctx.translate(x, y);
     ctx.rotate(rotation * Math.PI / 180 + flutter * (mirrored ? -1 : 1));
     ctx.scale(scale, scale); ctx.drawImage(foliage[i % 3 ? 0 : 1]!, -40, -40);
@@ -226,9 +226,9 @@ export function paintCallScene(ctx: CanvasRenderingContext2D, width: number, hei
     sunlight.restore();
   }
   const flight = scenePhase(seconds);
-  if (flight > 43 && flight < 47) {
-    const p = (flight - 43) / 4;
-    sunlight.save(); sunlight.globalAlpha = Math.sin(p * Math.PI) ** 2 * .3;
+  if (flight > 2 && flight < 4) {
+    const p = (flight - 2) / 2;
+    sunlight.save(); sunlight.globalAlpha = Math.sin(p * Math.PI) ** 2 * .18;
     sunlight.translate(360 - p * 430, 240 + p * 100); sunlight.rotate(-.25);
     sunlight.fill(new Path2D('M-22 3Q-12-14 0 0Q10-12 23-8Q10-5 2 5L-2 6Q-11-3-22 3Z'));
     sunlight.restore();

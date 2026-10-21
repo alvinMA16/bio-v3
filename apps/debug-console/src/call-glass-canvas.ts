@@ -31,6 +31,7 @@ export function mountCallGlass(canvas: HTMLCanvasElement, screen: HTMLElement) {
   const reduced=matchMedia('(prefers-reduced-motion: reduce)'),solid=matchMedia('(prefers-reduced-transparency: reduce)');
   const lenses=new Map<HTMLButtonElement,Lens>();
   let frame=0,last=0,stopped=false,dirty=true;
+  let startedAt: number | undefined;
   function clearControls(){for(const e of lenses.keys())e.removeAttribute('data-canvas-glass');lenses.clear();}
   function draw(now: number) {
     frame=0;if(stopped||document.hidden)return;
@@ -39,9 +40,11 @@ export function mountCallGlass(canvas: HTMLCanvasElement, screen: HTMLElement) {
     try {
       const box=canvas.getBoundingClientRect(),w=canvas.clientWidth,h=canvas.clientHeight;
       if(!w||!h){schedule();return;}
+      // Start at the designed entrance phase, independent of the page's age.
+      startedAt??=now;
       const scale=Math.min(devicePixelRatio||1,1.5),pw=Math.round(w*scale),ph=Math.round(h*scale);
       if(canvas.width!==pw||canvas.height!==ph){canvas.width=backdrop.width=pw;canvas.height=backdrop.height=ph;}
-      bg!.setTransform(scale,0,0,scale,0,0);paintCallScene(bg!,w,h,reduced.matches?0:now/1000,grain);
+      bg!.setTransform(scale,0,0,scale,0,0);paintCallScene(bg!,w,h,reduced.matches?0:(now-startedAt)/1000,grain);
       ctx!.setTransform(scale,0,0,scale,0,0);ctx!.clearRect(0,0,w,h);ctx!.drawImage(backdrop,0,0,w,h);
       if(solid.matches){clearControls();}
       else {
