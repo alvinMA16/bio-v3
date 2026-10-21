@@ -111,7 +111,7 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
           ranges = [{ blockId: block.id, start: 0, end: block.text.length }];
         }
         const chunks = narrationChunks(document, ranges);
-        const checkpoint = { documentId, version: document.version, chunks: chunks.map(({ text: _text, ...range }) => range), next: 0 };
+        const checkpoint = { documentId, version: document.version, chunks: chunks.map(({ blockId, start, end }) => ({ blockId, start, end })), next: 0 };
         workspace.saveNarration(checkpoint);
         const pages = documentPages(document);
         const show = (index: number, follow = false) => {

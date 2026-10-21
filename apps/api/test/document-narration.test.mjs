@@ -98,6 +98,7 @@ test('voice prepares subsequent chunks before playback completes, advances only 
     assert.deepEqual(played, [0, 1, 2]); assert.equal(returned, true);
     assert.ok(!events.some(e => e.type === 'agent' && e.event.type.startsWith('speech.')));
     assert.ok(events.some(e => e.type === 'done'));
+    assert.deepEqual(events.filter(e => e.type === 'audio').map(e => e.narration), chunks.map(({ text, ...position }) => position));
   } finally { session.close(); }
 });
 

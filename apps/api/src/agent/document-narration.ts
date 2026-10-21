@@ -1,6 +1,6 @@
-import type { DocumentRange, PanelDocument } from '@bio/contracts';
+import type { DocumentRange, DocumentNarrationPosition, PanelDocument } from '@bio/contracts';
 
-export interface NarrationChunk extends DocumentRange { text: string }
+export interface NarrationChunk extends DocumentNarrationPosition { text: string }
 export interface NarrationCheckpoint {
   documentId: string; version: number; chunks: DocumentRange[]; next: number;
 }
@@ -23,7 +23,7 @@ export function narrationChunks(document: PanelDocument, ranges?: DocumentRange[
       const last = boundaries.at(-1);
       if (last && last.index! + 1 >= 40) size = last.index! + 1;
       const end = start + size;
-      result.push({ blockId: block.id, start, end, text: block.text.slice(start, end) });
+      result.push({ documentId: document.id, version: document.version, blockId: block.id, start, end, text: block.text.slice(start, end) });
       start = end;
     }
   }

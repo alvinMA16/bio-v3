@@ -1,5 +1,5 @@
 import type { AgentEvent, ChatCompletionRequest, ChatCompletionResponse } from './index.js';
-import type { DocumentView } from './documents.js';
+import type { DocumentView, DocumentNarrationPosition } from './documents.js';
 
 export type VoiceRequest = Omit<ChatCompletionRequest, 'message'>;
 export type VoiceClientMessage =
@@ -28,7 +28,7 @@ export type VoiceServerMessage = { turnId: string; elapsedMs: number } & (
   | { type: 'transcript'; text: string }
   | { type: 'agent'; event: AgentEvent }
   | { type: 'result'; result: ChatCompletionResponse }
-  | { type: 'audio'; segmentId: number; messageId: string; text: string; data: string; sampleRate: number; endSample?: number }
+  | { type: 'audio'; segmentId: number; messageId: string; text: string; data: string; sampleRate: number; endSample?: number; narration?: DocumentNarrationPosition }
   | { type: 'segment.end'; segmentId: number }
   | { type: 'done' }
   | { type: 'cancelled'; reason?: string }

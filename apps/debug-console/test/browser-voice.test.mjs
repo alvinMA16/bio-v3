@@ -29,7 +29,7 @@ function environment(t, pendingMic, moduleError, prepare) {
   if (!timerContexts.has(t)) { t.mock.timers.enable({ apis: ['setTimeout'] }); timerContexts.add(t); }
   const cache = new Map();
   const visibility = new EventTarget();
-  const recoveries = [], statuses = [];
+  const recoveries = [], statuses = [], contexts = [];
   const tones = [];
   const sockets = [], nodes = [], messages = [], events = [], starts = [], playback = [], captures = [], levels = [], gains = [];
   let stopped = 0, ended = 0, connected = 0;
@@ -42,6 +42,7 @@ function environment(t, pendingMic, moduleError, prepare) {
     close() { this.readyState = 3; }
   }
   class Context {
+    constructor() { contexts.push(this); }
     currentTime = 0; destination = {}; audioWorklet = { async addModule() { if (moduleError) throw moduleError; } };
     async resume() {} async close() {}
     createAnalyser() { return { amplitude: 0, connect(destination) { this.destination = destination; }, disconnect() {}, getFloatTimeDomainData(samples) { samples.fill(this.amplitude); } }; }
@@ -69,7 +70,7 @@ function environment(t, pendingMic, moduleError, prepare) {
   const client = new BrowserVoice({ prepare, status: value => statuses.push(value), connected: () => connected++, request: () => ({}), start: id => starts.push(id), event: event => events.push(event),
     inputLevel: level => levels.push(level), playback: (...args) => playback.push(args), error: message => events.push({ type: 'local.error', message }), ended: until => { recoveries.push(until); ended++; } });
   t.after(() => { client.close(); restore.forEach(fn => fn()); });
-  return { client, cache, recoveries, statuses, navigator: globals.navigator, document: globals.document, tones, sockets, nodes, captures, levels, gains, starts, messages, events, playback, stream, connected: () => connected, stopped: () => stopped, ended: () => ended };
+  return { client, cache, recoveries, statuses, contexts, navigator: globals.navigator, document: globals.document, tones, sockets, nodes, captures, levels, gains, starts, messages, events, playback, stream, connected: () => connected, stopped: () => stopped, ended: () => ended };
 }
 
 test('interruption clears scheduled audio and rejects old turn callbacks', async t => {
@@ -697,4 +698,19 @@ test('explicit hangup parks unfinished audio so a later call cannot silently res
   assert.equal(f.client.captureBuffer.id, undefined); assert.equal(f.client.captureBuffer.hasParked, true);
   assert.equal(f.cache.has('bio-voice-resume'), false);
   assert.equal(f.cache.get('bio-voice-resume:audio:unfinished:1'), 'AAAA');
+});
+
+
+test('narration position follows the audio clock, never receipt or a suspended clock, and clears on interruption', async t => {
+  const f = environment(t); await f.client.start(); t.mock.timers.tick(3000); const ws = f.sockets[0]; ws.onopen();
+  const positions = []; f.document.addEventListener('bio:document-narration', event => positions.push(event.detail));
+  const narration = { documentId: 'story', version: 2, blockId: 'p8', start: 180, end: 300 };
+  const audio = { type: 'audio', turnId: f.starts[0], sampleRate: 16000, data: Buffer.alloc(32000).toString('base64'), text: '原文', segmentId: 1, narration };
+  ws.onmessage({ data: JSON.stringify(audio) }); assert.deepEqual(positions, []);
+  t.mock.timers.tick(40); assert.deepEqual(positions, [], 'suspended audio clock must not move the paper');
+  f.contexts[0].currentTime = .04; t.mock.timers.tick(40); assert.deepEqual(positions, [narration]);
+  ws.onmessage({ data: JSON.stringify({ ...audio, segmentId: 2, narration: { ...narration, blockId: 'p9' } }) });
+  f.client.interrupt(); assert.equal(positions.at(-1), null);
+  f.contexts[0].currentTime = 10; t.mock.timers.tick(2000);
+  assert.equal(positions.filter(Boolean).length, 1, 'cancelled queued and stale audio cannot restore following');
 });

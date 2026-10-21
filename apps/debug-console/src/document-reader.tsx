@@ -3,6 +3,7 @@ import { documentPages, documentTextSegments, type DocumentHighlight, type Docum
 import { markerBrush } from './marker-brush';
 import { documentViewport } from './document-viewport';
 import { navigateDocumentFocus } from './document-navigation';
+import { followDocumentNarration } from './document-narration-follow';
 import './document-highlight.css';
 
 // Small inline spans let us report visible text without changing paragraph layout.
@@ -31,6 +32,7 @@ export function DocumentReader({ document, view, onView }: {
   const titleBlock = document.blocks[0]?.kind === 'heading' && document.blocks[0].text.trim() === document.title.trim() ? document.blocks[0] : undefined;
   const content = useRef<HTMLElement>(null);
   const following = useRef(true);
+  const narrationFollow = useRef<ReturnType<typeof followDocumentNarration> | undefined>(undefined);
   const lastNavigation = useRef<{ documentId: string; page: number; followRequest?: number | undefined; focusId?: string | undefined } | undefined>(undefined);
   const current = useRef({ document, view, onView }); current.current = { document, view, onView };
   const receipt = useRef<DocumentNavigationReceipt | undefined>(undefined);
@@ -50,7 +52,6 @@ export function DocumentReader({ document, view, onView }: {
     following.current = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let last = '';
-    let pointerActive = false;
     const publish = () => {
       clearTimeout(timer);
       const { document, view, onView } = current.current;
@@ -70,28 +71,19 @@ export function DocumentReader({ document, view, onView }: {
       if (serialized !== last) { last = serialized; onView?.(next); }
     };
     report.current = publish;
-    const scroll = () => { if (pointerActive) following.current = false; clearTimeout(timer); timer = setTimeout(publish, 180); };
-    const pointerDown = () => { pointerActive = true; };
-    const pointerUp = () => { pointerActive = false; };
-    const manual = () => { following.current = false; scroll(); };
-    const key = (event: KeyboardEvent) => {
-      if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) manual();
-    };
+    const scroll = () => { clearTimeout(timer); timer = setTimeout(publish, 180); };
+    narrationFollow.current = followDocumentNarration(root, () => current.current.document, value => {
+      following.current = value; scroll();
+    });
     scroller.addEventListener('scroll', scroll, { passive: true });
-    scroller.addEventListener('wheel', manual, { passive: true });
-    scroller.addEventListener('touchmove', manual, { passive: true });
-    scroller.addEventListener('pointerdown', pointerDown); // Track scrollbar drags without treating taps as scrolls.
-    window.addEventListener('pointerup', pointerUp); window.addEventListener('pointercancel', pointerUp);
-    scroller.addEventListener('keydown', key);
     window.addEventListener('bio:document-view-request', publish);
     const resize = new ResizeObserver(scroll); resize.observe(scroller); resize.observe(root);
     publish();
     return () => {
       clearTimeout(timer); resize.disconnect();
-      scroller.removeEventListener('scroll', scroll); scroller.removeEventListener('wheel', manual);
-      scroller.removeEventListener('touchmove', manual); scroller.removeEventListener('pointerdown', pointerDown);
-      window.removeEventListener('pointerup', pointerUp); window.removeEventListener('pointercancel', pointerUp);
-      scroller.removeEventListener('keydown', key); window.removeEventListener('bio:document-view-request', publish);
+      scroller.removeEventListener('scroll', scroll);
+      narrationFollow.current?.cleanup(); narrationFollow.current = undefined;
+      window.removeEventListener('bio:document-view-request', publish);
       report.current = () => {};
     };
   }, [document.id]);
@@ -110,7 +102,7 @@ export function DocumentReader({ document, view, onView }: {
       return navigateDocumentFocus(root, view.focus, value => { receipt.current = value; report.current(); }, !!highlight?.ranges.length);
     }
     if (previous?.documentId === document.id && previous.page === navigation.page && !resume) return;
-    if (root && scroller && following.current) {
+    if (root && scroller && following.current && !narrationFollow.current?.active()) {
       const anchor = documentPages(document)[(view?.page ?? 1) - 1]?.fragments[0];
       const target = anchor && Array.from(root.querySelectorAll<HTMLElement>('[data-block]')).find(span =>
         span.dataset.block === anchor.blockId && Number(span.dataset.end) > anchor.start);

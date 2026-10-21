@@ -4,7 +4,7 @@ import type { AsrProvider, AsrStream, TtsProvider } from './providers.js';
 import { SpokenSegments } from './spoken-segments.js';
 import { PlaybackWindow } from './playback-window.js';
 import type { DocumentRuntime } from '../agent/document-runtime.js';
-import type { DocumentView } from '@bio/contracts';
+import type { DocumentView, DocumentNarrationPosition } from '@bio/contracts';
 
 type Runner = (input: ChatCompletionRequest, emit: (event: AgentEvent) => void, signal: AbortSignal, trigger?: 'call_opening' | 'call_resume', runtime?: DocumentRuntime) => Promise<ChatCompletionResponse>;
 type Payload = VoiceServerMessage extends infer M ? M extends VoiceServerMessage ? Omit<M, 'turnId' | 'elapsedMs'> : never : never;
@@ -188,7 +188,7 @@ export class VoiceSession {
       let segmentId = 0;
       let queuedCharacters = 0;
       let speechCharacterLimit = 20_000;
-      const enqueue = (part: string, speechId: string, onPlayed?: () => void) => {
+      const enqueue = (part: string, speechId: string, onPlayed?: () => void, narration?: DocumentNarrationPosition) => {
         queuedCharacters += part.length;
         if (queuedCharacters > speechCharacterLimit) {
           // A speech budget must never abort the independently persisted Agent response.
@@ -210,7 +210,7 @@ export class VoiceSession {
                   const chunk = pcm.subarray(offset, offset + 32000);
                   turn.window.sent += chunk.length / 2;
                   this.emit(turn, { type: 'audio', segmentId: index, messageId: speechId,
-                    text: part, data: Buffer.from(chunk).toString('base64'), sampleRate: 16000, endSample: turn.window.sent });
+                    text: part, ...(narration ? { narration } : {}), data: Buffer.from(chunk).toString('base64'), sampleRate: 16000, endSample: turn.window.sent });
                 }
               });
               break;
@@ -246,7 +246,7 @@ export class VoiceSession {
             // Queue original text directly; never emit it as model speech/history.
             // The existing 20s/8s credit window prepares subsequent chunks before
             // playback exhausts the current audio, with bounded PCM buffering.
-            chunks.forEach((chunk, index) => enqueue(chunk.text, narrationId, () => onPlayed(index)));
+            chunks.forEach(({ text, ...position }, index) => enqueue(text, narrationId, () => onPlayed(index), position));
             await ttsQueue;
             if (ttsError) throw ttsError;
             combined.throwIfAborted();

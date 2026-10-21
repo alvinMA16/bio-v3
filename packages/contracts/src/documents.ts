@@ -1,6 +1,8 @@
 import type { PanelDocument } from './index.js';
 
 export interface DocumentRange { blockId: string; start: number; end: number }
+/** Original-text location carried with narration audio, never inferred from text matching. */
+export interface DocumentNarrationPosition extends DocumentRange { documentId: string; version: number }
 export interface DocumentNavigationReceipt {
   requestId: string;
   status: 'received' | 'rendering' | 'visible' | 'failed';

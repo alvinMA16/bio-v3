@@ -1,6 +1,6 @@
 import { CaptureBuffer, CaptureUpload } from '../../../miniprogram/miniprogram/lib/capture-buffer';
 import { VOICE_RECOVERY_WINDOW_MS } from '@bio/contracts';
-import type { VoiceClientMessage, VoiceRequest, VoiceServerMessage } from '@bio/contracts';
+import type { DocumentNarrationPosition, VoiceClientMessage, VoiceRequest, VoiceServerMessage } from '@bio/contracts';
 import workletUrl from './pcm-worklet.js?url&no-inline';
 import { FoxSpeechSignal } from '../../../miniprogram/miniprogram/lib/fox-speech-signal';
 
@@ -73,6 +73,7 @@ export class BrowserVoice {
   private connectionTimer?: ReturnType<typeof setTimeout>;
   private audioFailed = false;
   private queuedBytes = 0;
+  private narration: DocumentNarrationPosition | undefined;
   private receivedSamples = 0;
   private acknowledgedSamples = 0;
   private readonly storageKey: string;
@@ -535,10 +536,18 @@ export class BrowserVoice {
     const source = context.createBufferSource(); source.buffer = buffer; source.connect(this.playbackAnalyser!);
     this.sources.add(source);
     const turnId = this.turnId;
-    const timer = setTimeout(() => {
+    const notify = () => {
       this.timers.delete(timer);
-      if (!this.closed && turnId === this.turnId && this.sources.has(source)) this.callbacks.playback(true, event.text);
-    }, Math.max(0, (start - context.currentTime) * 1000));
+      if (this.closed || turnId !== this.turnId || !this.sources.has(source)) return;
+      // Timers can fire while the audio clock is suspended. Wait for audible playback.
+      if (context.currentTime + .005 < start) {
+        timer = setTimeout(notify, Math.max(20, (start - context.currentTime) * 1000));
+        this.timers.add(timer); return;
+      }
+      this.updateNarration(event.narration);
+      this.callbacks.playback(true, event.text);
+    };
+    let timer = setTimeout(notify, Math.max(0, (start - context.currentTime) * 1000));
     this.timers.add(timer);
     source.onended = () => {
       source.disconnect(); this.sources.delete(source);
@@ -548,7 +557,7 @@ export class BrowserVoice {
         this.acknowledgedSamples = endSample;
         this.send({ type: 'playback', turnId, playedSamples: endSample });
       }
-      if (!this.sources.size) { this.callbacks.playback(false, ''); this.afterDrain(); }
+      if (!this.sources.size) { this.updateNarration(); this.callbacks.playback(false, ''); this.afterDrain(); }
     };
     source.start(start);
   }
@@ -560,7 +569,13 @@ export class BrowserVoice {
     const timer = setTimeout(() => { this.timers.delete(timer); this.listen(); }, 200);
     this.timers.add(timer);
   }
+  private updateNarration(position?: DocumentNarrationPosition): void {
+    if (JSON.stringify(position) === JSON.stringify(this.narration)) return;
+    this.narration = position;
+    document.dispatchEvent(new CustomEvent('bio:document-narration', { detail: position }));
+  }
   private stopAudio(): void {
+    this.updateNarration();
     for (const timer of this.timers) clearTimeout(timer);
     this.timers.clear();
     for (const source of this.sources) { source.onended = null; source.stop(); source.disconnect(); }
