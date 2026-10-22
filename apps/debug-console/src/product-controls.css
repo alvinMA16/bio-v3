@@ -17,6 +17,7 @@
 .phone-screen.phone-screen--call .slide-to-end::before,
 .phone-screen.phone-screen--call .slide-to-end-thumb,
 .phone-screen .material-folder .material-filters,
+.phone-screen .material-folder .material-glass-thumb,
 .phone-screen .material-folder :is(.material-add, .search-clear),
 .phone-screen .document-highlight-note button {
   color: var(--control-ink); border: 0;
@@ -34,7 +35,7 @@
 .phone-screen button.product-control::after, .account-card button::after,
 .phone-screen.phone-screen--call .slide-to-end::after,
 .phone-screen.phone-screen--call .slide-to-end-thumb::after,
-.phone-screen .material-folder :is(.material-filters, .material-add, .search-clear)::after,
+.phone-screen .material-folder :is(.material-filters, .material-glass-thumb, .material-add, .search-clear)::after,
 .phone-screen .document-highlight-note button::after {
   content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
   /* The capsule normal field shapes the reflection; the centre stays clear. */
@@ -62,6 +63,7 @@
 .phone-screen.phone-screen--call .slide-to-end--dragging .slide-to-end-thumb { box-shadow: 0 4px 10px #76273428; }
 .phone-screen .material-folder :is(.material-add, .search-clear) { position: relative; border-radius: 50%; }
 .phone-screen .material-folder .material-filters { border-radius: 24px; }
+.phone-screen .material-folder .material-glass-thumb { --control-surface: var(--control-primary); }
 .phone-screen .document-highlight-note button { position: relative; }
 @media (prefers-reduced-motion: reduce) { .phone-screen button.product-control, .phone-screen .material-folder button.product-control, .account-page .account-card button, .account-card button.account-submit { transition: none; } }
 @media (prefers-reduced-transparency: reduce) {

@@ -9,7 +9,7 @@ export function lensOffset(x: number, y: number, width: number, height: number, 
   const {dx,dy,depth,nx,ny}=lensSurface(x,y,width,height,radius);
   if(depth<=0)return {x:0,y:0};
   const magnification=1+.045*(1-Math.exp(-depth/7));
-  const bend=7*Math.exp(-depth/7)*(1-Math.exp(-depth/1.1));
+  const bend=9*Math.exp(-depth/7)*(1-Math.exp(-depth/1.1));
   return {x:dx/magnification-dx+nx*bend,y:dy/magnification-dy+ny*bend};
 }
 export function lensLighting(depth: number, nx: number, ny: number) {
@@ -17,12 +17,12 @@ export function lensLighting(depth: number, nx: number, ny: number) {
   // One fine directional glint; the refraction supplies the curved depth.
   const rim=Math.exp(-depth/.72);
   return {
-    light:rim*Math.max(0,-nx*.5-ny*.85)*.46,
-    shade:rim*Math.max(0,nx*.5+ny*.85)*.14,
+    light:rim*Math.max(0,-nx*.5-ny*.85)*.58,
+    shade:rim*Math.max(0,nx*.5+ny*.85)*.18,
   };
 }
 
-const selector = '.phone-screen .product-control, .phone-screen .slide-to-end, .phone-screen .slide-to-end-thumb, .phone-screen .material-filters, .phone-screen .material-add, .phone-screen .search-clear, .phone-screen .document-highlight-note button, .account-card button';
+const selector = '.phone-screen .product-control, .phone-screen .slide-to-end, .phone-screen .slide-to-end-thumb, .phone-screen .material-filters, .phone-screen .material-glass-thumb, .phone-screen .material-add, .phone-screen .search-clear, .phone-screen .document-highlight-note button, .account-card button';
 const ns = 'http://www.w3.org/2000/svg';
 let nextId = 0;
 export function installGlassOptics(root: HTMLElement = document.body) {

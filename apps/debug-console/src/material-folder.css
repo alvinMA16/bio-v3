@@ -85,16 +85,13 @@
 .material-folder .material-search { display: flex; align-items: center; gap: 7px; padding: 0 10px; margin-bottom: 9px; min-height: 35px; border-radius: 10px; background: #dfd5c280; color: #978971; }
 .material-folder .material-search input { min-width: 0; padding: 9px 0; border: 0; background: transparent; border-radius: 0; font-size: 11px; font-weight: 400; }
 .material-folder:has(.material-dock) { padding-bottom: 72px; }
-.material-dock { position: absolute; z-index: 2; bottom: 16px; left: 15px; right: 15px; display: flex; align-items: center; gap: 7px; padding: 5px; border-radius: 30px; isolation: isolate; background: linear-gradient(155deg, #ffffff35, #ffffff0d 48%, #dde3dc22); backdrop-filter: blur(18px) saturate(1.65); -webkit-backdrop-filter: blur(18px) saturate(1.65); border: 1px solid #ffffff60; box-shadow: 0 5px 16px #4e42281a; }
-.material-filters { position: relative; display: flex; align-items: center; flex: 1; min-width: 0; }
-.material-folder .material-filters button { position: relative; z-index: 1; transition: color 180ms ease; flex: 1; min-width: 0; min-height: 36px; padding: 8px 3px; border: 0; border-radius: 22px; background: transparent; color: #7b8376; font-size: 10px; }
-.material-folder .material-filters button[aria-pressed=true] { color: #495747; background: transparent; font-weight: 600; }
-.material-folder .material-add { display: grid; place-items: center; flex-shrink: 0; width: 36px; height: 36px; padding: 0; border: 0; border-left: 1px solid #9da59750; border-radius: 0; color: #64715e; background: transparent; }
+.material-dock { position: absolute; z-index: 2; bottom: 16px; left: 15px; right: 15px; display: flex; align-items: center; gap: 12px; }
+.material-filters { position: relative; display: flex; align-items: center; flex: 1; min-width: 0; padding: 4px; }
+.material-folder .material-filters button { position: relative; z-index: 1; flex: 1; min-width: 0; min-height: 44px; padding: 8px 3px; border: 0; border-radius: 24px; background: transparent; color: var(--control-ink); font-size: 14px; font-weight: 400; }
+.material-folder .material-filters button[aria-pressed=true] { font-weight: 500; }
+.material-folder .material-add { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; padding: 0; }
 
-.material-glass-thumb { position: absolute; inset: 1px auto 1px 0; width: 33.333333%; box-sizing: border-box; border-radius: 24px; transform: translateX(calc(var(--tab-index) * 100%)); transition: transform 520ms cubic-bezier(.22, 1.45, .4, 1); background: linear-gradient(135deg, #ffffffc9, #ffffff40 55%, #fff9); border: 1px solid #fff9; box-shadow: 0 2px 5px #62573c22, inset 0 1px 1px #fff, inset 0 -1px 2px #ffffffcc; backdrop-filter: blur(5px) saturate(1.8); -webkit-backdrop-filter: blur(5px) saturate(1.8); overflow: hidden; pointer-events: none; }
-.material-glass-thumb::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(110deg, transparent 15%, #fff9 42%, transparent 68%); transform: translateX(calc(var(--tab-index) * 15% - 20%)); transition: transform 650ms ease; }
-.material-folder .material-add { transition: transform 180ms ease, color 180ms ease; }
-.material-folder .material-add:active { transform: scale(.88); color: #34472a; }
+.material-glass-thumb { position: absolute; inset: 4px auto 4px 4px; width: calc((100% - 8px) / 3); box-sizing: border-box; border-radius: 24px; transform: translateX(calc(var(--tab-index) * 100%)); transition: transform 400ms cubic-bezier(.22, 1, .4, 1); pointer-events: none; }
 .material-results { transition: opacity 150ms ease, transform 150ms ease; }
 .material-results.is-leaving { opacity: 0; transform: translateY(-7px); pointer-events: none; }
 /* A short, capped stagger: the first card arrives immediately, the rest settle behind it. */
@@ -105,8 +102,7 @@
   65% { opacity: 1; }
   to { opacity: 1; transform: translateY(0) rotate(0) scale(1); }
 }
-@supports not (backdrop-filter: blur(1px)) { .material-dock { background: #e8eae6ed; } }
-@media (prefers-reduced-motion: reduce) { .material-results, .material-glass-thumb, .material-glass-thumb::after, .material-folder .material-add, .material-folder .material-filters button { transition: none; } .material-grid .material-card, .material-folder .material-result-count { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .material-results, .material-glass-thumb { transition: none; } .material-grid .material-card, .material-folder .material-result-count { animation: none; } }
 
 .phone-folder-nav > .phone-folder-search-toggle { margin-left: 9px; width: 34px; color: #858b80; }
 .phone-folder-nav svg { display: block; }
