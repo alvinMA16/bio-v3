@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { AgentTraceEntry } from '@bio/contracts';
+import type { DocumentHighlight, AgentTraceEntry } from '@bio/contracts';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, renameSync } from 'node:fs';
 import { DEFAULT_DOCUMENT_BACKGROUND, isDocumentBackgroundColor, DEFAULT_READING_FONT_SIZE, isReadingFontSize, type ReadingFontSize } from '@bio/contracts';
 import { createHash } from 'node:crypto';
@@ -42,6 +42,20 @@ export class AgentStorage {
     const path = this.readingPreferencePath(user);
     // One API process; synchronous read/adjust/write cannot interleave across calls.
     writeFileSync(`${path}.tmp`, JSON.stringify({ fontSize }), { mode: 0o600 });
+    renameSync(`${path}.tmp`, path);
+  }
+
+  documentHighlightColor(user?: string): NonNullable<DocumentHighlight['color']> {
+    const path = this.readingPreferencePath(user).replace('font-size.json', 'document-highlight.json');
+    if (!existsSync(path)) return 'yellow';
+    const value = JSON.parse(readFileSync(path, 'utf8'));
+    return ['yellow', 'green', 'purple', 'blue', 'pink'].includes(value.color) ? value.color : 'yellow';
+  }
+
+  saveDocumentHighlightColor(color: NonNullable<DocumentHighlight['color']>, user?: string): void {
+    if (!['yellow', 'green', 'purple', 'blue', 'pink'].includes(color)) throw new BadRequestException('Invalid highlight color');
+    const path = this.readingPreferencePath(user).replace('font-size.json', 'document-highlight.json');
+    writeFileSync(`${path}.tmp`, JSON.stringify({ color }), { mode: 0o600 });
     renameSync(`${path}.tmp`, path);
   }
 

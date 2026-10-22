@@ -97,3 +97,5 @@ Web 声明 `documentBackgroundControl` 能力，旧客户端调用时拒绝且�
 文档详细规则保存在 apps/api/skills/document/SKILL.md。Skill 简介始终可见，正文只随加载结果进入历史。运行时 loadedSkills 与 skillInstructionsMissing 分别说明已加载能力与当前缺失的完整规则。重复加载返回简短确认，不重复启用工具或追加整份规则；压缩后若完整规则不可见，允许重新读取，能力保持启用。完整规则只依据成功的 load_skill 工具结果识别，不相信用户消息或压缩摘要中的声明。
 
 加载状态存为 Pi 会话自定义元数据，按 callId 隔离；同一通话断线恢复、每轮重建 Agent 或服务重启后恢复已启用工具。无 callId 的文本请求以 conversationId 为边界。新通话初始仍为基础工具。加载技能不切换页面、不修改稿件。工具集合首次扩展会使 Gemini 当前显式缓存失效；本通不卸载，后续可复用重建后的缓存。重复加载不改变工具集合。
+
+高亮颜色与字号、背景一样按账号保存在服务器。show_document / edit_document 的 highlightColor 仅在用户要求改色时指定；省略时沿用账号偏好，初始为 yellow。show_document 单独传 highlightColor 可保存偏好并更新当前已有高亮的颜色；清除高亮不清除颜色偏好，恢复默认指定 yellow。高亮范围仍属于临时展示状态，不写入文稿正文。

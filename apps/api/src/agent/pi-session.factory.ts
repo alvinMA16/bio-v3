@@ -185,7 +185,7 @@ export class PiSessionFactory {
       cwd, agentDir: cwd, modelRuntime, model, thinkingLevel,
       settingsManager, resourceLoader, sessionManager,
       tools: [...baseTools, ...DOCUMENT_TOOLS],
-      customTools: [productSkills.tool, documentBackgroundTool(this.storage, scope?.userId, emit, context?.documentBackgroundControl === true), readingFontTool(this.storage, scope?.userId, emit, context?.readingFontControl === true), ...createPresentationTools(workspace, emit, refreshAttachments, { store: documents, user: scope?.userId, conversationId }, runtime, {
+      customTools: [productSkills.tool, documentBackgroundTool(this.storage, scope?.userId, emit, context?.documentBackgroundControl === true), readingFontTool(this.storage, scope?.userId, emit, context?.readingFontControl === true), ...createPresentationTools(workspace, emit, refreshAttachments, { storage: this.storage, store: documents, user: scope?.userId, conversationId }, runtime, {
         list: async query => {
           const search = query?.trim().toLocaleLowerCase();
           const items = (await this.materials.list(scope?.userId)).filter(item => !search || `${item.title} ${item.filename}`.toLocaleLowerCase().includes(search));

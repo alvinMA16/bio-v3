@@ -91,3 +91,41 @@ test('focus works within the same narration chunk; edits and reloads keep precis
     assert.equal((await store.get(undefined, 'story')).version, 2);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test('highlight preference survives new sessions, is account isolated, and failed validation does not overwrite it', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'bio-highlight-preference-'));
+  try {
+    const config = new ConfigService({ AGENT_DATA_DIR: root });
+    const session = user => {
+      const storage = new AgentStorage(config), store = new DocumentStore(storage), conversationId = randomUUID();
+      const workspace = new PanelWorkspace(storage.conversationDirectory(conversationId, user));
+      const tools = Object.fromEntries(createPresentationTools(workspace, () => {}, undefined,
+        { storage, store, user, conversationId }).map(t => [t.name, t]));
+      return { storage, workspace, tools };
+    };
+    const first = session('alice');
+    await first.tools.edit_document.execute('create', { documentId: 'story', expectedVersion: 0, title: '回忆',
+      operations: [{ action: 'insert', block: doc('花开了。').blocks[0] }] });
+    await first.tools.show_document.execute('color', { documentId: 'story', highlightColor: 'purple' });
+    const next = session('alice');
+    assert.equal(next.storage.documentHighlightColor('alice'), 'purple');
+    assert.equal(next.storage.documentHighlightColor('bob'), 'yellow');
+    assert.equal(next.storage.documentHighlightColor(), 'yellow');
+    const highlight = { documentId: 'story', expectedVersion: 1, highlights: [{ blockId: 'p1', quote: '花' }] };
+    // No browser receipt in this fixture: presentation is sent, confirmation remains unavailable.
+    await assert.rejects(next.tools.show_document.execute('highlight', highlight), /unconfirmed/);
+    assert.equal(next.workspace.state().documentView.highlight.color, 'purple');
+    await assert.rejects(next.tools.show_document.execute('invalid', { ...highlight, expectedVersion: 2, highlightColor: 'pink' }), /版本/);
+    assert.equal(next.storage.documentHighlightColor('alice'), 'purple');
+    await next.tools.show_document.execute('recolor', { highlightColor: 'green' });
+    assert.equal(next.workspace.state().documentView.highlight.color, 'green');
+    await next.tools.edit_document.execute('edit', { documentId: 'story', expectedVersion: 1,
+      operations: [{ action: 'replace', targetId: 'p1', block: doc('花落了。').blocks[0] }] });
+    assert.equal(next.workspace.state().documentView.highlight.color, 'green');
+    await next.tools.show_document.execute('clear', { clearHighlight: true });
+    assert.equal(next.storage.documentHighlightColor('alice'), 'green');
+    await next.tools.show_document.execute('reset', { highlightColor: 'yellow' });
+    assert.equal(session('alice').storage.documentHighlightColor('alice'), 'yellow');
+    assert.throws(() => next.storage.saveDocumentHighlightColor('invalid', 'alice'));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

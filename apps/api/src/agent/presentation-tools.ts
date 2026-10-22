@@ -4,12 +4,13 @@ import { Type } from 'typebox';
 import { documentPages, type AgentEventPayload, type PanelState, type PanelAttachment } from '@bio/contracts';
 import { locateText } from './document-highlight.js';
 import { PanelWorkspace } from './panel-workspace.js';
+import type { AgentStorage } from './agent-storage.js';
 import type { DocumentStore } from './document-store.js';
 import type { DocumentRuntime } from './document-runtime.js';
 import { randomUUID } from 'node:crypto';
 
 const id = Type.String({ pattern: '^[a-zA-Z0-9_-]{1,64}$' });
-const highlightColor = Type.Optional(Type.Union((['yellow', 'green', 'purple', 'blue', 'pink'] as const).map(color => Type.Literal(color)), { description: '本次荧光笔颜色，可自主选择；默认黄色。同一次操作统一使用一种颜色，仅影响展示，不修改正文。' }));
+const highlightColor = Type.Optional(Type.Union((['yellow', 'green', 'purple', 'blue', 'pink'] as const).map(color => Type.Literal(color)), { description: '仅用户要求改色时指定，并按账号保存为后续高亮颜色；省略时沿用账号设置，初始黄色。恢复默认指定 yellow。仅影响展示，不修改正文。' }));
 const highlightGranularity = Type.Optional(Type.Union([Type.Literal('reading'), Type.Literal('character')], { description: '默认 reading：英文按完整单词或标识符、数字按完整数值、中文至少按完整汉字标记。仅在用户明确要求字符级对比时选择 character；仍不拆分组合字符。' }));
 const block = Type.Object({ id, kind: Type.Union(['paragraph', 'heading', 'list', 'quote', 'code'].map(value => Type.Literal(value))), text: Type.String({ maxLength: 12000, description: '原始正文字符串，不要再 JSON.stringify。排版使用真实换行字符（U+000A），不要写成反斜杠加 n 或 r；多个自然段优先拆成独立 block，list 各项以真实换行分隔。需原样保留转义示例、代码或路径时使用 kind=code。' }) });
 export interface AttachmentLibrary {
@@ -17,7 +18,7 @@ export interface AttachmentLibrary {
   load: (attachmentId: string) => Promise<PanelAttachment>;
 }
 export function createPresentationTools(workspace: PanelWorkspace, emit: (event: AgentEventPayload) => void,
-  refreshAttachments?: () => Promise<void>, documents?: { store: DocumentStore; user?: string | undefined; conversationId: string }, runtime?: DocumentRuntime, attachments?: AttachmentLibrary) {
+  refreshAttachments?: () => Promise<void>, documents?: { storage?: AgentStorage; store: DocumentStore; user?: string | undefined; conversationId: string }, runtime?: DocumentRuntime, attachments?: AttachmentLibrary) {
   const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }], details: {} });
   const binding = () => { if (!documents) throw new Error('文稿存储未配置'); return documents; };
   const updated = (panel: PanelState) => {
@@ -158,7 +159,9 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
         const { store, user, conversationId } = binding();
         if (!params.documentId && params.expectedVersion !== 0) throw new Error('修改已有文稿需要 documentId');
         const document = await store.edit(user, conversationId, { ...params, documentId: params.documentId ?? randomUUID() }, params.summary);
-        updated(workspace.documentSaved(document, params.highlightColor, params.highlightGranularity));
+        const color = params.highlightColor ?? documents?.storage?.documentHighlightColor(user);
+        updated(workspace.documentSaved(document, color, params.highlightGranularity));
+        if (params.highlightColor) documents?.storage?.saveDocumentHighlightColor(params.highlightColor, user);
         return result({ status: 'saved', documentId: document.id, version: document.version, blockIds: document.blocks.map(item => item.id), displayed: workspace.state().document?.id === document.id,
           highlight: workspace.state().document?.id === document.id ? workspace.state().documentView?.highlight : undefined });
       },
@@ -189,9 +192,12 @@ export function createPresentationTools(workspace: PanelWorkspace, emit: (event:
         if (params.navigation && current?.documentId !== documentId) throw new Error('翻页需要先打开这篇文稿');
         const page = params.page ?? (focus ? pages.findIndex(item => item.fragments.some(fragment => fragment.blockId === focus.blockId && fragment.start <= focus.start && fragment.end >= focus.start)) + 1
           : params.navigation ? current!.page + (params.navigation === 'next' ? 1 : -1) : current?.documentId === documentId ? Math.min(current.page, pages.length) : 1);
+        const color = params.highlightColor ?? documents?.storage?.documentHighlightColor(user);
+        const existingHighlight = current?.documentId === documentId && current.version === document.version ? current.highlight : undefined;
         const panel = workspace.showDocument(document, page, params.follow, {
-          ...(ranges ? { highlight: { requestId: randomUUID(), kind: 'focus', ranges, ...(params.highlightColor ? { color: params.highlightColor } : {}) } } : {}),
+          ...(ranges ? { highlight: { requestId: randomUUID(), kind: 'focus', ranges, ...(color ? { color } : {}) } } : params.highlightColor && existingHighlight ? { highlight: { ...existingHighlight, color: params.highlightColor } } : {}),
           ...(focus ? { focus } : {}), ...(params.clearHighlight ? { clearHighlight: true } : {}) });
+        if (params.highlightColor) documents?.storage?.saveDocumentHighlightColor(params.highlightColor, user);
         const sent = updated(panel);
         const target = panel.documentView?.focus;
         if (!target) return sent;
