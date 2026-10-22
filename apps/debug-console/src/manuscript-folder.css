@@ -11,6 +11,55 @@
 .manuscript-paper pre { font-size: 12px; }
 .manuscript-empty { padding-top: 60px; justify-items: center; }
 .manuscript-empty .material-paper-sprig { margin-bottom: 18px; }
+
+/* The collection and its reader scroll behind the navigation, never between bars. */
+.phone-folder-page--manuscripts { --manuscript-nav-surface: #e8e7e2; --manuscript-overlay-ink: #000; --manuscript-safe-top: env(safe-area-inset-top, 0px); }
+.phone-folder-page--manuscripts > .phone-folder-nav,
+.manuscript-preview > .material-preview-header {
+  position: absolute; inset: 0 0 auto; z-index: 3;
+  background:
+    linear-gradient(to bottom, color-mix(in srgb, var(--manuscript-overlay-ink) 24%, transparent), color-mix(in srgb, var(--manuscript-overlay-ink) 16%, transparent) 52%, transparent),
+    linear-gradient(to bottom, var(--manuscript-nav-surface), color-mix(in srgb, var(--manuscript-nav-surface) 88%, transparent) 52%, transparent);
+  pointer-events: none;
+}
+.phone-folder-page--manuscripts > .phone-folder-nav { padding-top: calc(14px + var(--manuscript-safe-top)); padding-bottom: 30px; }
+.phone-folder-page--manuscripts > .phone-folder-nav button,
+.manuscript-preview > .material-preview-header button { pointer-events: auto; }
+.phone-folder-page--manuscripts > .phone-folder-scroll { padding-top: calc(76px + var(--manuscript-safe-top)); scroll-padding-top: calc(76px + var(--manuscript-safe-top)); }
+.phone-folder-page--manuscripts:has(.manuscript-preview) > .phone-folder-scroll { padding: 0; overflow: hidden; }
+.manuscript-preview {
+  --manuscript-nav-surface: var(--document-background, #fcfcf9);
+  --manuscript-overlay-ink: var(--document-foreground, #000);
+  --control-ink: var(--document-foreground, #294535);
+  --control-backdrop-softness: 3px;
+  background: var(--manuscript-nav-surface);
+}
+.manuscript-preview > .material-preview-header { padding-top: calc(12px + var(--manuscript-safe-top)); padding-bottom: 30px; }
+.manuscript-preview > .material-preview-header h2 { color: var(--document-foreground, #000); }
+.manuscript-preview > .material-preview-scroll {
+  position: absolute; inset: 0; padding: 0; overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scroll-padding-block: calc(88px + var(--manuscript-safe-top)) calc(112px + env(safe-area-inset-bottom, 0px));
+}
+.manuscript-preview .manuscript-paper { box-sizing: border-box; min-height: 100%; padding: calc(88px + var(--manuscript-safe-top)) 32px 28px; }
+.manuscript-preview:has(> .material-preview-footer) .manuscript-paper { padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px)); }
+.manuscript-preview > .material-preview-scroll > .material-empty { margin: calc(88px + var(--manuscript-safe-top)) 32px 28px; }
+.manuscript-preview > .material-preview-footer {
+  position: absolute; inset: auto 0 0; z-index: 3;
+  padding: 10px 15px max(16px, env(safe-area-inset-bottom, 0px));
+  background: transparent; pointer-events: none;
+}
+.manuscript-preview > .material-preview-footer button { pointer-events: auto; }
+.manuscript-preview > .material-preview-footer::before {
+  content: ''; position: absolute; inset: -28px 0 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(to top, color-mix(in srgb, var(--manuscript-overlay-ink) 24%, transparent), color-mix(in srgb, var(--manuscript-overlay-ink) 16%, transparent) 65%, transparent);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .manuscript-preview {
+    --control-glass: color-mix(in srgb, var(--manuscript-nav-surface) 88%, var(--document-foreground, #000));
+    --control-primary: color-mix(in srgb, var(--manuscript-nav-surface) 76%, var(--document-foreground, #000));
+  }
+}
 @container (max-width: 280px) {
   .manuscript-folder .material-paper-content { padding: 10px 7px; gap: 8px; }
   .manuscript-folder .material-paper-content .material-paper-sprig { display: none; }

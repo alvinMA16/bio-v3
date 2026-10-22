@@ -24,8 +24,8 @@
   background: var(--control-surface, var(--control-glass));
   box-shadow: 0 3px 9px var(--control-shadow);
   /* Native transparent fallback; URL optics affect only the backdrop, not labels. */
-  -webkit-backdrop-filter: blur(.35px) saturate(105%);
-  backdrop-filter: var(--glass-optics, blur(.35px)) saturate(105%);
+  -webkit-backdrop-filter: blur(calc(.35px + var(--control-backdrop-softness, 0px))) saturate(105%);
+  backdrop-filter: var(--glass-optics, blur(.35px)) blur(var(--control-backdrop-softness, 0px)) saturate(105%);
 }
 .phone-screen button.product-control, .phone-screen .material-folder button.product-control, .account-page .account-card button, .account-card button.account-submit {
   position: relative; isolation: isolate; border-radius: 24px; min-height: 44px;

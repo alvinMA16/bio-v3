@@ -6,6 +6,8 @@ The public product and internal phone preview share these rules and the same com
 
 Keep character art and current status together. Put actions in a separate group with clear space between the groups. On call waiting, paused, recovery, and failure screens, keep actions at the bottom and let status content scroll if needed. Show each state once. Labels describe outcomes, such as “取消呼叫” and “返回书桌”.
 
+The manuscript collection and reader use a full-height scrolling surface behind overlaid navigation. Fade the upper and lower overlays into the content without a hard bar: translucent black on light backgrounds and translucent white on dark backgrounds, using the existing luminance-based document text color to choose the overlay. The chat action floats above the document; only the button receives pointer input, and the gradient is a non-interactive layer outside layout flow. Use the shared `--control-backdrop-softness` setting to soften dense text behind floating controls while keeping labels crisp. Adapt ink and reduced-transparency surfaces to the reading background. Keep enough start/end space to bring the first and last content fully clear of the overlays, including device safe areas.
+
 ## Shared controls
 
 `apps/debug-console/src/product-controls.css` owns the shared material and feedback. Apply `product-control` to conventional action buttons, and `product-control--primary` to the preferred action. Use `product-control--danger` for destructive actions. Component styles own placement and width, not a separate material recipe.
