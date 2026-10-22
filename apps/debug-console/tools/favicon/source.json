@@ -1,0 +1,12 @@
+{
+  "tool": "built-in image_gen",
+  "reference": "apps/miniprogram/miniprogram/assets/animations/fox-clerk/lingli-avatar.png",
+  "source": "apps/debug-console/tools/favicon/lingli-icon-source.png",
+  "outputs": [
+    "apps/debug-console/src/assets/lingli-icon.png",
+    "apps/debug-console/src/assets/lingli-icon.ico",
+    "apps/debug-console/src/assets/lingli-touch-icon.png"
+  ],
+  "processing": "Generated alpha preserved for 64px PNG and 16/32/48px ICO. Touch icon: 164px portrait centered on a 180px pale sage background (#E8EDDF). All resizing and format conversion performed with sharp.",
+  "prompt": "Use case: stylized-concept. Asset type: final browser favicon / app identity portrait for the Lingli storytelling website. Input image: reference only for the established character identity and tactile handmade material. Create a NEW exquisite isolated head-only portrait of this same friendly orange needle-felt fox. Keep its soft round cream cheek tufts and muzzle, rich warm burnt-orange wool, dark brown-rimmed upright ears with ivory wool interiors, black bead eyes with tiny lively highlights, small charcoal nose and a very subtle kind smile. A charming gently inquisitive expression with an almost imperceptible head tilt, calm and lovable, beautifully sculpted soft facial proportions. Not a generic clipart fox. Real handmade wool miniature / premium stop-motion film character, dense short wool fibers and soft sculptural volume, understated upper-left studio lighting. Head only: no body, no neck, no scarf, no clothing, no paws. Square 1024x1024 composition, entire head including both ears visible, centered, fills about 92% of canvas width and height with a small consistent transparent margin. Clear bold silhouette and simple high-contrast facial features that remain readable at 16–32 pixels; broad cream cheeks, ears and bright orange fur should provide the recognition. True transparent background. No circle or badge, no background, no platform, no drop shadow outside the head, no lettering, no border, no watermark. Avoid flat vector art, thick outlines, emoji styling, shiny plastic, exaggerated anime eyes, coarse cluttered flyaway hairs."
+}
